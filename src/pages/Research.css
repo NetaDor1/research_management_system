@@ -1,0 +1,258 @@
+.research-page {
+  min-height: 100vh;
+  padding: 100px 20px 40px;
+  direction: rtl;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.research-header {
+  background: white;
+  padding: 30px 40px;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
+}
+
+.research-header h1 {
+  color: #667eea;
+  margin: 0 0 25px 0;
+  font-size: 32px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.search-container {
+  margin-bottom: 20px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 20px;
+  border: 2px solid #e9ecef;
+  border-radius: 10px;
+  font-size: 16px;
+  direction: rtl;
+  transition: all 0.3s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.filters-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.filter-group,
+.sort-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.filter-group label,
+.sort-group label {
+  color: #495057;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.filter-select {
+  padding: 8px 15px;
+  border: 2px solid #e9ecef;
+  border-radius: 8px;
+  font-size: 14px;
+  direction: rtl;
+  background: white;
+  color: #495057;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.filter-select:hover {
+  border-color: #667eea;
+}
+
+.research-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 25px;
+  margin-top: 20px;
+}
+
+.research-card {
+  background: white;
+  border-radius: 12px;
+  padding: 25px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  border: 2px solid transparent;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
+}
+
+.research-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.2);
+  border-color: #667eea;
+}
+
+.research-card:active {
+  transform: translateY(-2px);
+}
+
+.add-research-card {
+  background: #f0f0f0;
+  border: 2px dashed #d0d0d0;
+  box-shadow: none;
+  color: #6c757d;
+  align-items: center;
+  justify-content: center;
+  opacity: 1.5;
+}
+
+.add-research-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #999;
+  background: #e8e8e8;
+  opacity: 0.9;
+}
+
+.add-research-title {
+  margin: 0;
+  color: #33414c;
+  font-size: 18px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.new-badge {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  background: #667eea;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.research-title {
+  margin: 0 0 15px 0;
+  color: #212529;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.research-researcher {
+  margin: 0 0 20px 0;
+  color: #6c757d;
+  font-size: 16px;
+  flex: 1;
+}
+
+.status-button {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+
+.status-awarded {
+  background: #28a745;
+  color: white;
+}
+
+.status-pending {
+  background: #ffc107;
+  color: #212529;
+}
+
+.status-rejected {
+  background: #dc3545;
+  color: white;
+}
+
+.no-results {
+  text-align: center;
+  padding: 60px 20px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.no-results p {
+  color: #6c757d;
+  font-size: 18px;
+  margin: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .research-page {
+    padding: 80px 15px 30px;
+  }
+
+  .research-header {
+    padding: 20px;
+  }
+
+  .research-header h1 {
+    font-size: 24px;
+  }
+
+  .filters-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-group,
+  .sort-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-select {
+    width: 100%;
+  }
+
+  .research-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .research-header h1 {
+    font-size: 20px;
+  }
+
+  .research-card {
+    padding: 20px;
+  }
+}
+
