@@ -23,4 +23,11 @@ const analytics = getAnalytics(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
+// Verify Firestore connection
+if (db) {
+  console.log('✅ Firestore database initialized successfully');
+} else {
+  console.error('❌ Firestore database initialization failed');
+}
+
 export default app;

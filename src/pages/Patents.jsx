@@ -18,56 +18,130 @@ const Patents = () => {
   // Fetch patents from Firestore
   useEffect(() => {
     const fetchPatents = async () => {
+      if (!db) {
+        console.error('Firestore database not initialized');
+        setError('מסד הנתונים לא מאותחל');
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError('');
       
       try {
+        console.log('Connecting to Firestore for patents...');
         const patentsRef = collection(db, 'patents');
-        let q = query(patentsRef, orderBy('registrationDate', 'desc'));
+        let querySnapshot;
 
         // Filter by researcher if not admin
         if (userRole === 'RESEARCHER' && user?.id) {
-          q = query(
-            patentsRef,
-            where('researcherId', '==', user.id),
-            orderBy('registrationDate', 'desc')
-          );
+          console.log('Fetching patents for researcher:', user.id, user.name);
+          
+          // Try with orderBy first
+          try {
+            const q = query(
+              patentsRef,
+              where('researcherId', '==', user.id),
+              orderBy('registrationDate', 'desc')
+            );
+            querySnapshot = await getDocs(q);
+          } catch (orderByError) {
+            // If orderBy fails (missing index), try without orderBy
+            console.warn('OrderBy failed (may need index), trying without orderBy:', orderByError.message);
+            const q = query(
+              patentsRef,
+              where('researcherId', '==', user.id)
+            );
+            querySnapshot = await getDocs(q);
+          }
+        } else {
+          console.log('Fetching all patents (admin mode)');
+          try {
+            const q = query(patentsRef, orderBy('registrationDate', 'desc'));
+            querySnapshot = await getDocs(q);
+          } catch (orderByError) {
+            // If orderBy fails, try without orderBy
+            console.warn('OrderBy failed, trying without orderBy:', orderByError.message);
+            querySnapshot = await getDocs(patentsRef);
+          }
         }
 
-        const querySnapshot = await getDocs(q);
+        console.log(`Found ${querySnapshot.docs.length} patent documents`);
+
         const patentsList = querySnapshot.docs.map((doc) => {
           const data = doc.data();
           
           // Convert Firestore Timestamp to date string
           const toDateString = (timestamp) => {
             if (!timestamp) return '';
-            if (timestamp.toDate) {
+            if (timestamp && typeof timestamp.toDate === 'function') {
               return timestamp.toDate().toISOString().split('T')[0];
+            }
+            if (timestamp && timestamp.seconds) {
+              return new Date(timestamp.seconds * 1000).toISOString().split('T')[0];
             }
             return String(timestamp);
           };
 
           return {
             id: doc.id,
-            title: data.title || 'ללא כותרת',
+            title: data.title || data.projectTitle || 'ללא כותרת',
             researcher: data.researcherName || data.researcher || 'חוקר',
             status: data.status || 'in-process',
-            registrationDate: toDateString(data.registrationDate),
+            registrationDate: toDateString(data.registrationDate || data.submissionDate || data.createdAt),
             isNew: data.isNew || false,
+            researcherId: data.researcherId, // Keep for debugging
           };
         });
+
+        // Sort by date if we couldn't use orderBy
+        if (userRole === 'RESEARCHER' && user?.id) {
+          patentsList.sort((a, b) => {
+            const dateA = new Date(a.registrationDate || 0);
+            const dateB = new Date(b.registrationDate || 0);
+            return dateB - dateA; // Descending order
+          });
+        }
+
+        console.log(`Loaded ${patentsList.length} patents`);
+        if (userRole === 'RESEARCHER') {
+          console.log('Patents for researcher:', patentsList.map(p => ({ 
+            id: p.id, 
+            researcherId: p.researcherId, 
+            title: p.title,
+            match: p.researcherId === user.id
+          })));
+        }
 
         setPatentsData(patentsList);
       } catch (err) {
         console.error('Error fetching patents:', err);
-        setError('שגיאה בטעינת פטנטים');
+        console.error('Error details:', {
+          code: err.code,
+          message: err.message,
+          stack: err.stack
+        });
+        console.error('User role:', userRole);
+        console.error('User ID:', user?.id);
+        console.error('DB initialized:', !!db);
+        
+        let errorMessage = 'שגיאה בטעינת פטנטים';
+        if (err.code === 'failed-precondition') {
+          errorMessage = 'נדרש index ב-Firestore. אנא צור index עבור השדות: researcherId, registrationDate';
+        } else if (err.code === 'permission-denied') {
+          errorMessage = 'אין הרשאה לגשת לפטנטים. אנא בדוק את כללי האבטחה ב-Firestore';
+        } else if (err.message) {
+          errorMessage = `שגיאה: ${err.message}`;
+        }
+        
+        setError(errorMessage);
         setPatentsData([]);
       } finally {
         setLoading(false);
       }
     };
 
-    if (userRole) {
+    if (userRole && user) {
       fetchPatents();
     }
   }, [userRole, user?.id]);
@@ -107,6 +181,10 @@ const Patents = () => {
   const handlePatentClick = (patentId) => {
     // TODO: Navigate to patent details page
     navigate(`/patents/${patentId}`);
+  };
+
+  const handleAddPatent = () => {
+    navigate('/patents/new');
   };
 
   const getStatusLabel = (status) => {
@@ -194,6 +272,16 @@ const Patents = () => {
       )}
 
       <div className="research-grid">
+        {!isAdmin() && (
+          <button
+            className="research-card add-research-card"
+            onClick={handleAddPatent}
+            type="button"
+          >
+            <h3 className="add-research-title">הוספת פטנט חדש</h3>
+          </button>
+        )}
+
         {!loading && !error && filteredAndSorted.map((patent) => (
           <button
             key={patent.id}

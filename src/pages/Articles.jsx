@@ -19,31 +19,67 @@ const Articles = () => {
   // Fetch articles from Firestore
   useEffect(() => {
     const fetchArticles = async () => {
+      if (!db) {
+        console.error('Firestore database not initialized');
+        setError('מסד הנתונים לא מאותחל');
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError('');
       
       try {
+        console.log('Connecting to Firestore for articles...');
         const articlesRef = collection(db, 'articles');
-        let q = query(articlesRef, orderBy('publicationDate', 'desc'));
+        let querySnapshot;
 
         // Filter by researcher if not admin
         if (userRole === 'RESEARCHER' && user?.id) {
-          q = query(
-            articlesRef,
-            where('researcherId', '==', user.id),
-            orderBy('publicationDate', 'desc')
-          );
+          console.log('Fetching articles for researcher:', user.id, user.name);
+          
+          // Try with orderBy first
+          try {
+            const q = query(
+              articlesRef,
+              where('researcherId', '==', user.id),
+              orderBy('publicationDate', 'desc')
+            );
+            querySnapshot = await getDocs(q);
+          } catch (orderByError) {
+            // If orderBy fails (missing index), try without orderBy
+            console.warn('OrderBy failed (may need index), trying without orderBy:', orderByError.message);
+            const q = query(
+              articlesRef,
+              where('researcherId', '==', user.id)
+            );
+            querySnapshot = await getDocs(q);
+          }
+        } else {
+          console.log('Fetching all articles (admin mode)');
+          try {
+            const q = query(articlesRef, orderBy('publicationDate', 'desc'));
+            querySnapshot = await getDocs(q);
+          } catch (orderByError) {
+            // If orderBy fails, try without orderBy
+            console.warn('OrderBy failed, trying without orderBy:', orderByError.message);
+            querySnapshot = await getDocs(articlesRef);
+          }
         }
 
-        const querySnapshot = await getDocs(q);
+        console.log(`Found ${querySnapshot.docs.length} article documents`);
+
         const articlesList = querySnapshot.docs.map((doc) => {
           const data = doc.data();
           
           // Convert Firestore Timestamp to date string
           const toDateString = (timestamp) => {
             if (!timestamp) return '';
-            if (timestamp.toDate) {
+            if (timestamp && typeof timestamp.toDate === 'function') {
               return timestamp.toDate().toISOString().split('T')[0];
+            }
+            if (timestamp && timestamp.seconds) {
+              return new Date(timestamp.seconds * 1000).toISOString().split('T')[0];
             }
             return String(timestamp);
           };
@@ -56,20 +92,58 @@ const Articles = () => {
             publicationDate: toDateString(data.publicationDate),
             publicationType: data.publicationType || 'journal',
             isNew: data.isNew || false,
+            researcherId: data.researcherId, // Keep for debugging
           };
         });
+
+        // Sort by date if we couldn't use orderBy
+        if (userRole === 'RESEARCHER' && user?.id) {
+          articlesList.sort((a, b) => {
+            const dateA = new Date(a.publicationDate || 0);
+            const dateB = new Date(b.publicationDate || 0);
+            return dateB - dateA; // Descending order
+          });
+        }
+
+        console.log(`Loaded ${articlesList.length} articles`);
+        if (userRole === 'RESEARCHER') {
+          console.log('Articles for researcher:', articlesList.map(a => ({ 
+            id: a.id, 
+            researcherId: a.researcherId, 
+            title: a.title,
+            match: a.researcherId === user.id
+          })));
+        }
 
         setArticlesData(articlesList);
       } catch (err) {
         console.error('Error fetching articles:', err);
-        setError('שגיאה בטעינת מאמרים');
+        console.error('Error details:', {
+          code: err.code,
+          message: err.message,
+          stack: err.stack
+        });
+        console.error('User role:', userRole);
+        console.error('User ID:', user?.id);
+        console.error('DB initialized:', !!db);
+        
+        let errorMessage = 'שגיאה בטעינת מאמרים';
+        if (err.code === 'failed-precondition') {
+          errorMessage = 'נדרש index ב-Firestore. אנא צור index עבור השדות: researcherId, publicationDate';
+        } else if (err.code === 'permission-denied') {
+          errorMessage = 'אין הרשאה לגשת למאמרים. אנא בדוק את כללי האבטחה ב-Firestore';
+        } else if (err.message) {
+          errorMessage = `שגיאה: ${err.message}`;
+        }
+        
+        setError(errorMessage);
         setArticlesData([]);
       } finally {
         setLoading(false);
       }
     };
 
-    if (userRole) {
+    if (userRole && user) {
       fetchArticles();
     }
   }, [userRole, user?.id]);
@@ -114,6 +188,10 @@ const Articles = () => {
   const handleArticleClick = (articleId) => {
     // TODO: Navigate to article details page
     navigate(`/articles/${articleId}`);
+  };
+
+  const handleAddArticle = () => {
+    navigate('/articles/new');
   };
 
   const getStatusLabel = (status) => {
@@ -205,6 +283,16 @@ const Articles = () => {
       )}
 
       <div className="research-grid">
+        {!isAdmin() && (
+          <button
+            className="research-card add-research-card"
+            onClick={handleAddArticle}
+            type="button"
+          >
+            <h3 className="add-research-title">הוספת מאמר חדש</h3>
+          </button>
+        )}
+
         {!loading && !error && filteredAndSorted.map((article) => (
           <button
             key={article.id}

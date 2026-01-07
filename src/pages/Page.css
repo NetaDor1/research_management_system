@@ -478,6 +478,194 @@
   background: linear-gradient(135deg, #138496 0%, #117a8b 100%);
 }
 
+/* Additional form styles for Patent form */
+.form-subtitle {
+  color: #6c757d;
+  font-size: 16px;
+  margin-bottom: 30px;
+}
+
+.partner-group {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #e9ecef;
+}
+
+.partner-group h3 {
+  color: #667eea;
+  font-size: 18px;
+  margin-bottom: 15px;
+}
+
+.dates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.date-input-group {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.date-input-group input {
+  flex: 1;
+}
+
+.calendar-link {
+  font-size: 20px;
+  text-decoration: none;
+  padding: 8px;
+  display: inline-block;
+  transition: transform 0.2s;
+}
+
+.calendar-link:hover {
+  transform: scale(1.2);
+}
+
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-weight: normal;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: auto;
+  cursor: pointer;
+}
+
+.files-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8f9fa;
+  padding: 10px 15px;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.file-name {
+  display: block;
+  margin-top: 5px;
+  color: #667eea;
+  font-size: 14px;
+}
+
+.remove-btn,
+.remove-btn-small {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.remove-btn-small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.remove-btn:hover,
+.remove-btn-small:hover {
+  background: #c82333;
+  transform: translateY(-1px);
+}
+
+.add-btn {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s;
+  margin-top: 10px;
+}
+
+.add-btn:hover {
+  background: #218838;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+}
+
+.signature-info {
+  margin-top: 15px;
+  padding: 15px;
+  background: #e7f3ff;
+  border-radius: 6px;
+  border: 1px solid #b3d9ff;
+}
+
+.signature-info p {
+  margin: 5px 0;
+  color: #004085;
+  font-size: 14px;
+}
+
+.cancel-btn,
+.submit-btn {
+  padding: 14px 32px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cancel-btn {
+  background: #6c757d;
+  color: white;
+}
+
+.cancel-btn:hover {
+  background: #5a6268;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+.submit-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.submit-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Additional Form Styles */
 .readonly-field {
   background: #f8f9fa;

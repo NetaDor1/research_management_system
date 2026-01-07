@@ -108,9 +108,9 @@ const Dashboard = () => {
               const newRole = userRole === 'ADMIN' ? 'RESEARCHER' : 'ADMIN';
               
               if (newRole === 'RESEARCHER') {
-                setUser({ id: '1', name: 'נטע דור', email: 'researcher@college.ac.il' });
+                setUser({ id: '2', name: 'יוסי כהן', email: 'researcher@college.ac.il' });
               } else {
-                setUser({ id: '1', name: 'נטע דור', email: 'admin@college.ac.il' });
+                setUser({ id: '1', name: 'רשות המחקר', email: 'admin@college.ac.il' });
               }
               
               setUserRole(newRole);
