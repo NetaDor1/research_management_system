@@ -1,6 +1,3 @@
-<<<<<<< Updated upstream
-import logo from './logo.svg';
-=======
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
@@ -16,31 +13,11 @@ import Articles from './pages/Articles';
 import ArticleDetail from './pages/ArticleDetail';
 import Statistics from './pages/Statistics';
 import ReportFormat from './pages/ReportFormat';
->>>>>>> Stashed changes
+import SetupFirebase from './pages/SetupFirebase';
 import './App.css';
-import { db } from "../services/firebase";
-
 
 function App() {
   return (
-<<<<<<< Updated upstream
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-=======
     <AuthProvider>
       <BrowserRouter>
         <div className="App">
@@ -57,11 +34,11 @@ function App() {
             <Route path="/articles/:id" element={<ArticleDetail />} />
             <Route path="/statistics" element={<Statistics />} />
             <Route path="/report-format" element={<ReportFormat />} />
+            <Route path="/setup-firebase" element={<SetupFirebase />} />
           </Routes>
         </div>
       </BrowserRouter>
     </AuthProvider>
->>>>>>> Stashed changes
   );
 }
 

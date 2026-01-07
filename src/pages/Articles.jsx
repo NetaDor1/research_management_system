@@ -1,41 +1,83 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { db } from '../services/firebase';
 import './Research.css';
 
-// Mock data - TODO: Replace with actual data from Firebase/API
-const mockArticlesData = [
-  { id: 1, title: 'מאמר 1', researcher: 'נטע דור', status: 'published', publicationDate: '2024-01-15', publicationType: 'journal', isNew: false },
-  { id: 2, title: 'מאמר 2', researcher: 'טליה אליהו', status: 'published', publicationDate: '2024-02-20', publicationType: 'conference', isNew: false },
-  { id: 3, title: 'מאמר 3', researcher: 'דוד כהן', status: 'in-review', publicationDate: '2024-03-10', publicationType: 'journal', isNew: false },
-  { id: 4, title: 'מאמר 4', researcher: 'שרה לוי', status: 'published', publicationDate: '2024-04-05', publicationType: 'journal', isNew: false },
-  { id: 5, title: 'מאמר 5', researcher: 'יוסי ישראלי', status: 'in-review', publicationDate: '2024-05-12', publicationType: 'conference', isNew: true },
-  { id: 6, title: 'מאמר 6', researcher: 'מיכל רוזן', status: 'rejected', publicationDate: '2024-06-01', publicationType: 'journal', isNew: false },
-  { id: 7, title: 'מאמר 7', researcher: 'אבי כהן', status: 'published', publicationDate: '2024-06-15', publicationType: 'conference', isNew: false },
-  { id: 8, title: 'מאמר 8', researcher: 'רותם שמיר', status: 'in-review', publicationDate: '2024-07-01', publicationType: 'journal', isNew: false },
-];
-
 const Articles = () => {
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, userRole } = useAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [sortBy, setSortBy] = useState('alphabetical');
+  const [articlesData, setArticlesData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Filter articles based on user role
-  const filteredByRole = useMemo(() => {
-    if (isAdmin()) {
-      // ADMIN sees all articles
-      return mockArticlesData;
-    } else {
-      // RESEARCHER sees only their own articles
-      if (!user || !user.name) {
-        return [];
+  // Fetch articles from Firestore
+  useEffect(() => {
+    const fetchArticles = async () => {
+      setLoading(true);
+      setError('');
+      
+      try {
+        const articlesRef = collection(db, 'articles');
+        let q = query(articlesRef, orderBy('publicationDate', 'desc'));
+
+        // Filter by researcher if not admin
+        if (userRole === 'RESEARCHER' && user?.id) {
+          q = query(
+            articlesRef,
+            where('researcherId', '==', user.id),
+            orderBy('publicationDate', 'desc')
+          );
+        }
+
+        const querySnapshot = await getDocs(q);
+        const articlesList = querySnapshot.docs.map((doc) => {
+          const data = doc.data();
+          
+          // Convert Firestore Timestamp to date string
+          const toDateString = (timestamp) => {
+            if (!timestamp) return '';
+            if (timestamp.toDate) {
+              return timestamp.toDate().toISOString().split('T')[0];
+            }
+            return String(timestamp);
+          };
+
+          return {
+            id: doc.id,
+            title: data.title || 'ללא כותרת',
+            researcher: data.researcherName || data.researcher || 'חוקר',
+            status: data.status || 'published',
+            publicationDate: toDateString(data.publicationDate),
+            publicationType: data.publicationType || 'journal',
+            isNew: data.isNew || false,
+          };
+        });
+
+        setArticlesData(articlesList);
+      } catch (err) {
+        console.error('Error fetching articles:', err);
+        setError('שגיאה בטעינת מאמרים');
+        setArticlesData([]);
+      } finally {
+        setLoading(false);
       }
-      return mockArticlesData.filter(item => item.researcher === user.name);
+    };
+
+    if (userRole) {
+      fetchArticles();
     }
-  }, [isAdmin, user]);
+  }, [userRole, user?.id]);
+
+  // Data is already filtered by Firestore query
+  const filteredByRole = useMemo(() => {
+    return articlesData;
+  }, [articlesData]);
 
   // Filter and sort articles
   const filteredAndSorted = useMemo(() => {
@@ -150,8 +192,20 @@ const Articles = () => {
         </div>
       </div>
 
+      {loading && (
+        <div className="no-results">
+          <p>טוען מאמרים...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="no-results" style={{ background: '#f8d7da', color: '#721c24' }}>
+          <p>{error}</p>
+        </div>
+      )}
+
       <div className="research-grid">
-        {filteredAndSorted.map((article) => (
+        {!loading && !error && filteredAndSorted.map((article) => (
           <button
             key={article.id}
             className="research-card"
@@ -167,7 +221,7 @@ const Articles = () => {
         ))}
       </div>
 
-      {filteredAndSorted.length === 0 && (
+      {!loading && !error && filteredAndSorted.length === 0 && (
         <div className="no-results">
           <p>לא נמצאו מאמרים</p>
         </div>

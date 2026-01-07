@@ -1,40 +1,81 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { db } from '../services/firebase';
 import './Research.css';
 
-// Mock data - TODO: Replace with actual data from Firebase/API
-const mockPatentsData = [
-  { id: 1, title: 'פטנט 1', researcher: 'נטע דור', status: 'registered', registrationDate: '2024-01-15', isNew: false },
-  { id: 2, title: 'פטנט 2', researcher: 'טליה אליהו', status: 'approved', registrationDate: '2024-02-20', isNew: false },
-  { id: 3, title: 'פטנט 3', researcher: 'דוד כהן', status: 'in-process', registrationDate: '2024-03-10', isNew: false },
-  { id: 4, title: 'פטנט 4', researcher: 'שרה לוי', status: 'registered', registrationDate: '2024-04-05', isNew: false },
-  { id: 5, title: 'פטנט 5', researcher: 'יוסי ישראלי', status: 'in-process', registrationDate: '2024-05-12', isNew: true },
-  { id: 6, title: 'פטנט 6', researcher: 'מיכל רוזן', status: 'rejected', registrationDate: '2024-06-01', isNew: false },
-  { id: 7, title: 'פטנט 7', researcher: 'אבי כהן', status: 'approved', registrationDate: '2024-06-15', isNew: false },
-  { id: 8, title: 'פטנט 8', researcher: 'רותם שמיר', status: 'in-process', registrationDate: '2024-07-01', isNew: false },
-];
-
 const Patents = () => {
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, userRole } = useAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [sortBy, setSortBy] = useState('alphabetical');
+  const [patentsData, setPatentsData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Filter patents based on user role
-  const filteredByRole = useMemo(() => {
-    if (isAdmin()) {
-      // ADMIN sees all patents
-      return mockPatentsData;
-    } else {
-      // RESEARCHER sees only their own patents
-      if (!user || !user.name) {
-        return [];
+  // Fetch patents from Firestore
+  useEffect(() => {
+    const fetchPatents = async () => {
+      setLoading(true);
+      setError('');
+      
+      try {
+        const patentsRef = collection(db, 'patents');
+        let q = query(patentsRef, orderBy('registrationDate', 'desc'));
+
+        // Filter by researcher if not admin
+        if (userRole === 'RESEARCHER' && user?.id) {
+          q = query(
+            patentsRef,
+            where('researcherId', '==', user.id),
+            orderBy('registrationDate', 'desc')
+          );
+        }
+
+        const querySnapshot = await getDocs(q);
+        const patentsList = querySnapshot.docs.map((doc) => {
+          const data = doc.data();
+          
+          // Convert Firestore Timestamp to date string
+          const toDateString = (timestamp) => {
+            if (!timestamp) return '';
+            if (timestamp.toDate) {
+              return timestamp.toDate().toISOString().split('T')[0];
+            }
+            return String(timestamp);
+          };
+
+          return {
+            id: doc.id,
+            title: data.title || 'ללא כותרת',
+            researcher: data.researcherName || data.researcher || 'חוקר',
+            status: data.status || 'in-process',
+            registrationDate: toDateString(data.registrationDate),
+            isNew: data.isNew || false,
+          };
+        });
+
+        setPatentsData(patentsList);
+      } catch (err) {
+        console.error('Error fetching patents:', err);
+        setError('שגיאה בטעינת פטנטים');
+        setPatentsData([]);
+      } finally {
+        setLoading(false);
       }
-      return mockPatentsData.filter(item => item.researcher === user.name);
+    };
+
+    if (userRole) {
+      fetchPatents();
     }
-  }, [isAdmin, user]);
+  }, [userRole, user?.id]);
+
+  // Data is already filtered by Firestore query
+  const filteredByRole = useMemo(() => {
+    return patentsData;
+  }, [patentsData]);
 
   // Filter and sort patents
   const filteredAndSorted = useMemo(() => {
@@ -140,8 +181,20 @@ const Patents = () => {
         </div>
       </div>
 
+      {loading && (
+        <div className="no-results">
+          <p>טוען פטנטים...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="no-results" style={{ background: '#f8d7da', color: '#721c24' }}>
+          <p>{error}</p>
+        </div>
+      )}
+
       <div className="research-grid">
-        {filteredAndSorted.map((patent) => (
+        {!loading && !error && filteredAndSorted.map((patent) => (
           <button
             key={patent.id}
             className="research-card"
@@ -157,7 +210,7 @@ const Patents = () => {
         ))}
       </div>
 
-      {filteredAndSorted.length === 0 && (
+      {!loading && !error && filteredAndSorted.length === 0 && (
         <div className="no-results">
           <p>לא נמצאו פטנטים</p>
         </div>

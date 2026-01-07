@@ -1,79 +1,83 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { db } from '../services/firebase';
 import './Research.css';
 
-// Mock data - TODO: Replace with actual data from Firebase/API
-const initialMockResearchData = [
-  { id: 1, title: 'מחקר 1', researcher: 'נטע דור', status: 'pending', hasPatent: false, submissionDate: '2024-01-15', isNew: false },
-  { id: 2, title: 'מחקר 2', researcher: 'טליה אליהו', status: 'awarded', hasPatent: true, submissionDate: '2024-02-20', isNew: false },
-  { id: 3, title: 'מחקר 3', researcher: 'דוד כהן', status: 'awarded', hasPatent: false, submissionDate: '2024-03-10', isNew: false },
-  { id: 4, title: 'מחקר 4', researcher: 'שרה לוי', status: 'awarded', hasPatent: true, submissionDate: '2024-04-05', isNew: false },
-  { id: 5, title: 'מחקר 5', researcher: 'יוסי ישראלי', status: 'pending', hasPatent: false, submissionDate: '2024-05-12', isNew: true },
-  { id: 6, title: 'מחקר 6', researcher: 'מיכל רוזן', status: 'rejected', hasPatent: false, submissionDate: '2024-06-01', isNew: false },
-  { id: 7, title: 'מחקר 7', researcher: 'אבי כהן', status: 'pending', hasPatent: true, submissionDate: '2024-06-15', isNew: false },
-  { id: 8, title: 'מחקר 8', researcher: 'רותם שמיר', status: 'pending', hasPatent: false, submissionDate: '2024-07-01', isNew: false },
-];
-
-// Load research data from localStorage or use initial data
-const loadResearchData = () => {
-  try {
-    const saved = localStorage.getItem('researchData');
-    if (saved) {
-      return JSON.parse(saved);
-    }
-  } catch (error) {
-    console.error('Error loading research data:', error);
-  }
-  return initialMockResearchData;
-};
-
 const Research = () => {
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, userRole } = useAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPatents, setFilterPatents] = useState('all');
   const [sortBy, setSortBy] = useState('alphabetical');
-  const [researchData, setResearchData] = useState(() => loadResearchData());
+  const [researchData, setResearchData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Listen for new research submissions
+  // Fetch research data from Firestore
   useEffect(() => {
-    const handleStorageChange = () => {
-      const updated = loadResearchData();
-      setResearchData(updated);
+    const fetchResearch = async () => {
+      setLoading(true);
+      setError('');
+      
+      try {
+        const researchRef = collection(db, 'researchProposals');
+        let q = query(researchRef, orderBy('createdAt', 'desc'));
+
+        // Filter by researcher if not admin
+        if (userRole === 'RESEARCHER' && user?.id) {
+          q = query(
+            researchRef,
+            where('researcherId', '==', user.id),
+            orderBy('createdAt', 'desc')
+          );
+        }
+
+        const querySnapshot = await getDocs(q);
+        const researchList = querySnapshot.docs.map((doc) => {
+          const data = doc.data();
+          
+          // Convert Firestore Timestamp to date string
+          const toDateString = (timestamp) => {
+            if (!timestamp) return '';
+            if (timestamp.toDate) {
+              return timestamp.toDate().toISOString().split('T')[0];
+            }
+            return String(timestamp);
+          };
+
+          return {
+            id: doc.id,
+            title: data.projectTitle || data.title || 'ללא כותרת',
+            researcher: data.researcherName || data.researcher || 'חוקר',
+            status: data.status || 'pending',
+            hasPatent: data.hasPatent || false,
+            submissionDate: toDateString(data.submissionDate || data.createdAt),
+            isNew: data.isNew || false,
+          };
+        });
+
+        setResearchData(researchList);
+      } catch (err) {
+        console.error('Error fetching research:', err);
+        setError('שגיאה בטעינת מחקרים');
+        setResearchData([]);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    // Listen for custom event when new research is added
-    window.addEventListener('researchAdded', handleStorageChange);
-    
-    // Also check localStorage periodically
-    const interval = setInterval(() => {
-      const updated = loadResearchData();
-      if (JSON.stringify(updated) !== JSON.stringify(researchData)) {
-        setResearchData(updated);
-      }
-    }, 1000);
-
-    return () => {
-      window.removeEventListener('researchAdded', handleStorageChange);
-      clearInterval(interval);
-    };
-  }, [researchData]);
-
-  // Filter research based on user role
-  const filteredByRole = useMemo(() => {
-    if (isAdmin()) {
-      // ADMIN sees all research proposals
-      return researchData;
-    } else {
-      // RESEARCHER sees only their own research
-      if (!user || !user.name) {
-        return [];
-      }
-      return researchData.filter(item => item.researcher === user.name);
+    if (userRole) {
+      fetchResearch();
     }
-  }, [isAdmin, user, researchData]);
+  }, [userRole, user?.id]);
+
+  // Data is already filtered by Firestore query, so use researchData directly
+  const filteredByRole = useMemo(() => {
+    return researchData;
+  }, [researchData]);
 
   // Filter and sort research
   const filteredAndSorted = useMemo(() => {
@@ -218,7 +222,7 @@ const Research = () => {
         ))}
       </div>
 
-      {filteredAndSorted.length === 0 && (
+      {!loading && !error && filteredAndSorted.length === 0 && (
         <div className="no-results">
           <p>לא נמצאו מחקרים</p>
         </div>

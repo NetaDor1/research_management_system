@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
+import { db, storage } from '../services/firebase';
 import './Page.css';
 import './Research.css';
 
@@ -290,67 +293,162 @@ const NewResearch = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (validateForm()) {
-      // Load existing research data
-      let existingResearch = [];
-      try {
-        const saved = localStorage.getItem('researchData');
-        if (saved) {
-          existingResearch = JSON.parse(saved);
-        } else {
-          // Use initial mock data if nothing saved
-          existingResearch = [
-            { id: 1, title: 'מחקר 1', researcher: 'נטע דור', status: 'pending', hasPatent: false, submissionDate: '2024-01-15', isNew: false },
-            { id: 2, title: 'מחקר 2', researcher: 'טליה אליהו', status: 'awarded', hasPatent: true, submissionDate: '2024-02-20', isNew: false },
-            { id: 3, title: 'מחקר 3', researcher: 'דוד כהן', status: 'awarded', hasPatent: false, submissionDate: '2024-03-10', isNew: false },
-            { id: 4, title: 'מחקר 4', researcher: 'שרה לוי', status: 'awarded', hasPatent: true, submissionDate: '2024-04-05', isNew: false },
-            { id: 5, title: 'מחקר 5', researcher: 'יוסי ישראלי', status: 'pending', hasPatent: false, submissionDate: '2024-05-12', isNew: true },
-            { id: 6, title: 'מחקר 6', researcher: 'מיכל רוזן', status: 'rejected', hasPatent: false, submissionDate: '2024-06-01', isNew: false },
-            { id: 7, title: 'מחקר 7', researcher: 'אבי כהן', status: 'pending', hasPatent: true, submissionDate: '2024-06-15', isNew: false },
-            { id: 8, title: 'מחקר 8', researcher: 'רותם שמיר', status: 'pending', hasPatent: false, submissionDate: '2024-07-01', isNew: false },
-          ];
-        }
-      } catch (error) {
-        console.error('Error loading research data:', error);
-      }
+    if (!validateForm()) {
+      alert('יש למלא את כל השדות החובה');
+      return;
+    }
 
-      // Create new research object
-      const newId = existingResearch.length > 0 
-        ? Math.max(...existingResearch.map(r => r.id)) + 1 
-        : 1;
+    try {
+      const researcherId = user?.id || 'temp-user-id';
+      const researcherName = user?.name || 'חוקר';
+
+      console.log('Starting to save research proposal...');
+      console.log('Researcher ID:', researcherId);
+      console.log('Researcher Name:', researcherName);
+
+      // Convert dates to Timestamp for Firestore
+      const researchStartDate = formData.researchStartDate 
+        ? Timestamp.fromDate(new Date(formData.researchStartDate))
+        : null;
       
-      const newResearch = {
-        id: newId,
-        title: formData.projectTitle,
-        researcher: formData.researcher || user?.name || 'לא צוין',
+      const researchEndDate = formData.researchEndDate 
+        ? Timestamp.fromDate(new Date(formData.researchEndDate))
+        : null;
+      
+      const expectedResponseDate = formData.expectedResponseDate 
+        ? Timestamp.fromDate(new Date(formData.expectedResponseDate))
+        : null;
+
+      // Prepare research data
+      const researchData = {
+        // פרטים כלליים
+        projectTitle: formData.projectTitle,
+        fundName: formData.fundName,
+        submissionPath: formData.submissionPath,
+        researcherRole: formData.researcherRole,
+        proposalStage: formData.proposalStage,
+        
+        // פרטי החוקר
+        researcherId: researcherId,
+        researcherName: researcherName,
+        
+        // תקופת המחקר
+        researchStartDate: researchStartDate,
+        researchEndDate: researchEndDate,
+        researchDurationYears: formData.researchDurationYears || '',
+        academicYear: formData.academicYear || '',
+        
+        // תקציב
+        totalBudget: formData.totalBudget || '',
+        currency: formData.currency || 'ILS',
+        convertedBudget: formData.convertedBudget || '',
+        budgetComponents: formData.budgetComponents || {},
+        
+        // שותפים
+        partners: formData.partners.filter(p => p.name || p.email || p.institution || p.country) || [],
+        
+        // מסמכים
+        researchProposalFileUrl: '',
+        officialDocuments: [],
+        requiredDocumentsChecklist: formData.requiredDocumentsChecklist || {},
+        
+        // חתימה
+        digitalSignature: formData.digitalSignature || { signed: false, signer: '', date: null },
+        
+        // מידע נוסף
+        expectedResponseDate: expectedResponseDate,
+        notes: formData.notes || '',
+        
+        // סטטוס
         status: 'pending',
         hasPatent: false,
-        submissionDate: formData.researchStartDate || new Date().toISOString().split('T')[0],
-        isNew: true,
-        // Store full form data for future use
-        fullData: formData
+        
+        // תאריכים
+        submissionDate: researchStartDate || serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        isNew: true
       };
 
-      // Add new research to the list
-      const updatedResearch = [newResearch, ...existingResearch];
+      console.log('Research data prepared:', researchData);
 
-      // Save to localStorage
-      try {
-        localStorage.setItem('researchData', JSON.stringify(updatedResearch));
-        
-        // Dispatch custom event to notify other components
-        window.dispatchEvent(new Event('researchAdded'));
-        
-        console.log('Research saved:', newResearch);
-        alert('הצעת המחקר נשלחה בהצלחה!');
-        navigate('/research');
-      } catch (error) {
-        console.error('Error saving research:', error);
-        alert('שגיאה בשמירת המחקר. נסו שוב.');
+      // Create document in Firestore
+      console.log('Creating document in Firestore...');
+      const docRef = await addDoc(collection(db, 'researchProposals'), researchData);
+      console.log('Document created with ID:', docRef.id);
+
+      // Upload files after document creation
+      let proposalFileUrl = '';
+      let officialDocsUrls = [];
+      
+      if (formData.researchProposalFile) {
+        try {
+          console.log('Uploading proposal file...');
+          const fileRef = ref(storage, `researchProposals/${docRef.id}/proposal/${formData.researchProposalFile.name}`);
+          await uploadBytes(fileRef, formData.researchProposalFile);
+          proposalFileUrl = await getDownloadURL(fileRef);
+          console.log('Proposal file uploaded:', proposalFileUrl);
+        } catch (fileError) {
+          console.error('Error uploading proposal file:', fileError);
+          // Continue even if file upload fails
+        }
       }
+
+      if (formData.officialDocuments && formData.officialDocuments.length > 0) {
+        try {
+          console.log('Uploading official documents...');
+          for (let idx = 0; idx < formData.officialDocuments.length; idx++) {
+            const file = formData.officialDocuments[idx];
+            const fileRef = ref(storage, `researchProposals/${docRef.id}/official/${Date.now()}-${idx}-${file.name}`);
+            await uploadBytes(fileRef, file);
+            const url = await getDownloadURL(fileRef);
+            officialDocsUrls.push(url);
+          }
+          console.log('Official documents uploaded:', officialDocsUrls.length);
+        } catch (fileError) {
+          console.error('Error uploading official documents:', fileError);
+          // Continue even if file upload fails
+        }
+      }
+
+      // Update document with file URLs if any files were uploaded
+      if (proposalFileUrl || officialDocsUrls.length > 0) {
+        try {
+          console.log('Updating document with file URLs...');
+          await updateDoc(doc(db, 'researchProposals', docRef.id), {
+            researchProposalFileUrl: proposalFileUrl || null,
+            officialDocuments: officialDocsUrls,
+            updatedAt: serverTimestamp(),
+          });
+          console.log('Document updated with file URLs');
+        } catch (updateError) {
+          console.error('Error updating document with file URLs:', updateError);
+          // Continue even if update fails
+        }
+      }
+
+      console.log('Research proposal saved successfully!');
+      alert('הצעת המחקר נשלחה בהצלחה!');
+      navigate('/research');
+    } catch (error) {
+      console.error('Error saving research:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      
+      let errorMessage = 'שגיאה בשמירת המחקר. ';
+      
+      if (error.code === 'permission-denied') {
+        errorMessage += 'אין הרשאה לשמור. בדקי את ה-Security Rules ב-Firebase.';
+      } else if (error.code === 'unavailable') {
+        errorMessage += 'Firebase לא זמין כרגע. נסי שוב מאוחר יותר.';
+      } else {
+        errorMessage += `פרטים: ${error.message || 'שגיאה לא ידועה'}`;
+      }
+      
+      alert(errorMessage);
     }
   };
 
