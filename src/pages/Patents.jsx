@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
+import DetailModal from '../components/DetailModal';
 import './Research.css';
 
 const Patents = () => {
@@ -14,6 +15,8 @@ const Patents = () => {
   const [patentsData, setPatentsData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedPatentId, setSelectedPatentId] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Fetch patents from Firestore
   useEffect(() => {
@@ -179,8 +182,13 @@ const Patents = () => {
   }, [filteredByRole, searchTerm, filterStatus, sortBy]);
 
   const handlePatentClick = (patentId) => {
-    // TODO: Navigate to patent details page
-    navigate(`/patents/${patentId}`);
+    setSelectedPatentId(patentId);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedPatentId(null);
   };
 
   const handleAddPatent = () => {
@@ -303,6 +311,13 @@ const Patents = () => {
           <p>לא נמצאו פטנטים</p>
         </div>
       )}
+
+      <DetailModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        itemId={selectedPatentId}
+        type="patent"
+      />
     </div>
   );
 };

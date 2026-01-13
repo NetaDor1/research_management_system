@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -126,32 +126,57 @@ const NewResearch = () => {
   });
 
   const [errors, setErrors] = useState({});
+  
+  // Refs for date pickers
+  const startDatePickerRef = useRef(null);
+  const endDatePickerRef = useRef(null);
+  const expectedDatePickerRef = useRef(null);
 
   // Calculate research duration automatically
   useEffect(() => {
     if (formData.researchStartDate && formData.researchEndDate) {
-      const start = new Date(formData.researchStartDate);
-      const end = new Date(formData.researchEndDate);
+      const startDateISO = convertDateToISO(formData.researchStartDate);
+      const endDateISO = convertDateToISO(formData.researchEndDate);
       
-      if (end > start) {
-        const diffTime = Math.abs(end - start);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        const diffYears = (diffDays / 365).toFixed(2);
+      if (startDateISO && endDateISO) {
+        const start = new Date(startDateISO);
+        const end = new Date(endDateISO);
         
-        setFormData(prev => ({
-          ...prev,
-          researchDurationYears: diffYears
-        }));
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && end > start) {
+          const diffTime = Math.abs(end - start);
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          const diffYears = (diffDays / 365).toFixed(2);
+          
+          setFormData(prev => ({
+            ...prev,
+            researchDurationYears: diffYears
+          }));
 
-        // Calculate academic year
-        const academicYear = getHebrewAcademicYear(start);
-        setFormData(prev => ({
-          ...prev,
-          academicYear: academicYear
-        }));
+          // Calculate academic year
+          const academicYear = getHebrewAcademicYear(start);
+          setFormData(prev => ({
+            ...prev,
+            academicYear: academicYear
+          }));
+        }
       }
     }
   }, [formData.researchStartDate, formData.researchEndDate]);
+
+  // Calculate total budget from components
+  useEffect(() => {
+    const total = Object.values(formData.budgetComponents || {}).reduce((sum, amount) => {
+      const numAmount = parseFloat(amount) || 0;
+      return sum + numAmount;
+    }, 0);
+    
+    if (total > 0) {
+      setFormData(prev => ({
+        ...prev,
+        totalBudget: total.toString()
+      }));
+    }
+  }, [formData.budgetComponents]);
 
   // Calculate converted budget
   useEffect(() => {
@@ -170,8 +195,149 @@ const NewResearch = () => {
         ...prev,
         convertedBudget: converted
       }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        convertedBudget: ''
+      }));
     }
   }, [formData.totalBudget, formData.currency]);
+
+  // Format date from YYYY-MM-DD to dd/mm/yyyy
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return '';
+    // If already in dd/mm/yyyy format, return as is
+    if (dateString.includes('/')) {
+      return dateString;
+    }
+    // Convert from YYYY-MM-DD to dd/mm/yyyy
+    const parts = dateString.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateString;
+  };
+
+  // Convert date from dd/mm/yyyy to YYYY-MM-DD for storage
+  const convertDateToISO = (dateString) => {
+    if (!dateString) return '';
+    // If already in YYYY-MM-DD format, return as is
+    if (dateString.includes('-') && dateString.length === 10) {
+      return dateString;
+    }
+    // Convert from dd/mm/yyyy to YYYY-MM-DD
+    const parts = dateString.split('/');
+    if (parts.length === 3) {
+      const day = parts[0].padStart(2, '0');
+      const month = parts[1].padStart(2, '0');
+      const year = parts[2];
+      return `${year}-${month}-${day}`;
+    }
+    return dateString;
+  };
+
+  // Handle date input with formatting
+  const handleDateChange = (name, value) => {
+    // Remove non-numeric characters except /
+    let cleaned = value.replace(/[^\d/]/g, '');
+    
+    // Split by / to handle each part separately
+    const parts = cleaned.split('/');
+    let day = parts[0] || '';
+    let month = parts[1] || '';
+    let year = parts[2] || '';
+    
+    // Limit day to 2 digits and validate (01-31)
+    if (day.length > 2) {
+      day = day.slice(0, 2);
+    }
+    if (day.length === 2) {
+      const dayNum = parseInt(day, 10);
+      if (dayNum > 31) {
+        day = '31';
+      } else if (dayNum < 1) {
+        day = '01';
+      }
+    }
+    
+    // Limit month to 2 digits and validate (01-12)
+    if (month.length > 2) {
+      month = month.slice(0, 2);
+    }
+    if (month.length === 2) {
+      const monthNum = parseInt(month, 10);
+      if (monthNum > 12) {
+        month = '12';
+      } else if (monthNum < 1) {
+        month = '01';
+      }
+    }
+    
+    // Limit year to 4 digits
+    if (year.length > 4) {
+      year = year.slice(0, 4);
+    }
+    
+    // Reconstruct the date string
+    let formatted = day;
+    if (month || (cleaned.includes('/') && day.length === 2)) {
+      formatted += '/' + month;
+    }
+    if (year || (cleaned.split('/').length > 2 && month.length === 2)) {
+      formatted += '/' + year;
+    }
+    
+    // Auto-add / after day when 2 digits are entered
+    if (day.length === 2 && !month && !cleaned.includes('/') && value.length > cleaned.length) {
+      formatted = day + '/';
+    }
+    
+    // Auto-add / after month when 2 digits are entered
+    if (month.length === 2 && !year && cleaned.split('/').length === 2 && value.length > cleaned.length) {
+      formatted = day + '/' + month + '/';
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      [name]: formatted
+    }));
+
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  // Handle date picker change (from calendar)
+  const handleDatePickerChange = (name, value) => {
+    if (value) {
+      // Convert from YYYY-MM-DD to dd/mm/yyyy
+      const parts = value.split('-');
+      if (parts.length === 3) {
+        const formatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        setFormData(prev => ({
+          ...prev,
+          [name]: formatted
+        }));
+      }
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+
+    // Clear error
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value, type, files } = e.target;
@@ -181,6 +347,9 @@ const NewResearch = () => {
         ...prev,
         [name]: files[0] || null
       }));
+    } else if (name === 'researchStartDate' || name === 'researchEndDate' || name === 'expectedResponseDate') {
+      // Handle date fields with custom formatting
+      handleDateChange(name, value);
     } else {
       setFormData(prev => ({
         ...prev,
@@ -198,13 +367,27 @@ const NewResearch = () => {
   };
 
   const handleBudgetComponentChange = (component, value) => {
-    setFormData(prev => ({
-      ...prev,
-      budgetComponents: {
+    // Ensure value is a string (for number input)
+    const budgetValue = typeof value === 'string' ? value : '';
+    
+    setFormData(prev => {
+      const newBudgetComponents = {
         ...prev.budgetComponents,
-        [component]: value
-      }
-    }));
+        [component]: budgetValue
+      };
+      
+      // Calculate total budget from all components
+      const total = Object.values(newBudgetComponents).reduce((sum, amount) => {
+        const numAmount = parseFloat(amount) || 0;
+        return sum + numAmount;
+      }, 0);
+      
+      return {
+        ...prev,
+        budgetComponents: newBudgetComponents,
+        totalBudget: total > 0 ? total.toString() : ''
+      };
+    });
   };
 
   const handleDocumentChecklistChange = (document, checked) => {
@@ -279,14 +462,46 @@ const NewResearch = () => {
     if (!formData.proposalStage) {
       newErrors.proposalStage = 'שלב ההצעה חובה';
     }
+    // Validate date format dd/mm/yyyy
+    const datePattern = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    
     if (!formData.researchStartDate) {
       newErrors.researchStartDate = 'תאריך תחילת המחקר חובה';
+    } else if (!datePattern.test(formData.researchStartDate)) {
+      newErrors.researchStartDate = 'תאריך לא תקין. נא להזין בפורמט dd/mm/yyyy';
+    } else {
+      const startDateISO = convertDateToISO(formData.researchStartDate);
+      const startDate = new Date(startDateISO);
+      if (isNaN(startDate.getTime())) {
+        newErrors.researchStartDate = 'תאריך לא תקין';
+      }
     }
+    
     if (!formData.researchEndDate) {
       newErrors.researchEndDate = 'תאריך סיום המחקר חובה';
+    } else if (!datePattern.test(formData.researchEndDate)) {
+      newErrors.researchEndDate = 'תאריך לא תקין. נא להזין בפורמט dd/mm/yyyy';
+    } else {
+      const endDateISO = convertDateToISO(formData.researchEndDate);
+      const endDate = new Date(endDateISO);
+      if (isNaN(endDate.getTime())) {
+        newErrors.researchEndDate = 'תאריך לא תקין';
+      } else if (formData.researchStartDate) {
+        const startDateISO = convertDateToISO(formData.researchStartDate);
+        const startDate = new Date(startDateISO);
+        if (!isNaN(startDate.getTime()) && endDate <= startDate) {
+          newErrors.researchEndDate = 'תאריך סיום חייב להיות אחרי תאריך התחלה';
+        }
+      }
     }
-    if (!formData.totalBudget || formData.totalBudget.length > 7) {
-      newErrors.totalBudget = 'תקציב חובה (עד 7 ספרות)';
+    // Check if at least one budget component has a value
+    const hasBudgetComponents = Object.values(formData.budgetComponents || {}).some(amount => {
+      const numAmount = parseFloat(amount) || 0;
+      return numAmount > 0;
+    });
+    
+    if (!hasBudgetComponents) {
+      newErrors.budgetComponents = 'יש למלא לפחות קטגוריית תקציב אחת';
     }
 
     setErrors(newErrors);
@@ -310,16 +525,20 @@ const NewResearch = () => {
       console.log('Researcher Name:', researcherName);
 
       // Convert dates to Timestamp for Firestore
-      const researchStartDate = formData.researchStartDate 
-        ? Timestamp.fromDate(new Date(formData.researchStartDate))
+      const researchStartDateISO = convertDateToISO(formData.researchStartDate);
+      const researchEndDateISO = convertDateToISO(formData.researchEndDate);
+      const expectedResponseDateISO = convertDateToISO(formData.expectedResponseDate);
+      
+      const researchStartDate = researchStartDateISO 
+        ? Timestamp.fromDate(new Date(researchStartDateISO))
         : null;
       
-      const researchEndDate = formData.researchEndDate 
-        ? Timestamp.fromDate(new Date(formData.researchEndDate))
+      const researchEndDate = researchEndDateISO 
+        ? Timestamp.fromDate(new Date(researchEndDateISO))
         : null;
       
-      const expectedResponseDate = formData.expectedResponseDate 
-        ? Timestamp.fromDate(new Date(formData.expectedResponseDate))
+      const expectedResponseDate = expectedResponseDateISO 
+        ? Timestamp.fromDate(new Date(expectedResponseDateISO))
         : null;
 
       // Prepare research data
@@ -862,14 +1081,72 @@ const NewResearch = () => {
                 <label htmlFor="researchStartDate">
                   תאריך לועזי של תחילת המחקר (dd/mm/yyyy) <span className="required">*</span>
                 </label>
-                <input
-                  type="date"
-                  id="researchStartDate"
-                  name="researchStartDate"
-                  value={formData.researchStartDate}
-                  onChange={handleChange}
-                  className={errors.researchStartDate ? 'error' : ''}
-                />
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', position: 'relative' }}>
+                  <input
+                    type="text"
+                    id="researchStartDate"
+                    name="researchStartDate"
+                    value={formatDateForDisplay(formData.researchStartDate)}
+                    onChange={handleChange}
+                    className={errors.researchStartDate ? 'error' : ''}
+                    placeholder="dd/mm/yyyy"
+                    maxLength="10"
+                    style={{ flex: 1 }}
+                  />
+                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                    <input
+                      type="date"
+                      ref={startDatePickerRef}
+                      value={convertDateToISO(formData.researchStartDate) || ''}
+                      onChange={(e) => handleDatePickerChange('researchStartDate', e.target.value)}
+                      style={{ 
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        opacity: 0,
+                        cursor: 'pointer',
+                        zIndex: 2
+                      }}
+                      title="בחר תאריך מלוח שנה"
+                    />
+                    <div
+                      style={{
+                        cursor: 'pointer',
+                        fontSize: '20px',
+                        padding: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: '#f8f9fa',
+                        border: '2px solid #e9ecef',
+                        borderRadius: '8px',
+                        minWidth: '40px',
+                        height: '40px',
+                        transition: 'all 0.2s',
+                        margin: 0,
+                        pointerEvents: 'none'
+                      }}
+                      onMouseEnter={(e) => {
+                        const parent = e.target.parentElement;
+                        if (parent) {
+                          parent.style.background = '#e9ecef';
+                          parent.style.borderColor = '#667eea';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        const parent = e.target.parentElement;
+                        if (parent) {
+                          parent.style.background = '#f8f9fa';
+                          parent.style.borderColor = '#e9ecef';
+                        }
+                      }}
+                    >
+                      📅
+                    </div>
+                  </div>
+                </div>
                 {errors.researchStartDate && <span className="error-message">{errors.researchStartDate}</span>}
               </div>
 
@@ -877,14 +1154,72 @@ const NewResearch = () => {
                 <label htmlFor="researchEndDate">
                   תאריך לועזי של סוף המחקר (dd/mm/yyyy) <span className="required">*</span>
                 </label>
-                <input
-                  type="date"
-                  id="researchEndDate"
-                  name="researchEndDate"
-                  value={formData.researchEndDate}
-                  onChange={handleChange}
-                  className={errors.researchEndDate ? 'error' : ''}
-                />
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', position: 'relative' }}>
+                  <input
+                    type="text"
+                    id="researchEndDate"
+                    name="researchEndDate"
+                    value={formatDateForDisplay(formData.researchEndDate)}
+                    onChange={handleChange}
+                    className={errors.researchEndDate ? 'error' : ''}
+                    placeholder="dd/mm/yyyy"
+                    maxLength="10"
+                    style={{ flex: 1 }}
+                  />
+                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                    <input
+                      type="date"
+                      ref={endDatePickerRef}
+                      value={convertDateToISO(formData.researchEndDate) || ''}
+                      onChange={(e) => handleDatePickerChange('researchEndDate', e.target.value)}
+                      style={{ 
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        opacity: 0,
+                        cursor: 'pointer',
+                        zIndex: 2
+                      }}
+                      title="בחר תאריך מלוח שנה"
+                    />
+                    <div
+                      style={{
+                        cursor: 'pointer',
+                        fontSize: '20px',
+                        padding: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: '#f8f9fa',
+                        border: '2px solid #e9ecef',
+                        borderRadius: '8px',
+                        minWidth: '40px',
+                        height: '40px',
+                        transition: 'all 0.2s',
+                        margin: 0,
+                        pointerEvents: 'none'
+                      }}
+                      onMouseEnter={(e) => {
+                        const parent = e.target.parentElement;
+                        if (parent) {
+                          parent.style.background = '#e9ecef';
+                          parent.style.borderColor = '#667eea';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        const parent = e.target.parentElement;
+                        if (parent) {
+                          parent.style.background = '#f8f9fa';
+                          parent.style.borderColor = '#e9ecef';
+                        }
+                      }}
+                    >
+                      📅
+                    </div>
+                  </div>
+                </div>
                 {errors.researchEndDate && <span className="error-message">{errors.researchEndDate}</span>}
               </div>
             </div>
@@ -926,22 +1261,51 @@ const NewResearch = () => {
           <div className="form-section">
             <h2>תקציב</h2>
             
-            <div className="form-row">
+            <div className="form-group">
+              <label>רכיבי התקציב <span className="required">*</span></label>
+              <p className="form-subtitle" style={{ marginBottom: '15px', color: '#6c757d', fontSize: '14px' }}>
+                הזינו את הסכום המבוקש לכל קטגוריה. הסכום הכולל יחושב אוטומטית.
+              </p>
+              <div className="budget-components-grid">
+                {budgetComponents.map(component => (
+                  <div key={component} className="budget-component-item">
+                    <label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>
+                      {component}
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="הזינו סכום"
+                      value={formData.budgetComponents[component] || ''}
+                      onChange={(e) => handleBudgetComponentChange(component, e.target.value)}
+                      min="0"
+                      step="0.01"
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                ))}
+              </div>
+              {errors.budgetComponents && (
+                <span className="error-message" style={{ display: 'block', marginTop: '10px' }}>
+                  {errors.budgetComponents}
+                </span>
+              )}
+            </div>
+
+            <div className="form-row" style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid #e9ecef' }}>
               <div className="form-group">
                 <label htmlFor="totalBudget">
-                  סה"כ התקציב המבוקש (עד 7 ספרות) <span className="required">*</span>
+                  סה"כ התקציב המבוקש (חישוב אוטומטי)
                 </label>
                 <input
-                  type="number"
+                  type="text"
                   id="totalBudget"
                   name="totalBudget"
-                  value={formData.totalBudget}
-                  onChange={handleChange}
-                  className={errors.totalBudget ? 'error' : ''}
-                  placeholder="הזינו את הסכום"
-                  maxLength="7"
+                  value={formData.totalBudget ? Number(formData.totalBudget).toLocaleString('he-IL') : ''}
+                  readOnly
+                  className="readonly-field"
+                  placeholder="יחושב אוטומטית מכל הקטגוריות"
+                  style={{ fontWeight: '600', fontSize: '18px', color: '#667eea' }}
                 />
-                {errors.totalBudget && <span className="error-message">{errors.totalBudget}</span>}
               </div>
 
               <div className="form-group">
@@ -968,36 +1332,11 @@ const NewResearch = () => {
                   type="text"
                   id="convertedBudget"
                   name="convertedBudget"
-                  value={formData.convertedBudget}
+                  value={formData.convertedBudget ? Number(formData.convertedBudget).toLocaleString('he-IL') : ''}
                   readOnly
                   className="readonly-field"
                   placeholder="יחושב אוטומטית"
                 />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>רכיבי התקציב</label>
-              <div className="budget-components-grid">
-                {budgetComponents.map(component => (
-                  <div key={component} className="budget-component-item">
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={formData.budgetComponents[component] || false}
-                        onChange={(e) => handleBudgetComponentChange(component, e.target.checked)}
-                      />
-                      {component}
-                    </label>
-                    {formData.budgetComponents[component] && (
-                      <input
-                        type="number"
-                        placeholder="סכום"
-                        onChange={(e) => handleBudgetComponentChange(component, e.target.value)}
-                      />
-                    )}
-                  </div>
-                ))}
               </div>
             </div>
           </div>
@@ -1164,13 +1503,71 @@ const NewResearch = () => {
               <label htmlFor="expectedResponseDate">
                 תאריך משוער לקבלת תשובות קבלה / דחיה מהקרנות החיצוניות
               </label>
-              <input
-                type="date"
-                id="expectedResponseDate"
-                name="expectedResponseDate"
-                value={formData.expectedResponseDate}
-                onChange={handleChange}
-              />
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', position: 'relative' }}>
+                <input
+                  type="text"
+                  id="expectedResponseDate"
+                  name="expectedResponseDate"
+                  value={formatDateForDisplay(formData.expectedResponseDate)}
+                  onChange={handleChange}
+                  placeholder="dd/mm/yyyy"
+                  maxLength="10"
+                  style={{ flex: 1 }}
+                />
+                <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <input
+                    type="date"
+                    ref={expectedDatePickerRef}
+                    value={convertDateToISO(formData.expectedResponseDate) || ''}
+                    onChange={(e) => handleDatePickerChange('expectedResponseDate', e.target.value)}
+                    style={{ 
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      opacity: 0,
+                      cursor: 'pointer',
+                      zIndex: 2
+                    }}
+                    title="בחר תאריך מלוח שנה"
+                  />
+                  <div
+                    style={{
+                      cursor: 'pointer',
+                      fontSize: '20px',
+                      padding: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: '#f8f9fa',
+                      border: '2px solid #e9ecef',
+                      borderRadius: '8px',
+                      minWidth: '40px',
+                      height: '40px',
+                      transition: 'all 0.2s',
+                      margin: 0,
+                      pointerEvents: 'none'
+                    }}
+                    onMouseEnter={(e) => {
+                      const parent = e.target.parentElement;
+                      if (parent) {
+                        parent.style.background = '#e9ecef';
+                        parent.style.borderColor = '#667eea';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      const parent = e.target.parentElement;
+                      if (parent) {
+                        parent.style.background = '#f8f9fa';
+                        parent.style.borderColor = '#e9ecef';
+                      }
+                    }}
+                  >
+                    📅
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="form-group">

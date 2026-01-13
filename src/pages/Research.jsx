@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
+import DetailModal from '../components/DetailModal';
 import './Research.css';
 
 const Research = () => {
@@ -15,6 +16,8 @@ const Research = () => {
   const [researchData, setResearchData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedResearchId, setSelectedResearchId] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Fetch research data from Firestore
   const fetchResearch = React.useCallback(async () => {
@@ -203,8 +206,13 @@ const Research = () => {
   }, [filteredByRole, searchTerm, filterStatus, filterPatents, sortBy]);
 
   const handleResearchClick = (researchId) => {
-    // TODO: Navigate to research details page
-    navigate(`/research/${researchId}`);
+    setSelectedResearchId(researchId);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedResearchId(null);
   };
 
   const handleAddResearch = () => {
@@ -330,6 +338,13 @@ const Research = () => {
           <p>לא נמצאו מחקרים</p>
         </div>
       )}
+
+      <DetailModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        itemId={selectedResearchId}
+        type="research"
+      />
     </div>
   );
 };

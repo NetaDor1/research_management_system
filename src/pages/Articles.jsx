@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
+import DetailModal from '../components/DetailModal';
 import './Research.css';
 
 const Articles = () => {
@@ -15,6 +16,8 @@ const Articles = () => {
   const [articlesData, setArticlesData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedArticleId, setSelectedArticleId] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Fetch articles from Firestore
   useEffect(() => {
@@ -186,8 +189,13 @@ const Articles = () => {
   }, [filteredByRole, searchTerm, filterStatus, filterType, sortBy]);
 
   const handleArticleClick = (articleId) => {
-    // TODO: Navigate to article details page
-    navigate(`/articles/${articleId}`);
+    setSelectedArticleId(articleId);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedArticleId(null);
   };
 
   const handleAddArticle = () => {
@@ -314,6 +322,13 @@ const Articles = () => {
           <p>לא נמצאו מאמרים</p>
         </div>
       )}
+
+      <DetailModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        itemId={selectedArticleId}
+        type="article"
+      />
     </div>
   );
 };
