@@ -8,7 +8,7 @@ import './Research.css';
 
 const NewArticle = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
 
   // Options for journal ranking
   const journalRankingOptions = [
@@ -248,7 +248,7 @@ const NewArticle = () => {
 
           {/* כפתורי שליחה */}
           <div className="form-actions">
-            <button type="button" onClick={() => navigate('/articles')} className="cancel-btn">
+            <button type="button" onClick={() => navigate(userRole === 'RESEARCHER' ? '/' : '/articles')} className="cancel-btn">
               ביטול
             </button>
             <button type="submit" className="submit-btn" disabled={isSubmitting}>

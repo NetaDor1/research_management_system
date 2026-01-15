@@ -9,7 +9,7 @@ import './Research.css';
 
 const NewPatent = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
 
   // Options for dropdowns
   const institutionPercentageOptions = [
@@ -391,7 +391,7 @@ const NewPatent = () => {
 
       console.log('Patent saved successfully!');
       alert('הפטנט נשמר בהצלחה!');
-      navigate('/patents');
+      navigate(userRole === 'RESEARCHER' ? '/' : '/patents');
     } catch (error) {
       console.error('Error saving patent:', error);
       alert('שגיאה בשמירת הפטנט: ' + (error.message || 'שגיאה לא ידועה'));
@@ -838,7 +838,7 @@ const NewPatent = () => {
 
           {/* כפתורי שליחה */}
           <div className="form-actions">
-            <button type="button" onClick={() => navigate('/patents')} className="cancel-btn">
+            <button type="button" onClick={() => navigate(userRole === 'RESEARCHER' ? '/' : '/patents')} className="cancel-btn">
               ביטול
             </button>
             <button type="submit" className="submit-btn" disabled={isSubmitting}>

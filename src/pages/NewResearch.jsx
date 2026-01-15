@@ -9,32 +9,45 @@ import './Research.css';
 
 const NewResearch = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
   
   // Options for dropdowns
   const fundOptions = [
-    'קרן המדען הראשי',
-    'קרן ISF',
-    'קרן GIF',
-    'קרן BSF',
-    'קרן ERC',
-    'קרן Horizon Europe',
-    'קרן NIH',
-    'קרן NSF',
-    'קרן DFG',
-    'קרן ANR',
-    'קרן UKRI',
-    'קרן JSPS',
-    'קרן NSERC',
-    'קרן ARC',
+    'הקרן הלאומית למדע ISF - Israeli Science Foundation',
+    'הקרן הדו-לאומית למדע BSF - Binational Science Foundation',
+    'הקרן הגרמנית-ישראלית למחקר ופיתוח GIF - German-Israeli Foundation',
+    'האיחוד האירופי Horizon',
+    'משרד החדשנות, המדע והטכנולוגיה MOST',
+    'משרד הבריאות MOH',
+    'המכון הלאומי לבריאות (ארה"ב) - NIH National Institute of Health',
+    'הקרן לחקר הסרטן ICRF',
+    'הקרן הדו-לאומית למחקר ופיתוח חקלאי BARD',
+    'שיתוף פעולה גרמניה-ישראל DIP',
+    'הקרן הגרמנית למחקר DFG',
+    'HFSP - Human Frontiers Science Project',
+    'רשות המים - המדען הראשי',
+    'רשות האנרגיה והתשתיות - המדען הראשי',
+    'המשרד לאיכות הסביבה - המדען הראשי',
+    'משרד החקלאות וההתיישבות הכפרית / מכון וולקני',
+    'האגודה למלחמה בסרטן',
+    'אלו"ט',
+    'קרן "שלם"',
+    'Volfswagen Stiftung',
+    'Spencer Foundation for Research in Education',
+    'קרן קיימת לישראל קק"ל',
+    'מו"פ מדבר יהודה וים המלח',
+    'המרכז למחקרי סביבה וקיימות',
+    'קרן פזי',
+    'מכון אלי הורביץ לניהול אסטרטגי',
+    'מרכז לדאטה ובינה מלאכותית - אונ\' תל אביב',
     'קרן אחרת'
   ];
 
   const submissionPathOptions = [
-    'מסלול רגיל',
-    'מסלול מהיר',
-    'מסלול בינלאומי',
-    'מסלול מיוחד'
+    'לאומי',
+    'בינלאומי',
+    'שת"פ משרדים ממשלתיים',
+    'אחר'
   ];
 
   const researcherRoleOptions = [
@@ -49,6 +62,22 @@ const NewResearch = () => {
     'הצעה מלאה'
   ];
 
+  const submissionTypeOptions = [
+    'שלב אחד',
+    'דו-שלבי',
+    'רב שלבי',
+    'אחר'
+  ];
+
+  const fundTypeOptions = [
+    'תחרותי',
+    'ממשלתי',
+    'עמותה / קהילה',
+    'בינלאומי',
+    'מרכזי מחקר',
+    'תשתיות מחקר'
+  ];
+
   const currencyOptions = [
     { value: 'ILS', label: '₪ (שקל)' },
     { value: 'USD', label: '$ (דולר)' },
@@ -56,12 +85,15 @@ const NewResearch = () => {
   ];
 
   const budgetComponents = [
-    'כ"א (כוח אדם)',
-    'ציוד',
-    'נסיעות',
-    'פרסומים',
-    'תקורה',
-    'אחר'
+    'כוח אדם',
+    'ציוד קבוע',
+    'חומרים וציוד מתכלה',
+    'מחשבים',
+    'נסיעות לחו"ל',
+    'כנסים',
+    'פטנטים',
+    'שונות',
+    'תקורה'
   ];
 
   const requiredDocuments = [
@@ -105,9 +137,11 @@ const NewResearch = () => {
   const [formData, setFormData] = useState({
     projectTitle: '',
     fundName: '',
+    fundType: '',
     submissionPath: '',
     researcherRole: '',
     proposalStage: '',
+    submissionType: '',
     researchStartDate: '',
     researchEndDate: '',
     researchDurationYears: '',
@@ -546,9 +580,11 @@ const NewResearch = () => {
         // פרטים כלליים
         projectTitle: formData.projectTitle,
         fundName: formData.fundName,
+        fundType: formData.fundType || '',
         submissionPath: formData.submissionPath,
         researcherRole: formData.researcherRole,
         proposalStage: formData.proposalStage,
+        submissionType: formData.submissionType || '',
         
         // פרטי החוקר
         researcherId: researcherId,
@@ -651,7 +687,7 @@ const NewResearch = () => {
 
       console.log('Research proposal saved successfully!');
       alert('הצעת המחקר נשלחה בהצלחה!');
-      navigate('/research');
+      navigate(userRole === 'RESEARCHER' ? '/' : '/research');
     } catch (error) {
       console.error('Error saving research:', error);
       console.error('Error code:', error.code);
@@ -672,7 +708,7 @@ const NewResearch = () => {
   };
 
   const handleCancel = () => {
-    navigate('/research');
+    navigate(userRole === 'RESEARCHER' ? '/' : '/research');
   };
 
   const handleExportPDF = () => {
@@ -821,6 +857,10 @@ const NewResearch = () => {
             <span class="info-value">${formData.fundName || '<span class="empty-field">לא צוין</span>'}</span>
           </div>
           <div class="info-row">
+            <span class="info-label">סוג הקרן:</span>
+            <span class="info-value">${formData.fundType || '<span class="empty-field">לא צוין</span>'}</span>
+          </div>
+          <div class="info-row">
             <span class="info-label">מסלול ההגשה:</span>
             <span class="info-value">${formData.submissionPath || '<span class="empty-field">לא צוין</span>'}</span>
           </div>
@@ -831,6 +871,10 @@ const NewResearch = () => {
           <div class="info-row">
             <span class="info-label">שלב ההצעה:</span>
             <span class="info-value">${formData.proposalStage || '<span class="empty-field">לא צוין</span>'}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">סוג הגשה:</span>
+            <span class="info-value">${formData.submissionType || '<span class="empty-field">לא צוין</span>'}</span>
           </div>
         </div>
 
@@ -1012,6 +1056,25 @@ const NewResearch = () => {
               </div>
 
               <div className="form-group">
+                <label htmlFor="fundType">
+                  סוג הקרן
+                </label>
+                <select
+                  id="fundType"
+                  name="fundType"
+                  value={formData.fundType}
+                  onChange={handleChange}
+                >
+                  <option value="">בחרו סוג קרן</option>
+                  {fundTypeOptions.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
                 <label htmlFor="submissionPath">
                   מסלול ההגשה לקרן <span className="required">*</span>
                 </label>
@@ -1028,6 +1091,23 @@ const NewResearch = () => {
                   ))}
                 </select>
                 {errors.submissionPath && <span className="error-message">{errors.submissionPath}</span>}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="submissionType">
+                  סוג הגשה
+                </label>
+                <select
+                  id="submissionType"
+                  name="submissionType"
+                  value={formData.submissionType}
+                  onChange={handleChange}
+                >
+                  <option value="">בחרו סוג הגשה</option>
+                  {submissionTypeOptions.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
               </div>
             </div>
 

@@ -17,9 +17,10 @@ const NavigationBar = () => {
     setIsOpen(false);
   };
 
-  // Navigation items - both ADMIN and RESEARCHER see all items
-  // The content will be filtered based on role in each page
-  const navItems = [
+  // Navigation items - filtered by role
+  // RESEARCHER sees only Home, Dashboard, Statistics, and Report Format
+  // ADMIN sees all items including Research, Patents, and Articles
+  const allNavItems = [
     { path: '/', label: 'עמוד הבית', icon: '🏠' },
     { path: '/dashboard', label: 'לוח בקרה', icon: '📊' },
     { path: '/research', label: 'מחקרים', icon: '🔬' },
@@ -28,6 +29,16 @@ const NavigationBar = () => {
     { path: '/statistics', label: 'סטטיסטיקות', icon: '📈' },
     { path: '/report-format', label: 'פורמט דו"חות', icon: '📋' },
   ];
+
+  // Filter nav items based on role
+  const navItems = isAdmin() 
+    ? allNavItems 
+    : allNavItems.filter(item => 
+        item.path === '/' || 
+        item.path === '/dashboard' || 
+        item.path === '/statistics' || 
+        item.path === '/report-format'
+      );
 
   return (
     <>
