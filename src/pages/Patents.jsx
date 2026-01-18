@@ -182,8 +182,14 @@ const Patents = () => {
   }, [filteredByRole, searchTerm, filterStatus, sortBy]);
 
   const handlePatentClick = (patentId) => {
-    setSelectedPatentId(patentId);
-    setIsModalOpen(true);
+    if (isAdmin()) {
+      // Admin navigates to detail page
+      navigate(`/patents/${patentId}`);
+    } else {
+      // Researcher uses modal
+      setSelectedPatentId(patentId);
+      setIsModalOpen(true);
+    }
   };
 
   const handleCloseModal = () => {
@@ -312,12 +318,14 @@ const Patents = () => {
         </div>
       )}
 
-      <DetailModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        itemId={selectedPatentId}
-        type="patent"
-      />
+      {!isAdmin() && (
+        <DetailModal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          itemId={selectedPatentId}
+          type="patent"
+        />
+      )}
     </div>
   );
 };

@@ -206,8 +206,14 @@ const Research = () => {
   }, [filteredByRole, searchTerm, filterStatus, filterPatents, sortBy]);
 
   const handleResearchClick = (researchId) => {
-    setSelectedResearchId(researchId);
-    setIsModalOpen(true);
+    if (isAdmin()) {
+      // Admin navigates to detail page
+      navigate(`/research/${researchId}`);
+    } else {
+      // Researcher uses modal
+      setSelectedResearchId(researchId);
+      setIsModalOpen(true);
+    }
   };
 
   const handleCloseModal = () => {
@@ -339,12 +345,14 @@ const Research = () => {
         </div>
       )}
 
-      <DetailModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        itemId={selectedResearchId}
-        type="research"
-      />
+      {!isAdmin() && (
+        <DetailModal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          itemId={selectedResearchId}
+          type="research"
+        />
+      )}
     </div>
   );
 };

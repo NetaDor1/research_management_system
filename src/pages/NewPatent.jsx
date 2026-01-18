@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
@@ -9,7 +9,9 @@ import './Research.css';
 
 const NewPatent = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, userRole } = useAuth();
+  const editId = searchParams.get('edit');
 
   // Options for dropdowns
   const institutionPercentageOptions = [
@@ -838,7 +840,18 @@ const NewPatent = () => {
 
           {/* כפתורי שליחה */}
           <div className="form-actions">
-            <button type="button" onClick={() => navigate(userRole === 'RESEARCHER' ? '/' : '/patents')} className="cancel-btn">
+            <button 
+              type="button" 
+              onClick={() => {
+                // If editing, go back to the patent detail page
+                if (editId) {
+                  navigate(`/patents/${editId}`);
+                } else {
+                  navigate(userRole === 'RESEARCHER' ? '/' : '/patents');
+                }
+              }} 
+              className="cancel-btn"
+            >
               ביטול
             </button>
             <button type="submit" className="submit-btn" disabled={isSubmitting}>

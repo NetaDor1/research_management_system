@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
@@ -9,7 +9,9 @@ import './Research.css';
 
 const NewResearch = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, userRole } = useAuth();
+  const editId = searchParams.get('edit');
   
   // Options for dropdowns
   const fundOptions = [
@@ -708,7 +710,12 @@ const NewResearch = () => {
   };
 
   const handleCancel = () => {
-    navigate(userRole === 'RESEARCHER' ? '/' : '/research');
+    // If editing, go back to the research detail page
+    if (editId) {
+      navigate(`/research/${editId}`);
+    } else {
+      navigate(userRole === 'RESEARCHER' ? '/' : '/research');
+    }
   };
 
   const handleExportPDF = () => {

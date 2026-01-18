@@ -189,8 +189,14 @@ const Articles = () => {
   }, [filteredByRole, searchTerm, filterStatus, filterType, sortBy]);
 
   const handleArticleClick = (articleId) => {
-    setSelectedArticleId(articleId);
-    setIsModalOpen(true);
+    if (isAdmin()) {
+      // Admin navigates to detail page
+      navigate(`/articles/${articleId}`);
+    } else {
+      // Researcher uses modal
+      setSelectedArticleId(articleId);
+      setIsModalOpen(true);
+    }
   };
 
   const handleCloseModal = () => {
@@ -323,12 +329,14 @@ const Articles = () => {
         </div>
       )}
 
-      <DetailModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        itemId={selectedArticleId}
-        type="article"
-      />
+      {!isAdmin() && (
+        <DetailModal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          itemId={selectedArticleId}
+          type="article"
+        />
+      )}
     </div>
   );
 };
