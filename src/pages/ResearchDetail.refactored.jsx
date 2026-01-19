@@ -104,14 +104,10 @@ const ResearchDetail = () => {
 
   // Handle adding a new task
   const handleAddTask = async (formData) => {
-    if (!isAdmin() || !id || !db) {
-      console.error('Cannot add task: Missing admin permission, id, or db');
-      return;
-    }
+    if (!isAdmin() || !id || !db) return;
 
     setUploading(true);
     try {
-      // Get research proposal data to extract researcherId
       const researchDoc = await getDoc(doc(db, 'researchProposals', id));
       if (!researchDoc.exists()) {
         alert('הצעת המחקר לא נמצאה');
@@ -127,23 +123,18 @@ const ResearchDetail = () => {
         return;
       }
 
-      console.log('Adding task for researcher:', researcherId);
-
-      // Convert dueDate string to Timestamp if provided
       let dueDateTimestamp = null;
       let dueDateString = null;
       if (formData.dueDate) {
         try {
           const dueDate = new Date(formData.dueDate);
           dueDateTimestamp = Timestamp.fromDate(dueDate);
-          dueDateString = formData.dueDate; // Keep as YYYY-MM-DD for calendar
-          console.log('Task due date:', dueDateString);
+          dueDateString = formData.dueDate;
         } catch (e) {
           console.error('Error converting dueDate:', e);
         }
       }
 
-      // Prepare task data for subcollection
       const taskData = {
         title: formData.title,
         description: formData.description || '',
@@ -154,53 +145,28 @@ const ResearchDetail = () => {
         submissions: []
       };
 
-      // Save task in research proposal subcollection
       const tasksRef = collection(db, 'researchProposals', id, 'tasks');
       const taskDocRef = await addDoc(tasksRef, taskData);
       const taskId = taskDocRef.id;
-      console.log('✅ Task saved to subcollection with ID:', taskId);
 
-      // Also save to global tasks collection for calendar (only if dueDate exists)
-      // Note: This might fail due to Firestore security rules - task is already saved in subcollection
       if (dueDateString) {
-        try {
-          const globalTaskData = {
-            id: taskId,
-            title: formData.title,
-            dueDate: dueDateString, // YYYY-MM-DD format for calendar
-            status: 'open', // 'open' for pending tasks
-            researcherId: researcherId,
-            researchProposalId: id, // Link back to research proposal
-            createdAt: serverTimestamp()
-          };
+        const globalTaskData = {
+          id: taskId,
+          title: formData.title,
+          dueDate: dueDateString,
+          status: 'open',
+          researcherId: researcherId,
+          researchProposalId: id,
+          createdAt: serverTimestamp()
+        };
 
-          const globalTasksRef = collection(db, 'tasks');
-          const globalTaskDocRef = await addDoc(globalTasksRef, globalTaskData);
-          console.log('✅ Task saved to global tasks collection for calendar:', {
-            globalTaskId: globalTaskDocRef.id,
-            taskId,
-            dueDate: dueDateString,
-            researcherId
-          });
-        } catch (globalTaskError) {
-          // Task is already saved in subcollection, so we don't fail the whole operation
-          console.warn('⚠️ Failed to save task to global tasks collection (calendar):', globalTaskError.message);
-          console.warn('Task is still saved in subcollection and will be visible in research proposal');
-          console.warn('To fix: Update Firestore security rules to allow write to "tasks" collection');
-          // Don't throw - task is already saved successfully in subcollection
-        }
-      } else {
-        console.log('⚠️ Task has no dueDate, skipping calendar collection (task still saved in subcollection)');
+        const globalTasksRef = collection(db, 'tasks');
+        await addDoc(globalTasksRef, globalTaskData);
       }
 
       alert('המשימה נוספה בהצלחה!');
     } catch (err) {
-      console.error('❌ Error adding task:', err);
-      console.error('Error details:', {
-        message: err.message,
-        code: err.code,
-        stack: err.stack
-      });
+      console.error('Error adding task:', err);
       alert(`שגיאה בהוספת משימה: ${err.message || 'שגיאה לא ידועה'}`);
     } finally {
       setUploading(false);
@@ -353,6 +319,7 @@ const ResearchDetail = () => {
               researchProposalId={id}
               isAdmin={isAdmin()}
               onAddTask={handleAddTask}
+              onEditTask={(task) => {}}
               onDeleteTask={handleDeleteTask}
               onSaveEditTask={handleEditTask}
               uploading={uploading}

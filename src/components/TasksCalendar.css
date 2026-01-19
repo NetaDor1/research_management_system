@@ -1,0 +1,114 @@
+.tasks-calendar-container {
+  width: 100%;
+  margin: 20px 0;
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* FullCalendar base styles - required for calendar to display */
+/* FullCalendar v6 includes its own CSS automatically, but we add RTL and custom styling */
+.tasks-calendar-container .fc {
+  direction: rtl;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-size: 1em;
+  display: block;
+  position: relative;
+  width: 100%;
+}
+
+/* Ensure calendar displays full month without scrolling */
+.tasks-calendar-container .fc-view-harness {
+  position: relative;
+}
+
+.tasks-calendar-container .fc-view-harness-active > .fc-scroller {
+  overflow: visible !important;
+}
+
+.tasks-calendar-container .fc-scroller {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Ensure calendar table displays properly */
+.tasks-calendar-container .fc-daygrid {
+  width: 100%;
+}
+
+.tasks-calendar-container .fc-daygrid-body {
+  width: 100%;
+}
+
+.tasks-calendar-container .fc-header-toolbar {
+  direction: rtl;
+}
+
+.tasks-calendar-container .fc-toolbar-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.tasks-calendar-container .fc-button {
+  background-color: #667eea;
+  border-color: #667eea;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.tasks-calendar-container .fc-button:hover {
+  background-color: #5568d3;
+  border-color: #5568d3;
+}
+
+.tasks-calendar-container .fc-button:focus {
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+}
+
+.tasks-calendar-container .fc-daygrid-day {
+  border-color: #e2e8f0;
+}
+
+.tasks-calendar-container .fc-daygrid-day-top {
+  padding: 8px;
+}
+
+.tasks-calendar-container .fc-daygrid-event {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin: 2px 0;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tasks-calendar-container .fc-daygrid-event:hover {
+  opacity: 0.9;
+  transform: scale(1.02);
+  transition: all 0.2s;
+}
+
+.tasks-calendar-container .fc-day-today {
+  background-color: #f0f4ff;
+}
+
+.tasks-calendar-container .fc-col-header-cell {
+  padding: 12px;
+  background-color: #f7fafc;
+  font-weight: 600;
+  color: #4a5568;
+  border-color: #e2e8f0;
+}
+
+.tasks-calendar-container .fc-daygrid-day-number {
+  padding: 8px;
+  color: #2d3748;
+  font-weight: 500;
+}
