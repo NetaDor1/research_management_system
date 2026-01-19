@@ -20,7 +20,9 @@ import './TasksCalendar.css';
  *     title: string,
  *     dueDate: string, // YYYY-MM-DD
  *     status: "open" | "done",
- *     researcherId: string
+ *     researcherId: string,
+ *     researchProposalId: string,
+ *     researchProposalTitle: string
  *   }
  * @param {Function} onEventClick - Callback when an event is clicked
  */
@@ -41,9 +43,14 @@ const TasksCalendar = ({ tasks = [], onEventClick }) => {
       // Use dueDate as both start and end (single date event)
       const eventColor = task.status === 'done' ? '#28a745' : '#dc3545'; // Green for done, red for open
       
+      // Create title with research proposal name first, then task name
+      const eventTitle = task.researchProposalTitle 
+        ? `${task.researchProposalTitle} - ${task.title || 'ללא כותרת'}`
+        : task.title || 'ללא כותרת';
+      
       return {
         id: task.id,
-        title: task.title || 'ללא כותרת',
+        title: eventTitle,
         start: task.dueDate, // FullCalendar will use this as the event date (YYYY-MM-DD format)
         backgroundColor: eventColor,
         borderColor: eventColor,
@@ -52,6 +59,8 @@ const TasksCalendar = ({ tasks = [], onEventClick }) => {
           taskId: task.id,
           status: task.status,
           researcherId: task.researcherId,
+          researchProposalId: task.researchProposalId,
+          researchProposalTitle: task.researchProposalTitle,
           originalTask: task
         }
       };

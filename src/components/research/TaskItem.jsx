@@ -33,7 +33,8 @@ const TaskItem = ({
   onSaveEdit,
   isEditing,
   editingTask,
-  uploading 
+  uploading,
+  isAdmin = false
 }) => {
   const { user } = useAuth();
   const [fileUploading, setFileUploading] = useState(false);
@@ -99,6 +100,7 @@ const TaskItem = ({
       setFileUploading(false);
     }
   };
+
 
   if (isEditing && editingTask) {
     return (
@@ -191,32 +193,44 @@ const TaskItem = ({
         </div>
       </div>
 
-      {/* File upload for researcher */}
-      {!onEdit && task.status === 'pending' && (
+      {/* File upload for researcher - task can only be marked as complete after uploading files */}
+      {!isAdmin && (
         <div style={{ marginTop: '15px', padding: '15px', background: '#f0f0f0', borderRadius: '4px' }}>
-          <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
-            העלה קבצים להגשה:
-          </label>
-          <input
-            type="file"
-            multiple
-            onChange={async (e) => {
-              if (e.target.files && e.target.files.length > 0) {
-                await handleFileUpload(Array.from(e.target.files), e.target);
-              }
-            }}
-            disabled={fileUploading}
-            style={{
-              width: '100%',
-              padding: '10px',
-              borderRadius: '4px',
-              border: '1px solid #ddd',
-              fontSize: '14px'
-            }}
-          />
-          {fileUploading && (
-            <div style={{ marginTop: '10px' }}>
-              <p style={{ color: '#667eea', fontWeight: 'bold' }}>מעלה קבצים...</p>
+          {task.status === 'pending' && (
+            <>
+              <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
+                העלה קבצים להגשה (חובה):
+              </label>
+              <p style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>
+                יש להעלות קובץ כדי לסמן את המשימה כהושלמה
+              </p>
+              <input
+                type="file"
+                multiple
+                onChange={async (e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    await handleFileUpload(Array.from(e.target.files), e.target);
+                  }
+                }}
+                disabled={fileUploading}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '4px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px'
+                }}
+              />
+              {fileUploading && (
+                <div style={{ marginTop: '10px' }}>
+                  <p style={{ color: '#667eea', fontWeight: 'bold' }}>מעלה קבצים...</p>
+                </div>
+              )}
+            </>
+          )}
+          {task.status === 'submitted' && (
+            <div style={{ padding: '10px', background: '#d4edda', borderRadius: '4px', color: '#155724' }}>
+              <strong>✓ המשימה הושלמה והוגשה</strong>
             </div>
           )}
         </div>

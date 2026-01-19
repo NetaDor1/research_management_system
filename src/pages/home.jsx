@@ -375,7 +375,8 @@ const Home = () => {
                 dueDate: dueDate,
                 status: data.status || 'open',
                 researcherId: data.researcherId || proposalData?.researcherId || '',
-                researchProposalId: proposalId
+                researchProposalId: proposalId,
+                researchProposalTitle: proposalData?.projectTitle || proposalData?.title || 'ללא כותרת מחקר'
               };
             });
           } catch (taskError) {

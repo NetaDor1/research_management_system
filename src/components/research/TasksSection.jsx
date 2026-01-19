@@ -86,11 +86,12 @@ const TasksSection = ({
               researchProposalId={researchProposalId}
               isEditing={editingTaskId === task.id}
               editingTask={editingTask}
-              onEdit={handleEditTask}
-              onDelete={onDeleteTask}
+              onEdit={isAdmin ? handleEditTask : null}
+              onDelete={isAdmin ? onDeleteTask : null}
               onSaveEdit={handleSaveEdit}
               onUpdate={() => {}}
               uploading={uploading}
+              isAdmin={isAdmin}
             />
           ))}
         </div>

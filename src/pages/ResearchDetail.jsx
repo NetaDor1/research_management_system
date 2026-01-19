@@ -7,6 +7,7 @@ import ResearchInfoSection from '../components/research/ResearchInfoSection';
 import ResearchPeriodSection from '../components/research/ResearchPeriodSection';
 import BudgetSection from '../components/research/BudgetSection';
 import PartnersSection from '../components/research/PartnersSection';
+import ResearchDescriptionSection from '../components/research/ResearchDescriptionSection';
 import AdditionalInfoSection from '../components/research/AdditionalInfoSection';
 import TasksSection from '../components/research/TasksSection';
 import './Page.css';
@@ -347,6 +348,7 @@ const ResearchDetail = () => {
             <ResearchPeriodSection researchData={researchData} />
             <BudgetSection researchData={researchData} />
             <PartnersSection researchData={researchData} />
+            <ResearchDescriptionSection researchData={researchData} />
             <AdditionalInfoSection researchData={researchData} />
             <TasksSection
               tasks={tasks}
