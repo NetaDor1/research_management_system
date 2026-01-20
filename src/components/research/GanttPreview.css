@@ -79,14 +79,15 @@
 .gantt-timeline {
   flex: 1;
   display: flex;
-  min-width: max-content;
+  min-width: 0;
   position: relative;
   direction: rtl; /* RTL to match page direction */
 }
 
 .gantt-month-cell {
-  min-width: 80px;
-  width: 80px;
+  flex: 1;
+  min-width: 0;
+  width: auto;
   padding: 8px 4px;
   text-align: center;
   font-size: 13px;
@@ -128,19 +129,6 @@
   position: relative;
 }
 
-.gantt-timeline .gantt-month-cell.gantt-month-active {
-  background: #e3f2fd;
-}
-
-.gantt-timeline .gantt-month-cell.gantt-month-start {
-  background: #bbdefb;
-  border-left: 3px solid #2196f3;
-}
-
-.gantt-timeline .gantt-month-cell.gantt-month-end {
-  background: #bbdefb;
-  border-right: 3px solid #2196f3;
-}
 
 .gantt-task-bar {
   position: absolute;
@@ -151,6 +139,7 @@
   display: flex;
   align-items: center;
   padding: 0 12px;
+  box-sizing: border-box;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   cursor: default;
   transition: all 0.2s;

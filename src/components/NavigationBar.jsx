@@ -17,6 +17,13 @@ const NavigationBar = () => {
     setIsOpen(false);
   };
 
+  const handleNavigate = (path) => (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeNav();
+    window.location.assign(path);
+  };
+
   // Navigation items - filtered by role
   // RESEARCHER sees only Home, Dashboard, Statistics, and Report Format
   // ADMIN sees all items including Research, Patents, and Articles
@@ -47,6 +54,7 @@ const NavigationBar = () => {
         className={`menu-button ${isOpen ? 'active' : ''}`}
         onClick={toggleNav}
         aria-label="סרגל כלים"
+        type="button"
       >
         <span className="menu-icon">
           <span></span>
@@ -64,7 +72,7 @@ const NavigationBar = () => {
       <nav className={`navigation-sidebar ${isOpen ? 'open' : ''}`}>
         <div className="nav-header">
           <h2>סרגל כלים</h2>
-          <button className="close-button" onClick={closeNav} aria-label="סגור">
+          <button className="close-button" onClick={closeNav} aria-label="סגור" type="button">
             ✕
           </button>
         </div>
@@ -80,10 +88,8 @@ const NavigationBar = () => {
             <li key={item.path} className="nav-item">
               <button
                 className={`nav-link ${location.pathname === item.path ? 'active' : ''}`}
-                onClick={() => {
-                  closeNav();
-                  navigate(item.path);
-                }}
+                onClick={handleNavigate(item.path)}
+                type="button"
               >
                 <span className="nav-label">{item.label}</span>
               </button>
@@ -94,10 +100,8 @@ const NavigationBar = () => {
         <div className="nav-footer">
           <button
             className="logout-button"
-            onClick={() => {
-              closeNav();
-              navigate('/login');
-            }}
+            onClick={handleNavigate('/login')}
+            type="button"
           >
             <span className="nav-label">התנתק</span>
           </button>

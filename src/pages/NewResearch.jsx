@@ -737,15 +737,6 @@ const NewResearch = () => {
     }
   };
 
-  const handleCancel = () => {
-    // If editing, go back to the research detail page
-    if (editId) {
-      navigate(`/research/${editId}`);
-    } else {
-      navigate(userRole === 'RESEARCHER' ? '/' : '/research');
-    }
-  };
-
   const handleExportPDF = () => {
     // Format date for display
     const formatDate = (dateString) => {
@@ -1131,7 +1122,14 @@ const NewResearch = () => {
 
           {/* Form Actions */}
           <div className="form-actions">
-            <button type="button" className="btn-cancel" onClick={handleCancel}>
+            <button
+              type="button"
+              className="cancel-btn"
+              onClick={() => {
+                const targetPath = editId ? `/research/${editId}` : (userRole === 'RESEARCHER' ? '/' : '/research');
+                window.location.assign(targetPath);
+              }}
+            >
               ביטול
             </button>
             <button type="button" className="btn-export-pdf" onClick={handleExportPDF}>
