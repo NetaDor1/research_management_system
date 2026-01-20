@@ -174,7 +174,6 @@
   font-size: 18px;
   font-weight: 500;
   transition: all 0.3s ease;
-  border-right: 4px solid transparent;
   position: relative;
   cursor: pointer;
   background: none;
@@ -187,14 +186,12 @@
 .nav-link:hover {
   background: linear-gradient(90deg, rgba(102, 126, 234, 0.1) 0%, transparent 100%);
   color: #667eea;
-  border-right-color: #667eea;
   transform: translateX(-4px);
 }
 
 .nav-link.active {
   background: linear-gradient(90deg, rgba(102, 126, 234, 0.15) 0%, transparent 100%);
   color: #667eea;
-  border-right-color: #667eea;
   font-weight: 600;
 }
 
@@ -238,12 +235,12 @@
 }
 
 .nav-list::-webkit-scrollbar-thumb {
-  background: #667eea;
+  background: #f8f9fa;
   border-radius: 3px;
 }
 
 .nav-list::-webkit-scrollbar-thumb:hover {
-  background: #764ba2;
+  background: #f8f9fa;
 }
 
 /* Navigation Footer with Logout */
@@ -263,7 +260,6 @@
   font-size: 18px;
   font-weight: 600;
   transition: all 0.3s ease;
-  border-right: 4px solid transparent;
   position: relative;
   cursor: pointer;
   background: none;
@@ -277,7 +273,6 @@
 .logout-button:hover {
   background: linear-gradient(90deg, rgba(220, 53, 69, 0.1) 0%, transparent 100%);
   color: #c82333;
-  border-right-color: #dc3545;
   transform: translateX(-4px);
 }
 

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, Timestamp, query, where, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import './Page.css';
@@ -23,11 +23,63 @@ const NewArticle = () => {
     journalName: '',
     journalRanking: '',
     publicationYear: '',
-    articleLink: ''
+    articleLink: '',
+    researchProposalId: ''
   });
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [researchOptions, setResearchOptions] = useState([]);
+  const [researchLoading, setResearchLoading] = useState(true);
+  const [researchLoadError, setResearchLoadError] = useState('');
+  const backPath = userRole === 'RESEARCHER' ? '/' : '/articles';
+
+  useEffect(() => {
+    const fetchResearchOptions = async () => {
+      if (!db) {
+        setResearchOptions([]);
+        setResearchLoading(false);
+        return;
+      }
+
+      setResearchLoading(true);
+      setResearchLoadError('');
+      try {
+        const researchRef = collection(db, 'researchProposals');
+        let researchSnapshot;
+
+        if (userRole === 'ADMIN') {
+          researchSnapshot = await getDocs(researchRef);
+        } else if (user?.id) {
+          const q = query(researchRef, where('researcherId', '==', user.id));
+          researchSnapshot = await getDocs(q);
+        } else {
+          setResearchOptions([]);
+          setResearchLoading(false);
+          return;
+        }
+
+        const options = researchSnapshot.docs.map((docItem) => {
+          const data = docItem.data();
+          return {
+            id: docItem.id,
+            title: data.projectTitle || data.title || 'ללא כותרת',
+            researcherName: data.researcherName || data.researcher || 'חוקר'
+          };
+        });
+
+        setResearchOptions(options);
+      } catch (err) {
+        console.error('Error loading research options:', err);
+        setResearchLoadError('שגיאה בטעינת רשימת מחקרים');
+        setResearchOptions([]);
+      } finally {
+        setResearchLoading(false);
+      }
+    };
+
+    fetchResearchOptions();
+  }, [userRole, user?.id]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -102,6 +154,7 @@ const NewArticle = () => {
         journalRanking: formData.journalRanking,
         publicationYear: formData.publicationYear,
         articleLink: formData.articleLink || '',
+        researchProposalId: formData.researchProposalId || '',
         
         // פרטי החוקר
         researcherId: researcherId,
@@ -126,9 +179,21 @@ const NewArticle = () => {
       const docRef = await addDoc(collection(db, 'articles'), articleData);
       console.log('Document created with ID:', docRef.id);
 
+      if (formData.researchProposalId) {
+        try {
+          await updateDoc(doc(db, 'researchProposals', formData.researchProposalId), {
+            hasArticle: true,
+            linkedArticleIds: arrayUnion(docRef.id),
+            updatedAt: serverTimestamp()
+          });
+        } catch (linkError) {
+          console.warn('Failed to link article to research proposal:', linkError);
+        }
+      }
+
       console.log('Article saved successfully!');
       alert('המאמר נשמר בהצלחה!');
-      navigate('/articles');
+      navigate(backPath);
     } catch (error) {
       console.error('Error saving article:', error);
       console.error('Error code:', error.code);
@@ -172,6 +237,24 @@ const NewArticle = () => {
                 required
               />
               {errors.title && <span className="error-message">{errors.title}</span>}
+            </div>
+
+            <div className="form-group">
+              <label>קישור למחקר קיים</label>
+              <select
+                name="researchProposalId"
+                value={formData.researchProposalId}
+                onChange={handleInputChange}
+                disabled={researchLoading}
+              >
+                <option value="">בחר מחקר מהרשימה</option>
+                {researchOptions.map(option => (
+                  <option key={option.id} value={option.id}>
+                    {option.title}{userRole === 'ADMIN' ? ` - ${option.researcherName}` : ''}
+                  </option>
+                ))}
+              </select>
+              {researchLoadError && <span className="error-message">{researchLoadError}</span>}
             </div>
 
             <div className="form-group">
@@ -248,7 +331,7 @@ const NewArticle = () => {
 
           {/* כפתורי שליחה */}
           <div className="form-actions">
-            <button type="button" onClick={() => navigate(userRole === 'RESEARCHER' ? '/' : '/articles')} className="cancel-btn">
+            <button type="button" onClick={() => navigate(backPath)} className="cancel-btn">
               ביטול
             </button>
             <button type="submit" className="submit-btn" disabled={isSubmitting}>

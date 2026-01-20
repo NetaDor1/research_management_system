@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp, query, where, getDocs, arrayUnion } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../services/firebase';
@@ -86,6 +86,7 @@ const NewPatent = () => {
 
   const [formData, setFormData] = useState({
     projectTitle: '',
+    researchProposalId: '',
     institutionPercentage: '',
     partners: [{ name: '', email: '', institution: '', percentage: '' }],
     commercializationUnit: '',
@@ -120,6 +121,9 @@ const NewPatent = () => {
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [researchOptions, setResearchOptions] = useState([]);
+  const [researchLoading, setResearchLoading] = useState(true);
+  const [researchLoadError, setResearchLoadError] = useState('');
 
   // Calculate converted budget based on currency
   useEffect(() => {
@@ -140,6 +144,53 @@ const NewPatent = () => {
       }));
     }
   }, [formData.totalBudget, formData.currency]);
+
+  useEffect(() => {
+    const fetchResearchOptions = async () => {
+      if (!db) {
+        setResearchOptions([]);
+        setResearchLoading(false);
+        return;
+      }
+
+      setResearchLoading(true);
+      setResearchLoadError('');
+      try {
+        const researchRef = collection(db, 'researchProposals');
+        let researchSnapshot;
+
+        if (userRole === 'ADMIN') {
+          researchSnapshot = await getDocs(researchRef);
+        } else if (user?.id) {
+          const q = query(researchRef, where('researcherId', '==', user.id));
+          researchSnapshot = await getDocs(q);
+        } else {
+          setResearchOptions([]);
+          setResearchLoading(false);
+          return;
+        }
+
+        const options = researchSnapshot.docs.map((docItem) => {
+          const data = docItem.data();
+          return {
+            id: docItem.id,
+            title: data.projectTitle || data.title || 'ללא כותרת',
+            researcherName: data.researcherName || data.researcher || 'חוקר'
+          };
+        });
+
+        setResearchOptions(options);
+      } catch (err) {
+        console.error('Error loading research options:', err);
+        setResearchLoadError('שגיאה בטעינת רשימת מחקרים');
+        setResearchOptions([]);
+      } finally {
+        setResearchLoading(false);
+      }
+    };
+
+    fetchResearchOptions();
+  }, [userRole, user?.id]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -287,10 +338,16 @@ const NewPatent = () => {
       });
 
       // Prepare patent data
+      const linkedResearch = formData.researchProposalId
+        ? researchOptions.find(option => option.id === formData.researchProposalId)
+        : null;
+
       const patentData = {
         // פרטים כלליים
         title: formData.projectTitle,
         projectTitle: formData.projectTitle,
+        researchProposalId: formData.researchProposalId || null,
+        researchProposalTitle: linkedResearch?.title || '',
         
         // אחוזי המוסד
         institutionPercentage: formData.institutionPercentage,
@@ -391,6 +448,18 @@ const NewPatent = () => {
         }
       }
 
+      if (formData.researchProposalId) {
+        try {
+          await updateDoc(doc(db, 'researchProposals', formData.researchProposalId), {
+            hasPatent: true,
+            linkedPatentIds: arrayUnion(docRef.id),
+            updatedAt: serverTimestamp()
+          });
+        } catch (linkError) {
+          console.warn('Failed to link patent to research proposal:', linkError);
+        }
+      }
+
       console.log('Patent saved successfully!');
       alert('הפטנט נשמר בהצלחה!');
       navigate(userRole === 'RESEARCHER' ? '/' : '/patents');
@@ -440,6 +509,24 @@ const NewPatent = () => {
                 ))}
               </select>
               {errors.institutionPercentage && <span className="error-message">{errors.institutionPercentage}</span>}
+            </div>
+
+            <div className="form-group">
+              <label>קישור למחקר קיים</label>
+              <select
+                name="researchProposalId"
+                value={formData.researchProposalId}
+                onChange={handleInputChange}
+                disabled={researchLoading}
+              >
+                <option value="">בחר מחקר מהרשימה</option>
+                {researchOptions.map(option => (
+                  <option key={option.id} value={option.id}>
+                    {option.title}{userRole === 'ADMIN' ? ` - ${option.researcherName}` : ''}
+                  </option>
+                ))}
+              </select>
+              {researchLoadError && <span className="error-message">{researchLoadError}</span>}
             </div>
           </div>
 

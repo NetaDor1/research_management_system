@@ -129,17 +129,31 @@ const Login = () => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="role">תפקיד</label>
-            <select
-              id="role"
-              name="role"
-              value={formData.role}
-              onChange={handleChange}
-              required
-            >
-              <option value="RESEARCHER">חוקר</option>
-              <option value="ADMIN">רשות המחקר</option>
-            </select>
+            <span className="form-label">תפקיד</span>
+            <div className="role-options" role="radiogroup" aria-label="תפקיד">
+              <label className="role-option">
+                <input
+                  type="radio"
+                  name="role"
+                  value="RESEARCHER"
+                  checked={formData.role === 'RESEARCHER'}
+                  onChange={handleChange}
+                  required
+                />
+                חוקר
+              </label>
+              <label className="role-option">
+                <input
+                  type="radio"
+                  name="role"
+                  value="ADMIN"
+                  checked={formData.role === 'ADMIN'}
+                  onChange={handleChange}
+                  required
+                />
+                רשות המחקר
+              </label>
+            </div>
           </div>
 
           <button

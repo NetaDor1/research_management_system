@@ -14,6 +14,8 @@ const PatentDetail = () => {
   const [patentData, setPatentData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [linkedResearch, setLinkedResearch] = useState(null);
+  const [linkedResearchLoading, setLinkedResearchLoading] = useState(false);
   
   // Tasks and submissions state
   const [tasks, setTasks] = useState([]);
@@ -64,6 +66,49 @@ const PatentDetail = () => {
       fetchPatent();
     }
   }, [id, userRole, user?.id]);
+
+  useEffect(() => {
+    if (!db) return;
+
+    const researchId = patentData?.researchProposalId;
+    if (!researchId) {
+      setLinkedResearch(null);
+      return;
+    }
+
+    let isActive = true;
+    setLinkedResearchLoading(true);
+
+    const fetchLinkedResearch = async () => {
+      try {
+        const researchSnap = await getDoc(doc(db, 'researchProposals', researchId));
+        if (!isActive) return;
+        if (researchSnap.exists()) {
+          const data = researchSnap.data();
+          setLinkedResearch({
+            id: researchId,
+            title: data.projectTitle || data.title || 'ללא כותרת'
+          });
+        } else {
+          setLinkedResearch(null);
+        }
+      } catch (err) {
+        console.error('Error fetching linked research:', err);
+        if (isActive) {
+          setLinkedResearch(null);
+        }
+      } finally {
+        if (isActive) {
+          setLinkedResearchLoading(false);
+        }
+      }
+    };
+
+    fetchLinkedResearch();
+    return () => {
+      isActive = false;
+    };
+  }, [db, patentData?.researchProposalId]);
 
   // Fetch tasks
   useEffect(() => {
@@ -463,6 +508,42 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
+                    מחקר מקושר:
+                  </label>
+                  {patentData.researchProposalId ? (
+                    linkedResearchLoading ? (
+                      <span style={{ fontSize: '16px' }}>טוען...</span>
+                    ) : linkedResearch ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/research/${linkedResearch.id}`)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          padding: 0,
+                          color: '#667eea',
+                          cursor: 'pointer',
+                          fontSize: '16px',
+                          textDecoration: 'underline'
+                        }}
+                      >
+                        {linkedResearch.title}
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: '16px' }}>לא נמצא</span>
+                    )
+                  ) : (
+                    <span style={{ fontSize: '16px' }}>לא מקושר</span>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ 
+                    display: 'block', 
+                    fontWeight: 'bold', 
+                    marginBottom: '5px',
+                    color: '#666'
+                  }}>
                     חוקר:
                   </label>
                   <span style={{ fontSize: '16px' }}>{patentData.researcherName || 'לא צוין'}</span>
@@ -483,7 +564,11 @@ const PatentDetail = () => {
                       display: 'inline-block',
                       padding: '5px 15px',
                       borderRadius: '4px',
-                      fontSize: '14px'
+                      fontSize: '14px',
+                      width: 'fit-content',
+                      maxWidth: '100%',
+                      boxSizing: 'border-box',
+                      whiteSpace: 'nowrap'
                     }}
                   >
                     {getStatusLabel(patentData.status)}

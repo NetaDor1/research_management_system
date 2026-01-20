@@ -41,11 +41,12 @@ const TasksCalendar = ({ tasks = [], onEventClick }) => {
       }
       
       // Use dueDate as both start and end (single date event)
-      const eventColor = task.status === 'done' ? '#28a745' : '#dc3545'; // Green for done, red for open
+      const eventColor = task.status === 'done' ? '#5a7f66' : '#b86b6b'; // Muted green/red
       
       // Create title with research proposal name first, then task name
-      const eventTitle = task.researchProposalTitle 
-        ? `${task.researchProposalTitle} - ${task.title || 'ללא כותרת'}`
+      const parentTitle = task.parentTitle || task.researchProposalTitle;
+      const eventTitle = parentTitle
+        ? `${parentTitle} - ${task.title || 'ללא כותרת'}`
         : task.title || 'ללא כותרת';
       
       return {

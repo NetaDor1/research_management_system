@@ -21,13 +21,13 @@ const NavigationBar = () => {
   // RESEARCHER sees only Home, Dashboard, Statistics, and Report Format
   // ADMIN sees all items including Research, Patents, and Articles
   const allNavItems = [
-    { path: '/', label: 'עמוד הבית', icon: '🏠' },
-    { path: '/dashboard', label: 'לוח בקרה', icon: '📊' },
-    { path: '/research', label: 'מחקרים', icon: '🔬' },
-    { path: '/patents', label: 'פטנטים', icon: '📜' },
-    { path: '/articles', label: 'מאמרים', icon: '📄' },
-    { path: '/statistics', label: 'סטטיסטיקות', icon: '📈' },
-    { path: '/report-format', label: 'פורמט דו"חות', icon: '📋' },
+    { path: '/', label: 'עמוד הבית' },
+    { path: '/dashboard', label: 'לוח בקרה' },
+    { path: '/research', label: 'מחקרים' },
+    { path: '/patents', label: 'פטנטים' },
+    { path: '/articles', label: 'מאמרים' },
+    { path: '/statistics', label: 'סטטיסטיקות' },
+    { path: '/report-format', label: 'פורמט דו"חות' },
   ];
 
   // Filter nav items based on role
@@ -70,7 +70,7 @@ const NavigationBar = () => {
         </div>
         <div className="nav-user-info">
           <div className="user-role-badge">
-            {isAdmin() ? '👤 רשות המחקר' : '🔬 חוקר'}
+            {isAdmin() ? 'רשות המחקר' : 'חוקר'}
           </div>
           {user && <div className="user-name">{user.name}</div>}
         </div>
@@ -85,7 +85,6 @@ const NavigationBar = () => {
                   navigate(item.path);
                 }}
               >
-                <span className="nav-icon">{item.icon}</span>
                 <span className="nav-label">{item.label}</span>
               </button>
             </li>
@@ -100,7 +99,6 @@ const NavigationBar = () => {
               navigate('/login');
             }}
           >
-            <span className="nav-icon">🚪</span>
             <span className="nav-label">התנתק</span>
           </button>
         </div>

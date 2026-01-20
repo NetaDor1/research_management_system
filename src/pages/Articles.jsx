@@ -236,7 +236,8 @@ const Articles = () => {
 
   return (
     <div className="research-page">
-      <div className="research-header">
+      <div className="research-content">
+        <div className="research-header">
         <h1>אוסף מאמרים</h1>
         <div className="search-container">
           <input
@@ -329,14 +330,15 @@ const Articles = () => {
         </div>
       )}
 
-      {!isAdmin() && (
-        <DetailModal
-          isOpen={isModalOpen}
-          onClose={handleCloseModal}
-          itemId={selectedArticleId}
-          type="article"
-        />
-      )}
+        {!isAdmin() && (
+          <DetailModal
+            isOpen={isModalOpen}
+            onClose={handleCloseModal}
+            itemId={selectedArticleId}
+            type="article"
+          />
+        )}
+      </div>
     </div>
   );
 };

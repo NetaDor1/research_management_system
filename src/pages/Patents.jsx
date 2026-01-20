@@ -233,7 +233,8 @@ const Patents = () => {
 
   return (
     <div className="research-page">
-      <div className="research-header">
+      <div className="research-content">
+        <div className="research-header">
         <h1>אוסף פטנטים</h1>
         <div className="search-container">
           <input
@@ -318,14 +319,15 @@ const Patents = () => {
         </div>
       )}
 
-      {!isAdmin() && (
-        <DetailModal
-          isOpen={isModalOpen}
-          onClose={handleCloseModal}
-          itemId={selectedPatentId}
-          type="patent"
-        />
-      )}
+        {!isAdmin() && (
+          <DetailModal
+            isOpen={isModalOpen}
+            onClose={handleCloseModal}
+            itemId={selectedPatentId}
+            type="patent"
+          />
+        )}
+      </div>
     </div>
   );
 };

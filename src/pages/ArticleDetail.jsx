@@ -13,6 +13,8 @@ const ArticleDetail = () => {
   const [articleData, setArticleData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [linkedResearch, setLinkedResearch] = useState(null);
+  const [linkedResearchLoading, setLinkedResearchLoading] = useState(false);
 
   useEffect(() => {
     const fetchArticle = async () => {
@@ -55,6 +57,49 @@ const ArticleDetail = () => {
       fetchArticle();
     }
   }, [id, userRole, user?.id]);
+
+  useEffect(() => {
+    if (!db) return;
+
+    const researchId = articleData?.researchProposalId;
+    if (!researchId) {
+      setLinkedResearch(null);
+      return;
+    }
+
+    let isActive = true;
+    setLinkedResearchLoading(true);
+
+    const fetchLinkedResearch = async () => {
+      try {
+        const researchSnap = await getDoc(doc(db, 'researchProposals', researchId));
+        if (!isActive) return;
+        if (researchSnap.exists()) {
+          const data = researchSnap.data();
+          setLinkedResearch({
+            id: researchId,
+            title: data.projectTitle || data.title || 'ללא כותרת'
+          });
+        } else {
+          setLinkedResearch(null);
+        }
+      } catch (err) {
+        console.error('Error fetching linked research:', err);
+        if (isActive) {
+          setLinkedResearch(null);
+        }
+      } finally {
+        if (isActive) {
+          setLinkedResearchLoading(false);
+        }
+      }
+    };
+
+    fetchLinkedResearch();
+    return () => {
+      isActive = false;
+    };
+  }, [db, articleData?.researchProposalId]);
 
   const formatDate = (timestamp) => {
     if (!timestamp) return 'לא צוין';
@@ -251,6 +296,42 @@ const ArticleDetail = () => {
                     חוקר:
                   </label>
                   <span style={{ fontSize: '16px' }}>{articleData.researcherName || 'לא צוין'}</span>
+                </div>
+
+                <div>
+                  <label style={{ 
+                    display: 'block', 
+                    fontWeight: 'bold', 
+                    marginBottom: '5px',
+                    color: '#666'
+                  }}>
+                    מחקר מקושר:
+                  </label>
+                  {articleData.researchProposalId ? (
+                    linkedResearchLoading ? (
+                      <span style={{ fontSize: '16px' }}>טוען...</span>
+                    ) : linkedResearch ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/research/${linkedResearch.id}`)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          padding: 0,
+                          color: '#667eea',
+                          cursor: 'pointer',
+                          fontSize: '16px',
+                          textDecoration: 'underline'
+                        }}
+                      >
+                        {linkedResearch.title}
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: '16px' }}>לא נמצא</span>
+                    )
+                  ) : (
+                    <span style={{ fontSize: '16px' }}>לא מקושר</span>
+                  )}
                 </div>
 
                 <div>

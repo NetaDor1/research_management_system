@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { doc, getDoc, collection, addDoc, updateDoc, deleteDoc, query, where, getDocs, serverTimestamp, onSnapshot, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
@@ -16,6 +16,7 @@ import './Research.css';
 const ResearchDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAdmin, userRole, user } = useAuth();
   const [researchData, setResearchData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -24,6 +25,12 @@ const ResearchDetail = () => {
   // Tasks state
   const [tasks, setTasks] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [linkedPatents, setLinkedPatents] = useState([]);
+  const [linkedPatentsLoading, setLinkedPatentsLoading] = useState(true);
+  const [linkedPatentsError, setLinkedPatentsError] = useState('');
+  const [linkedArticles, setLinkedArticles] = useState([]);
+  const [linkedArticlesLoading, setLinkedArticlesLoading] = useState(true);
+  const [linkedArticlesError, setLinkedArticlesError] = useState('');
 
   useEffect(() => {
     const fetchResearch = async () => {
@@ -90,6 +97,70 @@ const ResearchDetail = () => {
         if (error.code !== 'permission-denied') {
           console.error('Tasks fetch error:', error.message);
         }
+      }
+    );
+
+    return () => unsubscribe();
+  }, [id]);
+
+  useEffect(() => {
+    if (!id || !db) return;
+
+    setLinkedArticlesLoading(true);
+    setLinkedArticlesError('');
+
+    const articlesQuery = query(
+      collection(db, 'articles'),
+      where('researchProposalId', '==', id)
+    );
+
+    const unsubscribe = onSnapshot(
+      articlesQuery,
+      (snapshot) => {
+        const articlesList = snapshot.docs.map(docItem => ({
+          id: docItem.id,
+          ...docItem.data()
+        }));
+        setLinkedArticles(articlesList);
+        setLinkedArticlesLoading(false);
+      },
+      (error) => {
+        console.error('Error fetching linked articles:', error);
+        setLinkedArticlesError('שגיאה בטעינת מאמרים מקושרים');
+        setLinkedArticles([]);
+        setLinkedArticlesLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [id]);
+
+  useEffect(() => {
+    if (!id || !db) return;
+
+    setLinkedPatentsLoading(true);
+    setLinkedPatentsError('');
+
+    const patentsQuery = query(
+      collection(db, 'patents'),
+      where('researchProposalId', '==', id)
+    );
+
+    const unsubscribe = onSnapshot(
+      patentsQuery,
+      (snapshot) => {
+        const patentsList = snapshot.docs.map(docItem => ({
+          id: docItem.id,
+          ...docItem.data()
+        }));
+        setLinkedPatents(patentsList);
+        setLinkedPatentsLoading(false);
+      },
+      (error) => {
+        console.error('Error fetching linked patents:', error);
+        setLinkedPatentsError('שגיאה בטעינת פטנטים מקושרים');
+        setLinkedPatents([]);
+        setLinkedPatentsLoading(false);
       }
     );
 
@@ -290,6 +361,15 @@ const ResearchDetail = () => {
     }
   };
 
+  useEffect(() => {
+    if (!loading && location.hash === '#tasks') {
+      const target = document.getElementById('research-tasks');
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  }, [loading, location.hash]);
+
   return (
     <div className="page-container">
       <div className="page-content">
@@ -350,15 +430,85 @@ const ResearchDetail = () => {
             <PartnersSection researchData={researchData} />
             <ResearchDescriptionSection researchData={researchData} />
             <AdditionalInfoSection researchData={researchData} />
-            <TasksSection
-              tasks={tasks}
-              researchProposalId={id}
-              isAdmin={isAdmin()}
-              onAddTask={handleAddTask}
-              onDeleteTask={handleDeleteTask}
-              onSaveEditTask={handleEditTask}
-              uploading={uploading}
-            />
+            {!linkedPatentsLoading && !linkedPatentsError && linkedPatents.length > 0 && (
+              <div style={{
+                background: '#f9f9f9',
+                padding: '30px',
+                borderRadius: '8px',
+                marginBottom: '20px'
+              }}>
+                <h2 style={{ marginBottom: '20px', color: '#667eea' }}>פטנטים מקושרים</h2>
+                <div className="research-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '14px' }}>
+                  {linkedPatents.map((patent) => (
+                    <button
+                      key={patent.id}
+                      className="research-card"
+                      style={{
+                        padding: '14px',
+                        minHeight: '100px',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        textAlign: 'center',
+                        maxWidth: '200px'
+                      }}
+                      onClick={() => navigate(`/patents/${patent.id}`)}
+                    >
+                      <h3 className="research-title" style={{ textAlign: 'center' }}>
+                        {patent.title || patent.projectTitle || 'ללא כותרת'}
+                      </h3>
+                      <p className="research-researcher" style={{ textAlign: 'center' }}>
+                        {patent.researcherName || patent.researcher || 'חוקר'}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {!linkedArticlesLoading && !linkedArticlesError && linkedArticles.length > 0 && (
+              <div style={{
+                background: '#f9f9f9',
+                padding: '30px',
+                borderRadius: '8px',
+                marginBottom: '20px'
+              }}>
+                <h2 style={{ marginBottom: '20px', color: '#667eea' }}>מאמרים מקושרים</h2>
+                <div className="research-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '14px' }}>
+                  {linkedArticles.map((article) => (
+                    <button
+                      key={article.id}
+                      className="research-card"
+                      style={{
+                        padding: '14px',
+                        minHeight: '100px',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        textAlign: 'center',
+                        maxWidth: '200px'
+                      }}
+                      onClick={() => navigate(`/articles/${article.id}`)}
+                    >
+                      <h3 className="research-title" style={{ textAlign: 'center' }}>
+                        {article.title || 'ללא כותרת'}
+                      </h3>
+                      <p className="research-researcher" style={{ textAlign: 'center' }}>
+                        {article.journalName || article.researcherName || 'מאמר'}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div id="research-tasks">
+              <TasksSection
+                tasks={tasks}
+                researchProposalId={id}
+                isAdmin={isAdmin()}
+                onAddTask={handleAddTask}
+                onDeleteTask={handleDeleteTask}
+                onSaveEditTask={handleEditTask}
+                uploading={uploading}
+              />
+            </div>
           </div>
         )}
       </div>

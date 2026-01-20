@@ -1,0 +1,155 @@
+.upcoming-tasks {
+  margin-top: 40px;
+  direction: rtl;
+}
+
+.upcoming-tasks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  border-bottom: 3px solid rgb(188, 192, 203);
+  padding-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.upcoming-tasks-title {
+  margin: 0;
+  text-align: right;
+  font-weight: bold;
+  color: #2d3748;
+}
+
+.upcoming-tasks-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #4a5568;
+  font-size: 14px;
+}
+
+.upcoming-tasks-range-label {
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.upcoming-tasks-range-select {
+  border: 1px solid #d7dde5;
+  border-radius: 10px;
+  padding: 6px 12px;
+  background: #ffffff;
+  color: #2d3748;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.upcoming-tasks-range-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.upcoming-tasks-empty {
+  padding: 20px;
+  text-align: center;
+  color: #6c757d;
+  background: #f7fafc;
+  border-radius: 8px;
+}
+
+.upcoming-tasks-error {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.upcoming-tasks-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.upcoming-task-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  background: #ffffff;
+  text-align: right;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.upcoming-task-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+}
+
+.upcoming-task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 10px;
+}
+
+.upcoming-task-type {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1a202c;
+  background: #edf2f7;
+}
+
+.upcoming-task-type--research {
+  background: #e9f2ff;
+  color: #2b6cb0;
+}
+
+.upcoming-task-type--patent {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.upcoming-task-date {
+  font-size: 13px;
+  color: #4a5568;
+  font-weight: 600;
+}
+
+.upcoming-task-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+  color: #2d3748;
+}
+
+.upcoming-task-parent,
+.upcoming-task-researcher {
+  margin: 0;
+  font-size: 14px;
+  color: #6c757d;
+}
+
+.upcoming-task-researcher {
+  margin-top: 6px;
+}
+
+@media (max-width: 1200px) {
+  .upcoming-tasks-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .upcoming-tasks-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .upcoming-tasks-list {
+    grid-template-columns: 1fr;
+  }
+}

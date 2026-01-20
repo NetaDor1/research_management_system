@@ -4,6 +4,7 @@ import { collection, getDocs, query, where, orderBy, onSnapshot, collectionGroup
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import TasksCalendarContainer from '../components/TasksCalendarContainer';
+import UpcomingTasks from '../components/UpcomingTasks';
 import './Page.css';
 import './Research.css';
 
@@ -263,8 +264,8 @@ const Home = () => {
   const [tasks, setTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(true);
   
-  // Fetch tasks from Firebase - only from research proposals subcollections
-  // Tasks are stored in: researchProposals/{proposalId}/tasks
+  // Fetch tasks from Firebase - research proposals + patents subcollections
+  // Tasks are stored in: researchProposals/{proposalId}/tasks and patents/{patentId}/tasks
   useEffect(() => {
     if (!db || !userRole) {
       setTasksLoading(false);
@@ -272,121 +273,90 @@ const Home = () => {
     }
 
     setTasksLoading(true);
-    console.log('Setting up real-time listener for tasks from research proposals...', { userRole, userId: user?.id });
+    console.log('Setting up task refresh from research proposals + patents...', { userRole, userId: user?.id });
 
-    // Function to fetch tasks from research proposals subcollections
-    const fetchTasksFromProposals = async () => {
-      try {
-        console.log('Fetching tasks from research proposals subcollections...');
-        
-        let proposalsQuery;
-        const proposalsRef = collection(db, 'researchProposals');
-        
-        // Filter proposals based on user role
-        if (userRole === 'ADMIN') {
-          // Admin can see all proposals
-          proposalsQuery = proposalsRef;
-        } else if (userRole === 'RESEARCHER' && user?.id) {
-          // Researcher can only see their own proposals
-          proposalsQuery = query(proposalsRef, where('researcherId', '==', user.id));
-        } else {
-          console.log('No valid user role or ID, skipping task fetch');
-          setTasks([]);
-          setTasksLoading(false);
-          return;
-        }
-        
-        let proposalsSnapshot;
-        try {
-          proposalsSnapshot = await getDocs(proposalsQuery);
-          console.log('Found', proposalsSnapshot.docs.length, 'research proposals');
-        } catch (queryError) {
-          console.error('❌ Error fetching research proposals:', queryError);
-          console.error('Error details:', {
-            message: queryError.message,
-            code: queryError.code
-          });
-          if (queryError.code === 'permission-denied') {
-            console.warn('⚠️ Permission denied - check Firestore security rules for researchProposals collection');
-          }
-          setTasks([]);
-          setTasksLoading(false);
-          return;
-        }
-        
-        if (proposalsSnapshot.docs.length === 0) {
-          console.log('No research proposals found');
-          setTasks([]);
-          setTasksLoading(false);
-          return;
-        }
-        
-        // For each proposal, get its tasks
-        const allTasksPromises = proposalsSnapshot.docs.map(async (proposalDoc) => {
-          const proposalId = proposalDoc.id;
-          const proposalData = proposalDoc.data();
-          
-          try {
-            const tasksRef = collection(db, 'researchProposals', proposalId, 'tasks');
-            const tasksSnapshot = await getDocs(tasksRef);
-            
-            console.log(`Found ${tasksSnapshot.docs.length} tasks in proposal ${proposalId}`);
-            
-            return tasksSnapshot.docs.map(taskDoc => {
-              const data = taskDoc.data();
-              // Convert dueDate from Timestamp to YYYY-MM-DD if needed
-              let dueDate = '';
-              
-              if (data.dueDate) {
-                try {
-                  // Check if it's a Firestore Timestamp
-                  if (data.dueDate && typeof data.dueDate.toDate === 'function') {
-                    dueDate = data.dueDate.toDate().toISOString().split('T')[0];
-                  } 
-                  // Check if it's a Timestamp object with seconds property
-                  else if (data.dueDate && data.dueDate.seconds) {
-                    dueDate = new Date(data.dueDate.seconds * 1000).toISOString().split('T')[0];
-                  }
-                  // Check if it's already a string in YYYY-MM-DD format
-                  else if (typeof data.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.dueDate)) {
-                    dueDate = data.dueDate;
-                  }
-                  // Try to parse as Date
-                  else if (data.dueDate instanceof Date) {
-                    dueDate = data.dueDate.toISOString().split('T')[0];
-                  }
-                  // Last resort: try to convert to Date
-                  else {
-                    const date = new Date(data.dueDate);
-                    if (!isNaN(date.getTime())) {
-                      dueDate = date.toISOString().split('T')[0];
-                    }
-                  }
-                } catch (e) {
-                  console.warn(`Error converting dueDate for task ${taskDoc.id}:`, e, data.dueDate);
+    const fetchTasksForCollection = async (collectionName, titleKeys) => {
+      let parentQuery;
+      const parentRef = collection(db, collectionName);
+
+      if (userRole === 'ADMIN') {
+        parentQuery = parentRef;
+      } else if (userRole === 'RESEARCHER' && user?.id) {
+        parentQuery = query(parentRef, where('researcherId', '==', user.id));
+      } else {
+        return [];
+      }
+
+      const parentSnapshot = await getDocs(parentQuery);
+      if (parentSnapshot.docs.length === 0) {
+        return [];
+      }
+
+      const tasksPromises = parentSnapshot.docs.map(async (parentDoc) => {
+        const parentData = parentDoc.data();
+        const tasksRef = collection(db, collectionName, parentDoc.id, 'tasks');
+        const tasksSnapshot = await getDocs(tasksRef);
+
+        return tasksSnapshot.docs.map((taskDoc) => {
+          const data = taskDoc.data();
+          let dueDate = '';
+
+          if (data.dueDate) {
+            try {
+              if (data.dueDate && typeof data.dueDate.toDate === 'function') {
+                dueDate = data.dueDate.toDate().toISOString().split('T')[0];
+              } else if (data.dueDate && data.dueDate.seconds) {
+                dueDate = new Date(data.dueDate.seconds * 1000).toISOString().split('T')[0];
+              } else if (typeof data.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.dueDate)) {
+                dueDate = data.dueDate;
+              } else if (data.dueDate instanceof Date) {
+                dueDate = data.dueDate.toISOString().split('T')[0];
+              } else {
+                const date = new Date(data.dueDate);
+                if (!isNaN(date.getTime())) {
+                  dueDate = date.toISOString().split('T')[0];
                 }
               }
-              
-              console.log(`Task ${taskDoc.id}: dueDate=${data.dueDate}, converted=${dueDate}`);
-              
-              return {
-                id: taskDoc.id,
-                title: data.title || 'ללא כותרת',
-                dueDate: dueDate,
-                status: data.status || 'open',
-                researcherId: data.researcherId || proposalData?.researcherId || '',
-                researchProposalId: proposalId,
-                researchProposalTitle: proposalData?.projectTitle || proposalData?.title || 'ללא כותרת מחקר'
-              };
-            });
-          } catch (taskError) {
-            console.warn(`Error fetching tasks for proposal ${proposalId}:`, taskError.message);
-            return []; // Return empty array if can't fetch tasks for this proposal
+            } catch (e) {
+              console.warn(`Error converting dueDate for task ${taskDoc.id}:`, e, data.dueDate);
+            }
           }
+
+          const parentTitle = titleKeys
+            .map((key) => parentData?.[key])
+            .find((value) => value && String(value).trim().length > 0) || 'ללא כותרת';
+
+          return {
+            id: taskDoc.id,
+            title: data.title || 'ללא כותרת',
+            dueDate,
+            status: data.status || 'open',
+            researcherId: data.researcherId || parentData?.researcherId || '',
+            parentId: parentDoc.id,
+            parentTitle,
+            parentType: collectionName === 'patents' ? 'patent' : 'research',
+            researchProposalId: collectionName === 'researchProposals' ? parentDoc.id : null,
+            patentId: collectionName === 'patents' ? parentDoc.id : null,
+            researchProposalTitle: collectionName === 'researchProposals' ? parentTitle : undefined
+          };
         });
-        
-        const tasksArrays = await Promise.all(allTasksPromises);
-        const allTasks = tasksArrays.flat().filter(task => {
+      });
+
+      const tasksArrays = await Promise.all(tasksPromises);
+      return tasksArrays.flat();
+    };
+
+    // Function to fetch tasks from research proposals + patents
+    const fetchTasksFromFirebase = async () => {
+      try {
+        console.log('Fetching tasks from research proposals and patents...');
+
+        const [researchTasks, patentTasks] = await Promise.all([
+          fetchTasksForCollection('researchProposals', ['projectTitle', 'title']),
+          fetchTasksForCollection('patents', ['title', 'projectTitle'])
+        ]);
+
+        const allTasks = [...researchTasks, ...patentTasks].filter(task => {
           // Only include tasks with valid dueDate in YYYY-MM-DD format
           if (!task.dueDate) {
             console.log('Task without dueDate:', task);
@@ -401,7 +371,11 @@ const Home = () => {
         });
 
         setTasks(allTasks);
-        console.log('✅ Tasks loaded from research proposals:', allTasks.length, 'tasks');
+        console.log('✅ Tasks loaded from Firebase:', {
+          researchTasks: researchTasks.length,
+          patentTasks: patentTasks.length,
+          total: allTasks.length
+        });
         if (allTasks.length > 0) {
           console.log('Sample tasks:', allTasks.slice(0, 3));
         } else {
@@ -409,7 +383,7 @@ const Home = () => {
         }
         setTasksLoading(false);
       } catch (err) {
-        console.error('❌ Error fetching tasks from research proposals:', err);
+        console.error('❌ Error fetching tasks from Firebase:', err);
         console.error('Error details:', {
           message: err.message,
           code: err.code,
@@ -421,13 +395,13 @@ const Home = () => {
     };
 
     // Initial fetch
-    fetchTasksFromProposals();
+    fetchTasksFromFirebase();
 
     // Set up periodic refresh instead of real-time listener to avoid permission issues
     // Refresh every 30 seconds
     const refreshInterval = setInterval(() => {
       console.log('Refreshing tasks...');
-      fetchTasksFromProposals();
+      fetchTasksFromFirebase();
     }, 30000);
 
     // Cleanup on unmount
@@ -440,13 +414,15 @@ const Home = () => {
   // Handle calendar event click
   const handleTaskClick = (task) => {
     console.log('Task clicked:', task);
-    // Navigate to research proposal detail page if researchProposalId exists
     if (task.researchProposalId) {
-      navigate(`/research/${task.researchProposalId}`);
-    } else {
-      // Fallback: just log if no research proposal link
-      console.log('Task has no research proposal link');
+      navigate(`/research/${task.researchProposalId}#tasks`);
+      return;
     }
+    if (task.patentId) {
+      navigate(`/patents/${task.patentId}`);
+      return;
+    }
+    console.log('Task has no research/patent link');
   };
 
   const getStatusLabel = (status, type = 'research') => {
@@ -512,6 +488,8 @@ const Home = () => {
           <h1>עמוד הבית - רשות המחקר</h1>
           <p className="welcome-text">ברוכים הבאים למערכת ניהול מחקר</p>
           
+          <UpcomingTasks />
+
           {/* Calendar Section for Admin */}
           <div style={{ marginTop: '40px' }}>
             {tasksLoading ? (
@@ -544,27 +522,7 @@ const Home = () => {
         <h1>עמוד הבית</h1>
         <p className="welcome-text">ברוכים הבאים למערכת ניהול מחקר</p>
 
-        {/* Calendar Section */}
-        <div style={{ marginTop: '40px' }}>
-          {tasksLoading ? (
-            <div style={{ 
-              padding: '40px', 
-              textAlign: 'center', 
-              color: '#6c757d',
-              background: '#f7fafc',
-              borderRadius: '8px'
-            }}>
-              <p>טוען משימות...</p>
-            </div>
-          ) : (
-            <TasksCalendarContainer
-              allTasks={tasks}
-              userRole={userRole}
-              userId={user?.id}
-              onEventClick={handleTaskClick}
-            />
-          )}
-        </div>
+        <UpcomingTasks />
 
         {/* Research Section */}
         <div style={{ marginTop: '40px' }}>
@@ -727,6 +685,28 @@ const Home = () => {
             <div className="no-results">
               <p>לא נמצאו מאמרים</p>
             </div>
+          )}
+        </div>
+
+        {/* Calendar Section */}
+        <div style={{ marginTop: '60px' }}>
+          {tasksLoading ? (
+            <div style={{ 
+              padding: '40px', 
+              textAlign: 'center', 
+              color: '#6c757d',
+              background: '#f7fafc',
+              borderRadius: '8px'
+            }}>
+              <p>טוען משימות...</p>
+            </div>
+          ) : (
+            <TasksCalendarContainer
+              allTasks={tasks}
+              userRole={userRole}
+              userId={user?.id}
+              onEventClick={handleTaskClick}
+            />
           )}
         </div>
 

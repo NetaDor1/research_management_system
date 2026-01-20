@@ -253,7 +253,8 @@ const Research = () => {
 
   return (
     <div className="research-page">
-      <div className="research-header">
+      <div className="research-content">
+        <div className="research-header">
         <h1>אוסף מחקרים</h1>
         <div className="search-container">
           <input
@@ -345,14 +346,15 @@ const Research = () => {
         </div>
       )}
 
-      {!isAdmin() && (
-        <DetailModal
-          isOpen={isModalOpen}
-          onClose={handleCloseModal}
-          itemId={selectedResearchId}
-          type="research"
-        />
-      )}
+        {!isAdmin() && (
+          <DetailModal
+            isOpen={isModalOpen}
+            onClose={handleCloseModal}
+            itemId={selectedResearchId}
+            type="research"
+          />
+        )}
+      </div>
     </div>
   );
 };

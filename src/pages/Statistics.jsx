@@ -394,7 +394,7 @@ const Statistics = () => {
           return (
             <>
               <div className="statistics-section">
-                <h2>📊 סטטיסטיקות חוקר</h2>
+                <h2>סטטיסטיקות חוקר</h2>
                 <div className="stats-grid">
                   <div 
                     className="stat-box"
@@ -535,7 +535,7 @@ const Statistics = () => {
 
               {/* Charts for Researcher - Moved to bottom */}
               <div className="statistics-section" style={{ marginTop: '40px' }}>
-                <h2>📈 גרפים</h2>
+                <h2>גרפים</h2>
               
               {/* Bar Chart - Submissions vs Awards vs Rejections */}
               <div style={{ marginBottom: '40px', padding: '20px', background: '#fff', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
@@ -657,7 +657,7 @@ const Statistics = () => {
           <>
             {/* Statistics by Researcher */}
             <div className="statistics-section">
-              <h2>📊 סטטיסטיקות לפי חוקר</h2>
+              <h2>סטטיסטיקות לפי חוקר</h2>
               
               {(() => {
                 // Filter researchers based on search term
@@ -1029,7 +1029,7 @@ const Statistics = () => {
             {/* Statistics by Department */}
             {adminStats.byDepartment.length > 0 && (
               <div className="statistics-section">
-                <h2>📊 סטטיסטיקות לפי מחלקה</h2>
+                <h2>סטטיסטיקות לפי מחלקה</h2>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '15px' }}>
                     <thead>
@@ -1057,7 +1057,7 @@ const Statistics = () => {
 
             {/* Statistics by Fund */}
         <div className="statistics-section">
-              <h2>📊 סטטיסטיקות לפי קרן</h2>
+              <h2>סטטיסטיקות לפי קרן</h2>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '15px' }}>
                   <thead>
@@ -1084,7 +1084,7 @@ const Statistics = () => {
 
             {/* Total Statistics per Year */}
             <div className="statistics-section">
-              <h2>📊 סה"כ הגשות/זכיות/דחיות בשנה</h2>
+              <h2>סה"כ הגשות/זכיות/דחיות בשנה</h2>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '15px' }}>
                   <thead>
@@ -1119,7 +1119,7 @@ const Statistics = () => {
 
             {/* Charts for Admin - Moved to bottom */}
             <div className="statistics-section" style={{ marginTop: '40px' }}>
-              <h2>📈 גרפים</h2>
+              <h2>גרפים</h2>
               
               {/* Pie Chart - Total Submissions/Awards/Rejections */}
               {adminStats.byYear.length > 0 && (() => {
