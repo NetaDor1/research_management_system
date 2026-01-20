@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import NavigationBar from './components/NavigationBar';
 import Home from './pages/home';
@@ -16,15 +16,18 @@ import NewArticle from './pages/NewArticle';
 import Statistics from './pages/Statistics';
 import ReportFormat from './pages/ReportFormat';
 import SetupFirebase from './pages/SetupFirebase';
+import Login from './pages/Login';
 import './App.css';
 
-function App() {
+function AppContent() {
+  const location = useLocation();
+  const showNavBar = location.pathname !== '/login';
+
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <div className="App">
-          <NavigationBar />
-          <Routes>
+    <div className="App">
+      {showNavBar && <NavigationBar />}
+      <Routes>
+        <Route path="/login" element={<Login />} />
             <Route path="/" element={<Home />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/research" element={<Research />} />
@@ -39,8 +42,16 @@ function App() {
             <Route path="/statistics" element={<Statistics />} />
             <Route path="/report-format" element={<ReportFormat />} />
             <Route path="/setup-firebase" element={<SetupFirebase />} />
-          </Routes>
-        </div>
+      </Routes>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <AppContent />
       </BrowserRouter>
     </AuthProvider>
   );

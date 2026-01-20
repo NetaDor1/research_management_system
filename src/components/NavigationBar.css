@@ -246,3 +246,52 @@
   background: #764ba2;
 }
 
+/* Navigation Footer with Logout */
+.nav-footer {
+  padding: 16px 24px;
+  border-top: 2px solid #e9ecef;
+  background: #f8f9fa;
+}
+
+.logout-button {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  color: #dc3545;
+  text-decoration: none;
+  font-size: 18px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  border-right: 4px solid transparent;
+  position: relative;
+  cursor: pointer;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: right;
+  font-family: inherit;
+  border-radius: 8px;
+}
+
+.logout-button:hover {
+  background: linear-gradient(90deg, rgba(220, 53, 69, 0.1) 0%, transparent 100%);
+  color: #c82333;
+  border-right-color: #dc3545;
+  transform: translateX(-4px);
+}
+
+.logout-button .nav-icon {
+  font-size: 24px;
+  width: 32px;
+  text-align: center;
+  transition: transform 0.3s ease;
+}
+
+.logout-button:hover .nav-icon {
+  transform: scale(1.2);
+}
+
+.logout-button .nav-label {
+  flex: 1;
+}

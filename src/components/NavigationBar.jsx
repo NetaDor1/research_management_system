@@ -91,6 +91,19 @@ const NavigationBar = () => {
             </li>
           ))}
         </ul>
+        
+        <div className="nav-footer">
+          <button
+            className="logout-button"
+            onClick={() => {
+              closeNav();
+              navigate('/login');
+            }}
+          >
+            <span className="nav-icon">🚪</span>
+            <span className="nav-label">התנתק</span>
+          </button>
+        </div>
       </nav>
     </>
   );
