@@ -1,0 +1,67 @@
+.work-plan-section {
+  margin: 40px 0;
+  padding: 30px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.work-plan-header {
+  margin-bottom: 30px;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 15px;
+}
+
+.work-plan-header h2 {
+  color: #667eea;
+  font-size: 24px;
+  margin: 0 0 10px 0;
+  font-weight: 600;
+}
+
+.section-description {
+  color: #6c757d;
+  font-size: 14px;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.work-plan-content {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.work-plan-left {
+  width: 100%;
+}
+
+.work-plan-right {
+  width: 100%;
+}
+
+.work-plan-readonly {
+  width: 100%;
+}
+
+/* Responsive design */
+@media (max-width: 1024px) {
+  .work-plan-content {
+    flex-direction: column;
+  }
+
+  .work-plan-left,
+  .work-plan-right {
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .work-plan-section {
+    padding: 20px;
+  }
+
+  .work-plan-header h2 {
+    font-size: 20px;
+  }
+}

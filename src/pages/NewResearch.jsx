@@ -12,6 +12,7 @@ import ResearchDescriptionSection from '../components/research/form/ResearchDesc
 import DocumentsSection from '../components/research/form/DocumentsSection';
 import DigitalSignatureSection from '../components/research/form/DigitalSignatureSection';
 import AdditionalInfoSection from '../components/research/form/AdditionalInfoSection';
+import WorkPlanSection from '../components/research/WorkPlanSection';
 import './Page.css';
 import './Research.css';
 
@@ -172,7 +173,8 @@ const NewResearch = () => {
     researchObjectives: '',
     detailedDescription: '',
     significanceInnovation: '',
-    applicability: ''
+    applicability: '',
+    workPlanTasks: []
   });
 
   const [errors, setErrors] = useState({});
@@ -641,6 +643,9 @@ const NewResearch = () => {
         detailedDescription: formData.detailedDescription || '',
         significanceInnovation: formData.significanceInnovation || '',
         applicability: formData.applicability || '',
+        
+        // תוכנית עבודה
+        workPlanTasks: formData.workPlanTasks || [],
         
         // סטטוס
         status: 'pending',
@@ -1111,6 +1116,17 @@ const NewResearch = () => {
             formatDateForDisplay={formatDateForDisplay}
             convertDateToISO={convertDateToISO}
             expectedDatePickerRef={expectedDatePickerRef}
+          />
+
+          <WorkPlanSection
+            initialTasks={formData.workPlanTasks || []}
+            onTasksChange={(tasks) => {
+              setFormData(prev => ({
+                ...prev,
+                workPlanTasks: tasks
+              }));
+            }}
+            readOnly={false}
           />
 
           {/* Form Actions */}

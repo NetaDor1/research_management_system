@@ -10,6 +10,7 @@ import PartnersSection from '../components/research/PartnersSection';
 import ResearchDescriptionSection from '../components/research/ResearchDescriptionSection';
 import AdditionalInfoSection from '../components/research/AdditionalInfoSection';
 import TasksSection from '../components/research/TasksSection';
+import WorkPlanSection from '../components/research/WorkPlanSection';
 import './Page.css';
 import './Research.css';
 
@@ -430,6 +431,14 @@ const ResearchDetail = () => {
             <PartnersSection researchData={researchData} />
             <ResearchDescriptionSection researchData={researchData} />
             <AdditionalInfoSection researchData={researchData} />
+            
+            {researchData.workPlanTasks && researchData.workPlanTasks.length > 0 && (
+              <WorkPlanSection
+                initialTasks={researchData.workPlanTasks || []}
+                readOnly={true}
+              />
+            )}
+            
             {!linkedPatentsLoading && !linkedPatentsError && linkedPatents.length > 0 && (
               <div style={{
                 background: '#f9f9f9',
