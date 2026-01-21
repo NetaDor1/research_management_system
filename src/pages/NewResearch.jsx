@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../services/firebase';
@@ -184,6 +184,7 @@ const NewResearch = () => {
   const startDatePickerRef = useRef(null);
   const endDatePickerRef = useRef(null);
   const expectedDatePickerRef = useRef(null);
+  const [loadingExisting, setLoadingExisting] = useState(false);
 
   // Calculate research duration automatically
   useEffect(() => {
@@ -230,6 +231,98 @@ const NewResearch = () => {
       }));
     }
   }, [formData.budgetComponents]);
+
+  // Helper to convert Firestore Timestamp or date string to dd/mm/yyyy for display
+  const timestampToDisplayDate = (value) => {
+    if (!value) return '';
+
+    try {
+      let dateObj;
+      if (value instanceof Date) {
+        dateObj = value;
+      } else if (value && typeof value.toDate === 'function') {
+        dateObj = value.toDate();
+      } else if (value && value.seconds) {
+        dateObj = new Date(value.seconds * 1000);
+      } else if (typeof value === 'string') {
+        // Try to parse ISO or existing dd/mm/yyyy
+        if (value.includes('/')) return value;
+        dateObj = new Date(value);
+      } else {
+        return '';
+      }
+
+      if (isNaN(dateObj.getTime())) return '';
+
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const year = String(dateObj.getFullYear());
+      return `${day}/${month}/${year}`;
+    } catch {
+      return '';
+    }
+  };
+
+  // Load existing research data when in edit mode
+  useEffect(() => {
+    const loadExistingResearch = async () => {
+      if (!editId || !db) return;
+
+      setLoadingExisting(true);
+      try {
+        const docRef = doc(db, 'researchProposals', editId);
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) {
+          console.warn('Research to edit not found:', editId);
+          setLoadingExisting(false);
+          return;
+        }
+
+        const data = snap.data();
+
+        setFormData(prev => ({
+          ...prev,
+          projectTitle: data.projectTitle || data.title || '',
+          fundName: data.fundName || '',
+          fundType: data.fundType || '',
+          submissionPath: data.submissionPath || '',
+          researcherRole: data.researcherRole || '',
+          proposalStage: data.proposalStage || '',
+          submissionType: data.submissionType || '',
+          researchStartDate: timestampToDisplayDate(data.researchStartDate),
+          researchEndDate: timestampToDisplayDate(data.researchEndDate),
+          researchDurationYears: data.researchDurationYears || '',
+          academicYear: data.academicYear || '',
+          totalBudget: data.totalBudget || '',
+          currency: data.currency || 'ILS',
+          convertedBudget: data.convertedBudget || '',
+          budgetComponents: data.budgetComponents || {},
+          partners: (data.partners && data.partners.length > 0)
+            ? data.partners
+            : [{ name: '', email: '', institution: '', country: '' }],
+          requiredDocumentsChecklist: data.requiredDocumentsChecklist || {},
+          digitalSignature: data.digitalSignature || { signed: false, date: '', signer: '' },
+          expectedResponseDate: timestampToDisplayDate(data.expectedResponseDate),
+          notes: data.notes || '',
+          abstract: data.abstract || '',
+          scientificBackground: data.scientificBackground || '',
+          researchObjectives: data.researchObjectives || '',
+          detailedDescription: data.detailedDescription || '',
+          significanceInnovation: data.significanceInnovation || '',
+          applicability: data.applicability || '',
+          workPlanTasks: data.workPlanTasks || []
+        }));
+
+        setHasPartners(Boolean(data.partners && data.partners.length > 0));
+      } catch (err) {
+        console.error('Error loading research for edit:', err);
+      } finally {
+        setLoadingExisting(false);
+      }
+    };
+
+    loadExistingResearch();
+  }, [editId]);
 
   // Calculate converted budget
   useEffect(() => {
@@ -570,6 +663,7 @@ const NewResearch = () => {
     }
 
     try {
+      const isEdit = Boolean(editId);
       const researcherId = user?.id || 'temp-user-id';
       const researcherName = user?.name || 'חוקר';
 
@@ -624,9 +718,7 @@ const NewResearch = () => {
         // שותפים - רק אם יש שותפים
         partners: hasPartners ? formData.partners.filter(p => p.name || p.email || p.institution || p.country) || [] : [],
         
-        // מסמכים
-        researchProposalFileUrl: '',
-        officialDocuments: [],
+        // מסמכים (הקישורים עצמם יעודכנו לאחר העלאת הקבצים)
         requiredDocumentsChecklist: formData.requiredDocumentsChecklist || {},
         
         // חתימה
@@ -660,19 +752,26 @@ const NewResearch = () => {
 
       console.log('Research data prepared:', researchData);
 
-      // Create document in Firestore
-      console.log('Creating document in Firestore...');
-      const docRef = await addDoc(collection(db, 'researchProposals'), researchData);
-      console.log('Document created with ID:', docRef.id);
+      // Create or update document in Firestore
+      console.log(isEdit ? 'Updating research proposal...' : 'Creating research proposal...');
+      let docId = editId;
+
+      if (isEdit) {
+        await updateDoc(doc(db, 'researchProposals', editId), researchData);
+      } else {
+        const docRef = await addDoc(collection(db, 'researchProposals'), researchData);
+        docId = docRef.id;
+        console.log('Document created with ID:', docId);
+      }
 
       // Upload files after document creation
       let proposalFileUrl = '';
       let officialDocsUrls = [];
       
-      if (formData.researchProposalFile) {
+      if (docId && formData.researchProposalFile) {
         try {
           console.log('Uploading proposal file...');
-          const fileRef = ref(storage, `researchProposals/${docRef.id}/proposal/${formData.researchProposalFile.name}`);
+          const fileRef = ref(storage, `researchProposals/${docId}/proposal/${formData.researchProposalFile.name}`);
           await uploadBytes(fileRef, formData.researchProposalFile);
           proposalFileUrl = await getDownloadURL(fileRef);
           console.log('Proposal file uploaded:', proposalFileUrl);
@@ -682,12 +781,12 @@ const NewResearch = () => {
         }
       }
 
-      if (formData.officialDocuments && formData.officialDocuments.length > 0) {
+      if (docId && formData.officialDocuments && formData.officialDocuments.length > 0) {
         try {
           console.log('Uploading official documents...');
           for (let idx = 0; idx < formData.officialDocuments.length; idx++) {
             const file = formData.officialDocuments[idx];
-            const fileRef = ref(storage, `researchProposals/${docRef.id}/official/${Date.now()}-${idx}-${file.name}`);
+            const fileRef = ref(storage, `researchProposals/${docId}/official/${Date.now()}-${idx}-${file.name}`);
             await uploadBytes(fileRef, file);
             const url = await getDownloadURL(fileRef);
             officialDocsUrls.push(url);
@@ -700,10 +799,10 @@ const NewResearch = () => {
       }
 
       // Update document with file URLs if any files were uploaded
-      if (proposalFileUrl || officialDocsUrls.length > 0) {
+      if (docId && (proposalFileUrl || officialDocsUrls.length > 0)) {
         try {
           console.log('Updating document with file URLs...');
-          await updateDoc(doc(db, 'researchProposals', docRef.id), {
+          await updateDoc(doc(db, 'researchProposals', docId), {
             researchProposalFileUrl: proposalFileUrl || null,
             officialDocuments: officialDocsUrls,
             updatedAt: serverTimestamp(),

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp, query, where, getDocs, arrayUnion } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp, Timestamp, query, where, getDocs, arrayUnion } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { db, storage } from '../services/firebase';
@@ -124,6 +124,7 @@ const NewPatent = () => {
   const [researchOptions, setResearchOptions] = useState([]);
   const [researchLoading, setResearchLoading] = useState(true);
   const [researchLoadError, setResearchLoadError] = useState('');
+  const isEdit = Boolean(editId);
 
   // Calculate converted budget based on currency
   useEffect(() => {
@@ -191,6 +192,89 @@ const NewPatent = () => {
 
     fetchResearchOptions();
   }, [userRole, user?.id]);
+
+  // Load existing patent data for edit mode
+  useEffect(() => {
+    const loadExistingPatent = async () => {
+      if (!editId || !db) return;
+
+      try {
+        const docRef = doc(db, 'patents', editId);
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) {
+          console.warn('Patent to edit not found:', editId);
+          return;
+        }
+
+        const data = snap.data();
+
+        // Convert dates (Firestore Timestamp or string) to YYYY-MM-DD
+        const convertToInputDate = (value) => {
+          if (!value) return '';
+          try {
+            let d;
+            if (value && typeof value.toDate === 'function') {
+              d = value.toDate();
+            } else if (value && value.seconds) {
+              d = new Date(value.seconds * 1000);
+            } else if (typeof value === 'string') {
+              // If already YYYY-MM-DD
+              if (value.length === 10 && value.includes('-')) return value;
+              d = new Date(value);
+            } else {
+              return '';
+            }
+            if (isNaN(d.getTime())) return '';
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+          } catch {
+            return '';
+          }
+        };
+
+        const loadedDates = {};
+        dateFields.forEach(({ key }) => {
+          loadedDates[key] = convertToInputDate(data[key]);
+        });
+
+        setFormData(prev => ({
+          ...prev,
+          projectTitle: data.projectTitle || data.title || '',
+          researchProposalId: data.researchProposalId || '',
+          institutionPercentage: data.institutionPercentage || '',
+          partners: (data.partners && data.partners.length > 0)
+            ? data.partners
+            : [{ name: '', email: '', institution: '', percentage: '' }],
+          commercializationUnit: data.commercializationUnit || '',
+          commercializationContact1: data.commercializationContact1 || '',
+          commercializationContact2: data.commercializationContact2 || '',
+          commercializationEmail1: data.commercializationEmail1 || '',
+          commercializationEmail2: data.commercializationEmail2 || '',
+          submissionPath: data.submissionPath || '',
+          researcherRole: data.researcherRole || '',
+          patentStatus: data.status || data.patentStatus || 'in-process',
+          patentStage: data.patentStage || '',
+          dates: {
+            ...prev.dates,
+            ...loadedDates
+          },
+          totalBudget: data.totalBudget || '',
+          currency: data.currency || 'ILS',
+          convertedBudget: data.convertedBudget || '',
+          stageBudgets: data.stageBudgets || {},
+          requiredDocumentsChecklist: data.requiredDocumentsChecklist || {},
+          digitalSignature: data.digitalSignature || { signed: false, date: '', signer: '' },
+          notes: data.notes || ''
+        }));
+      } catch (err) {
+        console.error('Error loading patent for edit:', err);
+      }
+    };
+
+    loadExistingPatent();
+  }, [editId]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -380,9 +464,7 @@ const NewPatent = () => {
         convertedBudget: formData.convertedBudget || '',
         stageBudgets: formData.stageBudgets || {},
         
-        // מסמכים
-        patentApplicationFileUrl: '',
-        officialDocuments: [],
+        // מסמכים (הקישורים עצמם יעודכנו לאחר העלאת הקבצים)
         requiredDocumentsChecklist: formData.requiredDocumentsChecklist || {},
         
         // חתימה
@@ -403,17 +485,23 @@ const NewPatent = () => {
 
       console.log('Patent data prepared:', patentData);
 
-      // Create document in Firestore
-      const docRef = await addDoc(collection(db, 'patents'), patentData);
-      console.log('Document created with ID:', docRef.id);
+      // Create or update document in Firestore
+      let docId = editId;
+      if (isEdit) {
+        await updateDoc(doc(db, 'patents', editId), patentData);
+      } else {
+        const docRef = await addDoc(collection(db, 'patents'), patentData);
+        docId = docRef.id;
+        console.log('Document created with ID:', docId);
+      }
 
       // Upload files after document creation
       let applicationFileUrl = '';
       let officialDocsUrls = [];
       
-      if (formData.patentApplicationFile) {
+      if (docId && formData.patentApplicationFile) {
         try {
-          const fileRef = ref(storage, `patents/${docRef.id}/application/${formData.patentApplicationFile.name}`);
+          const fileRef = ref(storage, `patents/${docId}/application/${formData.patentApplicationFile.name}`);
           await uploadBytes(fileRef, formData.patentApplicationFile);
           applicationFileUrl = await getDownloadURL(fileRef);
         } catch (fileError) {
@@ -421,11 +509,11 @@ const NewPatent = () => {
         }
       }
 
-      if (formData.officialDocuments && formData.officialDocuments.length > 0) {
+      if (docId && formData.officialDocuments && formData.officialDocuments.length > 0) {
         try {
           for (let idx = 0; idx < formData.officialDocuments.length; idx++) {
             const file = formData.officialDocuments[idx];
-            const fileRef = ref(storage, `patents/${docRef.id}/official/${Date.now()}-${idx}-${file.name}`);
+            const fileRef = ref(storage, `patents/${docId}/official/${Date.now()}-${idx}-${file.name}`);
             await uploadBytes(fileRef, file);
             const url = await getDownloadURL(fileRef);
             officialDocsUrls.push(url);
@@ -436,9 +524,9 @@ const NewPatent = () => {
       }
 
       // Update document with file URLs if any files were uploaded
-      if (applicationFileUrl || officialDocsUrls.length > 0) {
+      if (docId && (applicationFileUrl || officialDocsUrls.length > 0)) {
         try {
-          await updateDoc(doc(db, 'patents', docRef.id), {
+          await updateDoc(doc(db, 'patents', docId), {
             patentApplicationFileUrl: applicationFileUrl || null,
             officialDocuments: officialDocsUrls,
             updatedAt: serverTimestamp(),
@@ -448,11 +536,11 @@ const NewPatent = () => {
         }
       }
 
-      if (formData.researchProposalId) {
+      if (docId && formData.researchProposalId) {
         try {
           await updateDoc(doc(db, 'researchProposals', formData.researchProposalId), {
             hasPatent: true,
-            linkedPatentIds: arrayUnion(docRef.id),
+            linkedPatentIds: arrayUnion(docId),
             updatedAt: serverTimestamp()
           });
         } catch (linkError) {

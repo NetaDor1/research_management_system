@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { collection, addDoc, serverTimestamp, Timestamp, query, where, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { collection, addDoc, serverTimestamp, Timestamp, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import './Page.css';
@@ -8,7 +8,9 @@ import './Research.css';
 
 const NewArticle = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, userRole } = useAuth();
+  const editId = searchParams.get('edit');
 
   // Options for journal ranking
   const journalRankingOptions = [
@@ -80,6 +82,38 @@ const NewArticle = () => {
 
     fetchResearchOptions();
   }, [userRole, user?.id]);
+
+  // Load existing article for edit mode
+  useEffect(() => {
+    const loadExistingArticle = async () => {
+      if (!editId || !db) return;
+
+      try {
+        const docRef = doc(db, 'articles', editId);
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) {
+          console.warn('Article to edit not found:', editId);
+          return;
+        }
+
+        const data = snap.data();
+
+        setFormData(prev => ({
+          ...prev,
+          title: data.title || '',
+          journalName: data.journalName || '',
+          journalRanking: data.journalRanking || '',
+          publicationYear: data.publicationYear || '',
+          articleLink: data.articleLink || '',
+          researchProposalId: data.researchProposalId || ''
+        }));
+      } catch (err) {
+        console.error('Error loading article for edit:', err);
+      }
+    };
+
+    loadExistingArticle();
+  }, [editId]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -175,15 +209,21 @@ const NewArticle = () => {
 
       console.log('Article data prepared:', articleData);
 
-      // Create document in Firestore
-      const docRef = await addDoc(collection(db, 'articles'), articleData);
-      console.log('Document created with ID:', docRef.id);
+      // Create or update document in Firestore
+      let docId = editId;
+      if (editId) {
+        await updateDoc(doc(db, 'articles', editId), articleData);
+      } else {
+        const docRef = await addDoc(collection(db, 'articles'), articleData);
+        docId = docRef.id;
+        console.log('Document created with ID:', docId);
+      }
 
-      if (formData.researchProposalId) {
+      if (docId && formData.researchProposalId) {
         try {
           await updateDoc(doc(db, 'researchProposals', formData.researchProposalId), {
             hasArticle: true,
-            linkedArticleIds: arrayUnion(docRef.id),
+            linkedArticleIds: arrayUnion(docId),
             updatedAt: serverTimestamp()
           });
         } catch (linkError) {
