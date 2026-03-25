@@ -18,6 +18,7 @@ import Statistics from './pages/Statistics';
 import ReportFormat from './pages/ReportFormat';
 import SetupFirebase from './pages/SetupFirebase';
 import Settings from './pages/Settings';
+import Notifications from './pages/Notifications';
 import Login from './pages/Login';
 import './App.css';
 
@@ -45,6 +46,7 @@ function AppContent() {
             <Route path="/report-format" element={<ReportFormat />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/setup-firebase" element={<SetupFirebase />} />
+            <Route path="/notifications" element={<Notifications />} />
       </Routes>
     </div>
   );

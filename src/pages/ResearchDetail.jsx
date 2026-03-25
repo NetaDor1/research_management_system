@@ -4,6 +4,7 @@ import { doc, getDoc, collection, addDoc, updateDoc, deleteDoc, query, where, ge
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
+import { createNotification } from '../services/notifications';
 import ResearchInfoSection from '../components/research/ResearchInfoSection';
 import ResearchPeriodSection from '../components/research/ResearchPeriodSection';
 import BudgetSection from '../components/research/BudgetSection';
@@ -178,6 +179,20 @@ const ResearchDetail = () => {
     return '/research';
   };
 
+  const createTaskNotification = async ({ researcherId, title, message, taskId, link, eventKey, type = 'task' }) => {
+    if (!researcherId) return;
+    await createNotification({
+      userId: researcherId,
+      title,
+      message,
+      type,
+      entityType: 'task',
+      entityId: taskId,
+      link,
+      eventKey
+    });
+  };
+
   // Handle adding a new task
   const handleAddTask = async (formData) => {
     if (!isAdmin() || !id || !db) {
@@ -226,6 +241,7 @@ const ResearchDetail = () => {
         dueDate: dueDateTimestamp,
         createdAt: serverTimestamp(),
         createdBy: user?.name || 'Admin',
+        researcherId,
         status: 'pending',
         submissions: []
       };
@@ -269,6 +285,15 @@ const ResearchDetail = () => {
         console.log('⚠️ Task has no dueDate, skipping calendar collection (task still saved in subcollection)');
       }
 
+      await createTaskNotification({
+        researcherId,
+        title: 'משימה חדשה',
+        message: `נוספה משימה חדשה: "${formData.title}"${dueDateString ? ` (תאריך יעד: ${new Date(dueDateString).toLocaleDateString('he-IL')})` : ''}.`,
+        taskId,
+        link: `/research/${id}#tasks`,
+        eventKey: `task_created:${taskId}`
+      });
+
       alert('המשימה נוספה בהצלחה!');
     } catch (err) {
       console.error('❌ Error adding task:', err);
@@ -289,6 +314,10 @@ const ResearchDetail = () => {
 
     setUploading(true);
     try {
+      const taskRef = doc(db, 'researchProposals', id, 'tasks', taskId);
+      const taskSnap = await getDoc(taskRef);
+      const existingTask = taskSnap.exists() ? taskSnap.data() : null;
+      const researcherId = existingTask?.researcherId || researchData?.researcherId;
       let dueDateTimestamp = null;
       let dueDateString = null;
       if (formData.dueDate) {
@@ -301,7 +330,6 @@ const ResearchDetail = () => {
         }
       }
 
-      const taskRef = doc(db, 'researchProposals', id, 'tasks', taskId);
       await updateDoc(taskRef, {
         title: formData.title,
         description: formData.description || '',
@@ -324,6 +352,21 @@ const ResearchDetail = () => {
         }
       }
 
+      const dueDateLabel = dueDateString
+        ? new Date(dueDateString).toLocaleDateString('he-IL')
+        : '';
+
+      await createTaskNotification({
+        researcherId,
+        title: 'עדכון משימה',
+        message: dueDateLabel
+          ? `תאריך הגשת "${formData.title}" עודכן ל-${dueDateLabel}.`
+          : `המשימה "${formData.title}" עודכנה.`,
+        taskId,
+        link: `/research/${id}#tasks`,
+        eventKey: `task_updated:${taskId}:${Date.now()}`
+      });
+
       alert('המשימה עודכנה בהצלחה!');
     } catch (err) {
       console.error('Error updating task:', err);
@@ -344,6 +387,10 @@ const ResearchDetail = () => {
     setUploading(true);
     try {
       const taskRef = doc(db, 'researchProposals', id, 'tasks', taskId);
+      const taskSnap = await getDoc(taskRef);
+      const existingTask = taskSnap.exists() ? taskSnap.data() : null;
+      const researcherId = existingTask?.researcherId || researchData?.researcherId;
+      const taskTitle = existingTask?.title || 'משימה';
       await deleteDoc(taskRef);
 
       const globalTasksQuery = query(
@@ -355,6 +402,16 @@ const ResearchDetail = () => {
         const globalTaskDoc = globalTasksSnapshot.docs[0];
         await deleteDoc(globalTaskDoc.ref);
       }
+
+      await createTaskNotification({
+        researcherId,
+        title: 'משימה נמחקה',
+        message: `המשימה "${taskTitle}" נמחקה.`,
+        taskId,
+        link: `/research/${id}#tasks`,
+        eventKey: `task_deleted:${taskId}`,
+        type: 'task_deleted'
+      });
 
       alert('המשימה נמחקה בהצלחה!');
     } catch (err) {

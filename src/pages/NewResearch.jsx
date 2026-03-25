@@ -5,6 +5,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db, storage } from '../services/firebase';
+import { createNotification } from '../services/notifications';
 import BasicInfoSection from '../components/research/form/BasicInfoSection';
 import ResearchPeriodSection from '../components/research/form/ResearchPeriodSection';
 import BudgetSection from '../components/research/form/BudgetSection';
@@ -181,6 +182,8 @@ const NewResearch = () => {
 
   const [errors, setErrors] = useState({});
   const [hasPartners, setHasPartners] = useState(false);
+  const [existingResearcherId, setExistingResearcherId] = useState('');
+  const previousResearchRef = useRef(null);
   
   // Refs for date pickers
   const startDatePickerRef = useRef(null);
@@ -265,6 +268,24 @@ const NewResearch = () => {
     }
   };
 
+  const normalizeDateValue = (value) => {
+    if (!value) return '';
+    if (value && typeof value.toDate === 'function') {
+      return value.toDate().toISOString().split('T')[0];
+    }
+    if (value && value.seconds) {
+      return new Date(value.seconds * 1000).toISOString().split('T')[0];
+    }
+    if (typeof value === 'string') {
+      return value.includes('/') ? convertDateToISO(value) : value;
+    }
+    return '';
+  };
+
+  const getMissingDocuments = (checklist) => {
+    return requiredDocuments.filter((docName) => !checklist?.[docName]);
+  };
+
   // Load existing research data when in edit mode
   useEffect(() => {
     const loadExistingResearch = async () => {
@@ -281,6 +302,8 @@ const NewResearch = () => {
         }
 
         const data = snap.data();
+        setExistingResearcherId(data.researcherId || '');
+        previousResearchRef.current = data;
 
         setFormData(prev => ({
           ...prev,
@@ -691,6 +714,14 @@ const NewResearch = () => {
         : null;
 
       // Prepare research data
+      const existingStatus = previousResearchRef.current?.status;
+      const existingResearcherName = previousResearchRef.current?.researcherName || '';
+      const finalResearcherId = isEdit && userRole === 'ADMIN' && existingResearcherId
+        ? existingResearcherId
+        : researcherId;
+      const finalResearcherName = isEdit && userRole === 'ADMIN' && existingResearcherName
+        ? existingResearcherName
+        : researcherName;
       const researchData = {
         // פרטים כלליים
         projectTitle: formData.projectTitle,
@@ -702,8 +733,8 @@ const NewResearch = () => {
         submissionType: formData.submissionType || '',
         
         // פרטי החוקר
-        researcherId: researcherId,
-        researcherName: researcherName,
+        researcherId: finalResearcherId,
+        researcherName: finalResearcherName,
         
         // תקופת המחקר
         researchStartDate: researchStartDate,
@@ -742,7 +773,7 @@ const NewResearch = () => {
         workPlanTasks: formData.workPlanTasks || [],
         
         // סטטוס
-        status: 'pending',
+        status: isEdit ? (existingStatus || 'pending') : 'pending',
         hasPatent: false,
         
         // תאריכים
@@ -814,6 +845,79 @@ const NewResearch = () => {
           console.error('Error updating document with file URLs:', updateError);
           // Continue even if update fails
         }
+      }
+
+      if (isEdit && userRole === 'ADMIN' && existingResearcherId) {
+        const previous = previousResearchRef.current || {};
+        const notifications = [];
+
+        notifications.push({
+          title: 'עדכון הצעת מחקר',
+          message: `הצעת המחקר "${formData.projectTitle}" עודכנה על ידי רשות המחקר.`,
+          type: 'research_update',
+          eventKey: `research_updated:${editId}:${Date.now()}`
+        });
+
+        const prevStatus = previous.status || '';
+        const nextStatus = researchData.status || '';
+        if (prevStatus && nextStatus && prevStatus !== nextStatus) {
+          notifications.push({
+            title: 'סטטוס הצעה עודכן',
+            message: `סטטוס הצעת המחקר השתנה מ-"${prevStatus}" ל-"${nextStatus}".`,
+            type: 'status_update',
+            eventKey: `research_status:${editId}:${Date.now()}`
+          });
+        }
+
+        const prevBudget = previous.totalBudget || '';
+        const nextBudget = researchData.totalBudget || '';
+        if (prevBudget && nextBudget && prevBudget !== nextBudget) {
+          notifications.push({
+            title: 'עדכון תקציב',
+            message: `עודכן התקציב בהצעת המחקר: ${prevBudget} → ${nextBudget}.`,
+            type: 'budget_update',
+            eventKey: `research_budget:${editId}:${Date.now()}`
+          });
+        }
+
+        const prevExpected = normalizeDateValue(previous.expectedResponseDate);
+        const nextExpected = normalizeDateValue(researchData.expectedResponseDate);
+        if (prevExpected && nextExpected && prevExpected !== nextExpected) {
+          notifications.push({
+            title: 'עדכון תאריך משוער',
+            message: `התאריך המשוער לתשובה עודכן ל-${new Date(nextExpected).toLocaleDateString('he-IL')}.`,
+            type: 'date_update',
+            eventKey: `research_expected:${editId}:${Date.now()}`
+          });
+        }
+
+        const prevMissing = getMissingDocuments(previous.requiredDocumentsChecklist || {});
+        const nextMissing = getMissingDocuments(researchData.requiredDocumentsChecklist || {});
+        const prevMissingSet = new Set(prevMissing);
+        const newlyMissing = nextMissing.filter((docName) => !prevMissingSet.has(docName));
+        if (nextMissing.length > 0 && newlyMissing.length > 0) {
+          notifications.push({
+            title: 'מסמכים חסרים להגשה',
+            message: `נדרשים מסמכים נוספים: ${newlyMissing.join(', ')}.`,
+            type: 'missing_docs',
+            eventKey: `research_missing_docs:${editId}:${Date.now()}`
+          });
+        }
+
+        await Promise.all(
+          notifications.map((n) =>
+            createNotification({
+              userId: existingResearcherId,
+              title: n.title,
+              message: n.message,
+              type: n.type,
+              entityType: 'research',
+              entityId: editId,
+              link: `/research/${editId}`,
+              eventKey: n.eventKey
+            })
+          )
+        );
       }
 
       console.log('Research proposal saved successfully!');

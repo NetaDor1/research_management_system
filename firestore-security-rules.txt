@@ -1,84 +1,7 @@
 // Firestore Security Rules for Research Management System
 // Copy these rules to Firebase Console > Firestore Database > Rules
-
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    
-    // Helper function to check if user is admin
-    function isAdmin() {
-      return request.auth != null && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
-    }
-    
-    // Helper function to check if user is researcher
-    function isResearcher() {
-      return request.auth != null && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'RESEARCHER';
-    }
-    
-    // Research Proposals Collection
-    match /researchProposals/{proposalId} {
-      // Anyone authenticated can read if they are the researcher or admin
-      allow read: if request.auth != null && (
-        resource.data.researcherId == request.auth.uid || 
-        isAdmin()
-      );
-      
-      // Only admin can create/update/delete
-      allow create, update, delete: if isAdmin();
-      
-      // Tasks subcollection
-      match /tasks/{taskId} {
-        // Researcher can read their own tasks, admin can read all
-        allow read: if request.auth != null && (
-          get(/databases/$(database)/documents/researchProposals/$(proposalId)).data.researcherId == request.auth.uid ||
-          isAdmin()
-        );
-        
-        // Only admin can create/update/delete tasks
-        allow create, update, delete: if isAdmin();
-      }
-    }
-    
-    // Global Tasks Collection (for calendar)
-    match /tasks/{taskId} {
-      // Researcher can read their own tasks, admin can read all
-      allow read: if request.auth != null && (
-        resource.data.researcherId == request.auth.uid ||
-        isAdmin()
-      );
-      
-      // Only admin can create/update/delete tasks
-      allow create, update, delete: if isAdmin();
-    }
-    
-    // Patents Collection
-    match /patents/{patentId} {
-      allow read: if request.auth != null && (
-        resource.data.researcherId == request.auth.uid ||
-        isAdmin()
-      );
-      allow create, update, delete: if request.auth != null;
-    }
-    
-    // Articles Collection
-    match /articles/{articleId} {
-      allow read: if request.auth != null && (
-        resource.data.researcherId == request.auth.uid ||
-        isAdmin()
-      );
-      allow create, update, delete: if request.auth != null;
-    }
-  }
-}
-
-// ============================================
-// ALTERNATIVE: Simplified Rules (if user roles are stored differently)
-// ============================================
-
-// If you're using localStorage for roles (as in your current implementation),
-// you might need to use these simpler rules:
+// NOTE: The app currently uses localStorage for roles (no Firebase Auth),
+// so the rules below are intentionally permissive for development.
 
 rules_version = '2';
 service cloud.firestore {
@@ -86,28 +9,38 @@ service cloud.firestore {
     
     // Research Proposals
     match /researchProposals/{proposalId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if true;
+      allow write: if true;
       
       // Tasks subcollection
       match /tasks/{taskId} {
-        allow read, write: if request.auth != null;
+        allow read, write: if true;
       }
     }
     
     // Global Tasks Collection (for calendar)
     match /tasks/{taskId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if true;
     }
     
     // Patents
     match /patents/{patentId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if true;
     }
     
     // Articles
     match /articles/{articleId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if true;
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      allow read, write: if true;
+    }
+
+    // Researcher Messages (messages sent from researcher to authority)
+    match /researcherMessages/{messageId} {
+      allow read, write: if true;
     }
   }
 }

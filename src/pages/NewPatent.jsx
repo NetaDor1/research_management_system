@@ -5,6 +5,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db, storage } from '../services/firebase';
+import { createNotification } from '../services/notifications';
 import './Page.css';
 import './Research.css';
 
@@ -126,6 +127,7 @@ const NewPatent = () => {
   const [researchOptions, setResearchOptions] = useState([]);
   const [researchLoading, setResearchLoading] = useState(true);
   const [researchLoadError, setResearchLoadError] = useState('');
+  const [existingResearcherId, setExistingResearcherId] = useState('');
   const isEdit = Boolean(editId);
 
   // Calculate converted budget based on currency
@@ -209,6 +211,7 @@ const NewPatent = () => {
         }
 
         const data = snap.data();
+        setExistingResearcherId(data.researcherId || '');
 
         // Convert dates (Firestore Timestamp or string) to YYYY-MM-DD
         const convertToInputDate = (value) => {
@@ -547,6 +550,29 @@ const NewPatent = () => {
           });
         } catch (linkError) {
           console.warn('Failed to link patent to research proposal:', linkError);
+        }
+      }
+
+      if (userRole === 'ADMIN') {
+        let targetResearcherId = existingResearcherId;
+        if (!isEdit && formData.researchProposalId) {
+          const researchSnap = await getDoc(doc(db, 'researchProposals', formData.researchProposalId));
+          targetResearcherId = researchSnap.exists() ? researchSnap.data().researcherId : '';
+        }
+
+        if (targetResearcherId) {
+          await createNotification({
+            userId: targetResearcherId,
+            title: isEdit ? 'עדכון פטנט' : 'נוסף פטנט חדש',
+            message: isEdit
+              ? `הפטנט "${formData.projectTitle}" עודכן על ידי רשות המחקר.`
+              : `נוסף פטנט חדש בשם "${formData.projectTitle}" המקושר למחקר שלך.`,
+            type: 'patent_update',
+            entityType: 'patent',
+            entityId: docId,
+            link: `/patents/${docId}`,
+            eventKey: `${isEdit ? 'patent_updated' : 'patent_created'}:${docId}:${Date.now()}`
+          });
         }
       }
 

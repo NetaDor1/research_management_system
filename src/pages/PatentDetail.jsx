@@ -5,6 +5,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db, storage } from '../services/firebase';
+import { createNotification } from '../services/notifications';
 import './Page.css';
 import './Research.css';
 import { exportPrintableHtmlToPdf, escapeHtml } from '../utils/exportPdf';
@@ -206,6 +207,20 @@ const PatentDetail = () => {
     return '/patents';
   };
 
+  const createTaskNotification = async ({ researcherId, title, message, taskId, link, eventKey, type = 'task' }) => {
+    if (!researcherId) return;
+    await createNotification({
+      userId: researcherId,
+      title,
+      message,
+      type,
+      entityType: 'task',
+      entityId: taskId,
+      link,
+      eventKey
+    });
+  };
+
   // Handle adding a new task (admin only)
   const handleAddTask = async () => {
     if (!isAdmin() || !id || !db) return;
@@ -227,18 +242,34 @@ const PatentDetail = () => {
         }
       }
 
+      const researcherId = patentData?.researcherId || '';
       const taskData = {
         title: newTask.title,
         description: newTask.description || '',
         dueDate: dueDateTimestamp,
         createdAt: serverTimestamp(),
         createdBy: user?.name || 'Admin',
+        researcherId,
         status: 'pending',
         submissions: []
       };
 
       const tasksRef = collection(db, 'patents', id, 'tasks');
-      await addDoc(tasksRef, taskData);
+      const taskDocRef = await addDoc(tasksRef, taskData);
+      const taskId = taskDocRef.id;
+
+      const dueDateLabel = newTask.dueDate
+        ? new Date(newTask.dueDate).toLocaleDateString('he-IL')
+        : '';
+
+      await createTaskNotification({
+        researcherId,
+        title: 'משימה חדשה מהרשות',
+        message: `נוספה משימה חדשה: "${newTask.title}"${dueDateLabel ? ` (תאריך יעד: ${dueDateLabel})` : ''}.`,
+        taskId,
+        link: `/patents/${id}`,
+        eventKey: `patent_task_created:${taskId}`
+      });
 
       setNewTask({ title: '', description: '', dueDate: '', files: [] });
       setShowAddTask(false);
@@ -338,11 +369,29 @@ const PatentDetail = () => {
       }
 
       const taskRef = doc(db, 'patents', id, 'tasks', editingTaskId);
+      const taskSnap = await getDoc(taskRef);
+      const existingTask = taskSnap.exists() ? taskSnap.data() : null;
+      const researcherId = existingTask?.researcherId || patentData?.researcherId || '';
       await updateDoc(taskRef, {
         title: editTask.title,
         description: editTask.description || '',
         dueDate: dueDateTimestamp,
         updatedAt: serverTimestamp()
+      });
+
+      const dueDateLabel = editTask.dueDate
+        ? new Date(editTask.dueDate).toLocaleDateString('he-IL')
+        : '';
+
+      await createTaskNotification({
+        researcherId,
+        title: 'עדכון משימה מהרשות',
+        message: dueDateLabel
+          ? `תאריך הגשת "${editTask.title}" עודכן ל-"${dueDateLabel}".`
+          : `המשימה "${editTask.title}" עודכנה.`,
+        taskId: editingTaskId,
+        link: `/patents/${id}`,
+        eventKey: `patent_task_updated:${editingTaskId}:${Date.now()}`
       });
 
       setEditingTaskId(null);
@@ -368,7 +417,22 @@ const PatentDetail = () => {
     setUploading(true);
     try {
       const taskRef = doc(db, 'patents', id, 'tasks', taskId);
+      const taskSnap = await getDoc(taskRef);
+      const existingTask = taskSnap.exists() ? taskSnap.data() : null;
+      const researcherId = existingTask?.researcherId || patentData?.researcherId || '';
+      const taskTitle = existingTask?.title || 'משימה';
+
       await deleteDoc(taskRef);
+
+      await createTaskNotification({
+        researcherId,
+        title: 'משימה נמחקה מהרשות',
+        message: `המשימה "${taskTitle}" נמחקה על ידי הרשות.`,
+        taskId,
+        link: `/patents/${id}`,
+        eventKey: `patent_task_deleted:${taskId}`,
+        type: 'task_deleted'
+      });
       alert('המשימה נמחקה בהצלחה!');
     } catch (err) {
       console.error('Error deleting task:', err);

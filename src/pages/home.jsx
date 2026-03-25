@@ -4,6 +4,7 @@ import { collection, getDocs, query, where, orderBy, onSnapshot, collectionGroup
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
+import { createNotification } from '../services/notifications';
 import TasksCalendarContainer from '../components/TasksCalendarContainer';
 import UpcomingTasks from '../components/UpcomingTasks';
 import './Page.css';
@@ -412,6 +413,65 @@ const Home = () => {
       clearInterval(refreshInterval);
     };
   }, [userRole, user?.id]);
+
+  useEffect(() => {
+    const ensureDueSoonNotifications = async () => {
+      if (!db || userRole !== 'RESEARCHER' || !user?.id || tasks.length === 0) return;
+
+      const now = new Date();
+      const inTwoDays = new Date();
+      inTwoDays.setDate(now.getDate() + 2);
+
+      const dueSoonTasks = tasks.filter((task) => {
+        if (!task.dueDate || task.researcherId !== user.id) return false;
+        const due = new Date(task.dueDate);
+        if (isNaN(due.getTime())) return false;
+        return due >= now && due <= inTwoDays;
+      });
+
+      if (dueSoonTasks.length === 0) return;
+
+      const existingSnap = await getDocs(
+        query(
+          collection(db, 'notifications'),
+          where('userId', '==', user.id),
+          where('type', '==', 'task_due_soon')
+        )
+      );
+
+      const existingKeys = new Set(
+        existingSnap.docs.map((docItem) => docItem.data().eventKey).filter(Boolean)
+      );
+
+      await Promise.all(
+        dueSoonTasks.map((task) => {
+          const eventKey = `task_due_soon:${task.id}:${task.dueDate}`;
+          if (existingKeys.has(eventKey)) return Promise.resolve();
+
+          const dueLabel = new Date(task.dueDate).toLocaleDateString('he-IL');
+          const link = task.researchProposalId
+            ? `/research/${task.researchProposalId}#tasks`
+            : task.patentId
+              ? `/patents/${task.patentId}`
+              : '';
+
+          return createNotification({
+            userId: user.id,
+            title: 'תזכורת: מועד הגשה מתקרב',
+            message: `המשימה "${task.title}" מתקרבת למועד ההגשה (${dueLabel}).`,
+            type: 'task_due_soon',
+            entityType: 'task',
+            entityId: task.id,
+            link,
+            eventKey
+          });
+        })
+      );
+
+    };
+
+    ensureDueSoonNotifications();
+  }, [tasks, userRole, user?.id]);
 
   // Handle calendar event click
   const handleTaskClick = (task) => {

@@ -4,6 +4,7 @@ import { collection, addDoc, serverTimestamp, Timestamp, query, where, getDocs, 
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
+import { createNotification } from '../services/notifications';
 import './Page.css';
 import './Research.css';
 
@@ -37,6 +38,7 @@ const NewArticle = () => {
   const [researchLoading, setResearchLoading] = useState(true);
   const [researchLoadError, setResearchLoadError] = useState('');
   const backPath = userRole === 'RESEARCHER' ? '/' : '/articles';
+  const [existingResearcherId, setExistingResearcherId] = useState('');
 
   useEffect(() => {
     const fetchResearchOptions = async () => {
@@ -99,6 +101,7 @@ const NewArticle = () => {
         }
 
         const data = snap.data();
+        setExistingResearcherId(data.researcherId || '');
 
         setFormData(prev => ({
           ...prev,
@@ -230,6 +233,29 @@ const NewArticle = () => {
           });
         } catch (linkError) {
           console.warn('Failed to link article to research proposal:', linkError);
+        }
+      }
+
+      if (userRole === 'ADMIN') {
+        let targetResearcherId = existingResearcherId;
+        if (!editId && formData.researchProposalId) {
+          const researchSnap = await getDoc(doc(db, 'researchProposals', formData.researchProposalId));
+          targetResearcherId = researchSnap.exists() ? researchSnap.data().researcherId : '';
+        }
+
+        if (targetResearcherId) {
+          await createNotification({
+            userId: targetResearcherId,
+            title: editId ? 'עדכון מאמר' : 'נוסף מאמר חדש',
+            message: editId
+              ? `המאמר "${formData.title}" עודכן על ידי רשות המחקר.`
+              : `נוסף מאמר חדש בשם "${formData.title}" המקושר למחקר שלך.`,
+            type: 'article_update',
+            entityType: 'article',
+            entityId: docId,
+            link: `/articles/${docId}`,
+            eventKey: `${editId ? 'article_updated' : 'article_created'}:${docId}:${Date.now()}`
+          });
         }
       }
 

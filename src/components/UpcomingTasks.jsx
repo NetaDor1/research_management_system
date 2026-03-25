@@ -57,16 +57,27 @@ const UpcomingTasks = () => {
 
         const getParents = async (collectionName) => {
           const baseRef = collection(db, collectionName);
-          if (userRole === 'RESEARCHER' && user?.id) {
-            return getDocs(query(baseRef, where('researcherId', '==', user.id)));
+          try {
+            if (userRole === 'RESEARCHER' && user?.id) {
+              return getDocs(query(baseRef, where('researcherId', '==', user.id)));
+            }
+            return getDocs(baseRef);
+          } catch (err) {
+            console.warn(`Failed to load ${collectionName} parents:`, err?.message || err);
+            return { docs: [] };
           }
-          return getDocs(baseRef);
         };
 
         const fetchTasksForParent = async (collectionName, parentDoc) => {
           const parentData = parentDoc.data();
           const tasksRef = collection(db, collectionName, parentDoc.id, 'tasks');
-          const tasksSnapshot = await getDocs(tasksRef);
+          let tasksSnapshot;
+          try {
+            tasksSnapshot = await getDocs(tasksRef);
+          } catch (err) {
+            console.warn(`Failed to load tasks for ${collectionName}/${parentDoc.id}:`, err?.message || err);
+            return [];
+          }
 
           return tasksSnapshot.docs.map((taskDoc) => {
             const data = taskDoc.data();
