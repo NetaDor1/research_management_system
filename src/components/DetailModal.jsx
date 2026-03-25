@@ -1,16 +1,18 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { useLanguage } from '../context/LanguageContext';
 import './DetailModal.css';
 
 const DetailModal = ({ isOpen, onClose, itemId, type }) => {
+  const { t, language } = useLanguage();
   const [itemData, setItemData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const fetchItemDetails = useCallback(async () => {
     if (!db) {
-      setError('מסד הנתונים לא מאותחל');
+      setError(t('dbNotInitialized', 'מסד הנתונים לא מאותחל'));
       return;
     }
 
@@ -28,15 +30,15 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
         const data = docSnap.data();
         setItemData(data);
       } else {
-        setError('הפריט לא נמצא');
+        setError(t('itemNotFound', 'הפריט לא נמצא'));
       }
     } catch (err) {
       console.error('Error fetching item details:', err);
-      setError('שגיאה בטעינת הפרטים');
+      setError(t('loadDetailsError', 'שגיאה בטעינת הפרטים'));
     } finally {
       setLoading(false);
     }
-  }, [itemId, type]);
+  }, [itemId, type, t]);
 
   useEffect(() => {
     if (isOpen && itemId) {
@@ -50,16 +52,16 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
   }, [isOpen, itemId, fetchItemDetails]);
 
   const formatDate = (timestamp) => {
-    if (!timestamp) return 'לא צוין';
+    if (!timestamp) return t('notSpecified', 'לא צוין');
     try {
       if (timestamp && typeof timestamp.toDate === 'function') {
-        return timestamp.toDate().toLocaleDateString('he-IL');
+        return timestamp.toDate().toLocaleDateString(language === 'en' ? 'en-US' : 'he-IL');
       }
       if (timestamp && timestamp.seconds) {
-        return new Date(timestamp.seconds * 1000).toLocaleDateString('he-IL');
+        return new Date(timestamp.seconds * 1000).toLocaleDateString(language === 'en' ? 'en-US' : 'he-IL');
       }
       if (typeof timestamp === 'string') {
-        return new Date(timestamp).toLocaleDateString('he-IL');
+        return new Date(timestamp).toLocaleDateString(language === 'en' ? 'en-US' : 'he-IL');
       }
       return String(timestamp);
     } catch (e) {
@@ -68,7 +70,7 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
   };
 
   const formatCurrency = (amount, currency = 'ILS') => {
-    if (!amount) return 'לא צוין';
+    if (!amount) return t('notSpecified', 'לא צוין');
     const currencySymbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '₪';
     return `${currencySymbol} ${Number(amount).toLocaleString('he-IL')}`;
   };
@@ -84,28 +86,28 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
           <h3>פרטים כלליים</h3>
           <div className="detail-grid">
             <div className="detail-item">
-              <label>כותרת הפרויקט:</label>
-              <span>{itemData.projectTitle || 'לא צוין'}</span>
+              <label>{t('projectTitleLabel', 'כותרת הפרוייקט שהוגש לקרן חיצונית')}:</label>
+              <span>{itemData.projectTitle || t('notSpecified', 'לא צוין')}</span>
             </div>
             <div className="detail-item">
-              <label>שם הקרן:</label>
-              <span>{itemData.fundName || 'לא צוין'}</span>
+              <label>{t('fundNameLabel', 'שם הקרן אליה הוגשה הבקשה')}:</label>
+              <span>{itemData.fundName || t('notSpecified', 'לא צוין')}</span>
             </div>
             <div className="detail-item">
-              <label>מסלול הגשה:</label>
-              <span>{itemData.submissionPath || 'לא צוין'}</span>
+              <label>{t('submissionPathLabel', 'מסלול ההגשה לקרן')}:</label>
+              <span>{itemData.submissionPath || t('notSpecified', 'לא צוין')}</span>
             </div>
             <div className="detail-item">
-              <label>תפקיד החוקר:</label>
-              <span>{itemData.researcherRole || 'לא צוין'}</span>
+              <label>{t('researcherRoleLabel', 'תפקיד החוקר בהצעת המחקר')}:</label>
+              <span>{itemData.researcherRole || t('notSpecified', 'לא צוין')}</span>
             </div>
             <div className="detail-item">
-              <label>שלב ההצעה:</label>
-              <span>{itemData.proposalStage || 'לא צוין'}</span>
+              <label>{t('proposalStageLabel', 'שלב ההצעה')}:</label>
+              <span>{itemData.proposalStage || t('notSpecified', 'לא צוין')}</span>
             </div>
             <div className="detail-item">
-              <label>חוקר:</label>
-              <span>{itemData.researcherName || 'לא צוין'}</span>
+              <label>{t('researcher', 'חוקר')}:</label>
+              <span>{itemData.researcherName || t('notSpecified', 'לא צוין')}</span>
             </div>
           </div>
         </div>
@@ -114,20 +116,20 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
           <h3>תקופת המחקר</h3>
           <div className="detail-grid">
             <div className="detail-item">
-              <label>תאריך התחלה:</label>
+              <label>{t('startDateLabel', 'תאריך לועזי של תחילת המחקר (dd/mm/yyyy)')}:</label>
               <span>{formatDate(itemData.researchStartDate)}</span>
             </div>
             <div className="detail-item">
-              <label>תאריך סיום:</label>
+              <label>{t('endDateLabel', 'תאריך לועזי של סוף המחקר (dd/mm/yyyy)')}:</label>
               <span>{formatDate(itemData.researchEndDate)}</span>
             </div>
             <div className="detail-item">
-              <label>משך המחקר (שנים):</label>
-              <span>{itemData.researchDurationYears || 'לא צוין'}</span>
+              <label>{t('totalResearchYears', 'סה"כ תקופת המחקר בשנים (חישוב אוטומטי)')}:</label>
+              <span>{itemData.researchDurationYears || t('notSpecified', 'לא צוין')}</span>
             </div>
             <div className="detail-item">
-              <label>שנה אקדמית:</label>
-              <span>{itemData.academicYear || 'לא צוין'}</span>
+              <label>{t('academicYearLabel', 'שנה אקדמית (תרגום אוטומטי)')}:</label>
+              <span>{itemData.academicYear || t('notSpecified', 'לא צוין')}</span>
             </div>
           </div>
         </div>
@@ -136,21 +138,21 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
           <h3>תקציב</h3>
           <div className="detail-grid">
             <div className="detail-item">
-              <label>תקציב כולל:</label>
+              <label>{t('totalBudgetRequested', 'סה"כ התקציב המבוקש (חישוב אוטומטי)')}:</label>
               <span>{formatCurrency(itemData.totalBudget, itemData.currency)}</span>
             </div>
             <div className="detail-item">
-              <label>מטבע:</label>
+              <label>{t('budgetCurrency', 'מטבע התקציב')}:</label>
               <span>{itemData.currency || 'ILS'}</span>
             </div>
             <div className="detail-item">
-              <label>תקציב מומר:</label>
+              <label>{t('budgetConvertedIls', 'התקציב המתורגם לשקלים (חישוב אוטומטי)')}:</label>
               <span>{formatCurrency(itemData.convertedBudget, 'ILS')}</span>
             </div>
           </div>
           {itemData.budgetComponents && Object.keys(itemData.budgetComponents).length > 0 && (
             <div className="budget-components">
-              <h4>רכיבי תקציב:</h4>
+              <h4>{t('budgetComponentsLabel', 'רכיבי התקציב')}:</h4>
               <div className="budget-list">
                 {Object.entries(itemData.budgetComponents).map(([key, value]) => (
                   <div key={key} className="budget-item">
@@ -165,25 +167,25 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
 
         {itemData.partners && itemData.partners.length > 0 && (
           <div className="detail-section">
-            <h3>שותפים</h3>
+            <h3>{t('partnersProjectTitle', 'שותפים לפרוייקט')}</h3>
             <div className="partners-list">
               {itemData.partners.map((partner, index) => (
                 <div key={index} className="partner-card">
                   <div className="partner-detail">
-                    <label>שם:</label>
-                    <span>{partner.name || 'לא צוין'}</span>
+                    <label>{t('partnerName', 'שם השותף')}:</label>
+                    <span>{partner.name || t('notSpecified', 'לא צוין')}</span>
                   </div>
                   <div className="partner-detail">
-                    <label>אימייל:</label>
-                    <span>{partner.email || 'לא צוין'}</span>
+                    <label>{t('partnerEmail', 'אימייל של השותף')}:</label>
+                    <span>{partner.email || t('notSpecified', 'לא צוין')}</span>
                   </div>
                   <div className="partner-detail">
-                    <label>מוסד:</label>
-                    <span>{partner.institution || 'לא צוין'}</span>
+                    <label>{t('partnerInstitution', 'המוסד של השותף')}:</label>
+                    <span>{partner.institution || t('notSpecified', 'לא צוין')}</span>
                   </div>
                   {partner.country && (
                     <div className="partner-detail">
-                      <label>מדינה:</label>
+                      <label>{t('partnerCountry', 'מדינה שבה השותף נמצא')}:</label>
                       <span>{partner.country}</span>
                     </div>
                   )}
@@ -194,30 +196,30 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
         )}
 
         <div className="detail-section">
-          <h3>מידע נוסף</h3>
+          <h3>{t('additionalInfoTitle', 'מידע נוסף')}</h3>
           <div className="detail-grid">
             <div className="detail-item">
-              <label>תאריך תגובה צפוי:</label>
+              <label>{t('expectedResponseDateLabel', 'תאריך משוער לקבלת תשובות קבלה / דחיה מהקרנות החיצוניות')}:</label>
               <span>{formatDate(itemData.expectedResponseDate)}</span>
             </div>
             <div className="detail-item">
-              <label>סטטוס:</label>
+              <label>{t('status', 'סטטוס')}:</label>
               <span className={`status-badge status-${itemData.status || 'pending'}`}>
-                {itemData.status === 'awarded' ? 'זכייה' : 
-                 itemData.status === 'pending' ? 'המתנה' : 
-                 itemData.status === 'rejected' ? 'לא אושר' : itemData.status}
+                {itemData.status === 'awarded' ? t('awarded', 'זכייה') : 
+                 itemData.status === 'pending' ? t('pending', 'המתנה') : 
+                 itemData.status === 'rejected' ? t('rejected', 'לא אושר') : itemData.status}
               </span>
             </div>
             <div className="detail-item">
-              <label>יש פטנט:</label>
-              <span>{itemData.hasPatent ? 'כן' : 'לא'}</span>
+              <label>{t('patents', 'פטנטים')}:</label>
+              <span>{itemData.hasPatent ? t('yes', 'כן') : t('no', 'לא')}</span>
             </div>
           </div>
         </div>
 
         {itemData.notes && (
           <div className="detail-section">
-            <h3>הערות</h3>
+            <h3>{t('notesFreeText', 'הערות (כתיבה חופשית)')}</h3>
             <p className="notes-text">{itemData.notes}</p>
           </div>
         )}
@@ -481,7 +483,7 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
         <div className="modal-body">
           {loading && (
             <div className="loading-state">
-              <p>טוען פרטים...</p>
+              <p>{t('loadingDetails', 'טוען פרטים...')}</p>
             </div>
           )}
           

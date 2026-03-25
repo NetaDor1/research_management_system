@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const BudgetSection = ({ 
   formData, 
@@ -8,14 +9,15 @@ const BudgetSection = ({
   budgetComponents,
   currencyOptions
 }) => {
+  const { t } = useLanguage();
   return (
     <div className="form-section">
-      <h2>תקציב</h2>
+      <h2>{t('budgetTitle', 'תקציב')}</h2>
       
       <div className="form-group">
-        <label>רכיבי התקציב <span className="required">*</span></label>
+        <label>{t('budgetComponentsLabel', 'רכיבי התקציב')} <span className="required">*</span></label>
         <p className="form-subtitle" style={{ marginBottom: '15px', color: '#6c757d', fontSize: '14px' }}>
-          הזינו את הסכום המבוקש לכל קטגוריה. הסכום הכולל יחושב אוטומטית.
+          {t('budgetComponentsHelp', 'הזינו את הסכום המבוקש לכל קטגוריה. הסכום הכולל יחושב אוטומטית.')}
         </p>
         <div className="budget-components-grid">
           {budgetComponents.map(component => (
@@ -25,7 +27,7 @@ const BudgetSection = ({
               </label>
               <input
                 type="number"
-                placeholder="הזינו סכום"
+                placeholder={t('enterAmount', 'הזינו סכום')}
                 value={formData.budgetComponents[component] || ''}
                 onChange={(e) => handleBudgetComponentChange(component, e.target.value)}
                 min="0"
@@ -45,7 +47,7 @@ const BudgetSection = ({
       <div className="form-row" style={{ marginTop: '20px', paddingTop: '20px', borderTop: '2px solid #e9ecef' }}>
         <div className="form-group">
           <label htmlFor="totalBudget">
-            סה"כ התקציב המבוקש (חישוב אוטומטי)
+            {t('totalBudgetRequested', 'סה"כ התקציב המבוקש (חישוב אוטומטי)')}
           </label>
           <input
             type="text"
@@ -54,14 +56,14 @@ const BudgetSection = ({
             value={formData.totalBudget ? Number(formData.totalBudget).toLocaleString('he-IL') : ''}
             readOnly
             className="readonly-field"
-            placeholder="יחושב אוטומטית מכל הקטגוריות"
+            placeholder={t('autoCalculatedFromCategories', 'יחושב אוטומטית מכל הקטגוריות')}
             style={{ fontWeight: '600', fontSize: '18px', color: '#667eea' }}
           />
         </div>
 
         <div className="form-group">
           <label htmlFor="currency">
-            מטבע התקציב
+            {t('budgetCurrency', 'מטבע התקציב')}
           </label>
           <select
             id="currency"
@@ -77,7 +79,7 @@ const BudgetSection = ({
 
         <div className="form-group">
           <label htmlFor="convertedBudget">
-            התקציב המתורגם לשקלים (חישוב אוטומטי)
+            {t('budgetConvertedIls', 'התקציב המתורגם לשקלים (חישוב אוטומטי)')}
           </label>
           <input
             type="text"
@@ -86,7 +88,7 @@ const BudgetSection = ({
             value={formData.convertedBudget ? Number(formData.convertedBudget).toLocaleString('he-IL') : ''}
             readOnly
             className="readonly-field"
-            placeholder="יחושב אוטומטית"
+            placeholder={t('autoCalculated', 'יחושב אוטומטית')}
           />
         </div>
       </div>

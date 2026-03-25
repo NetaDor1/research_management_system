@@ -2,12 +2,14 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
 import DetailModal from '../components/DetailModal';
 import './Research.css';
 
 const Research = () => {
   const { isAdmin, user, userRole } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -228,11 +230,11 @@ const Research = () => {
   const getStatusLabel = (status) => {
     switch (status) {
       case 'awarded':
-        return 'זכייה';
+        return t('awarded', 'זכייה');
       case 'pending':
-        return 'המתנה';
+        return t('pending', 'המתנה');
       case 'rejected':
-        return 'לא אושר';
+        return t('rejected', 'לא אושר');
       default:
         return status;
     }
@@ -255,11 +257,11 @@ const Research = () => {
     <div className="research-page">
       <div className="research-content">
         <div className="research-header">
-        <h1>אוסף מחקרים</h1>
+        <h1>{t('researchCollection', 'אוסף מחקרים')}</h1>
         <div className="search-container">
           <input
             type="text"
-            placeholder="חיפוש"
+            placeholder={t('search', 'חיפוש')}
             className="search-input"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -267,36 +269,36 @@ const Research = () => {
         </div>
         <div className="filters-container">
           <div className="filter-group">
-            <label>סינון לפי:</label>
+            <label>{t('filterBy', 'סינון לפי:')}</label>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
               className="filter-select"
             >
-              <option value="all">סטטוס</option>
-              <option value="awarded">זכייה</option>
-              <option value="pending">המתנה</option>
-              <option value="rejected">לא אושר</option>
+              <option value="all">{t('status', 'סטטוס')}</option>
+              <option value="awarded">{t('awarded', 'זכייה')}</option>
+              <option value="pending">{t('pending', 'המתנה')}</option>
+              <option value="rejected">{t('rejected', 'לא אושר')}</option>
             </select>
             <select
               value={filterPatents}
               onChange={(e) => setFilterPatents(e.target.value)}
               className="filter-select"
             >
-              <option value="all">מחקרים עם פטנטים</option>
-              <option value="with">עם פטנטים</option>
-              <option value="without">ללא פטנטים</option>
+              <option value="all">{t('researchCollection', 'אוסף מחקרים')} + פטנטים</option>
+              <option value="with">{t('patents', 'פטנטים')}</option>
+              <option value="without">{t('research', 'מחקרים')} בלבד</option>
             </select>
           </div>
           <div className="sort-group">
-            <label>מיון לפי:</label>
+            <label>{t('sortBy', 'מיון לפי:')}</label>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
               className="filter-select"
             >
-              <option value="alphabetical">אלף בית</option>
-              <option value="date">תאריך הגשת הצעה</option>
+              <option value="alphabetical">{t('alphabetical', 'אלף בית')}</option>
+              <option value="date">{t('date', 'תאריך')} הגשה</option>
             </select>
           </div>
         </div>
@@ -304,7 +306,7 @@ const Research = () => {
 
       {loading && (
         <div className="no-results">
-          <p>טוען מחקרים...</p>
+          <p>{t('loadingData', 'טוען נתונים...')}</p>
         </div>
       )}
 
@@ -320,7 +322,7 @@ const Research = () => {
             className="research-card add-research-card"
             onClick={handleAddResearch}
           >
-            <h3 className="add-research-title">הוספת מחקר חדש</h3>
+            <h3 className="add-research-title">{t('addNewResearch', 'הוספת מחקר חדש')}</h3>
           </button>
         )}
 
@@ -330,7 +332,7 @@ const Research = () => {
             className="research-card"
             onClick={() => handleResearchClick(research.id)}
           >
-            {research.isNew && <span className="new-badge">חדש!</span>}
+            {research.isNew && <span className="new-badge">{t('newBadge', 'חדש!')}</span>}
             <h3 className="research-title">{research.title}</h3>
             <p className="research-researcher">{research.researcher}</p>
             <button className={`status-button ${getStatusClass(research.status)}`}>
@@ -342,7 +344,7 @@ const Research = () => {
 
       {!loading && !error && filteredAndSorted.length === 0 && (
         <div className="no-results">
-          <p>לא נמצאו מחקרים</p>
+          <p>{t('noResearchFound', 'לא נמצאו מחקרים')}</p>
         </div>
       )}
 

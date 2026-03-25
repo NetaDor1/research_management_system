@@ -3,14 +3,17 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, collection, addDoc, updateDoc, deleteDoc, getDoc as getDocTask, serverTimestamp, onSnapshot, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { db, storage } from '../services/firebase';
 import './Page.css';
 import './Research.css';
+import { exportPrintableHtmlToPdf, escapeHtml } from '../utils/exportPdf';
 
 const PatentDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAdmin, userRole, user } = useAuth();
+  const { t, language } = useLanguage();
   const [patentData, setPatentData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -376,6 +379,168 @@ const PatentDetail = () => {
     }
   };
 
+  const formatDateForLocale = (value) => {
+    if (!value) return t('notSpecified', 'לא צוין');
+    try {
+      if (value && typeof value.toDate === 'function') {
+        return value.toDate().toLocaleDateString(language === 'en' ? 'en-US' : 'he-IL');
+      }
+      if (value && value.seconds) {
+        return new Date(value.seconds * 1000).toLocaleDateString(language === 'en' ? 'en-US' : 'he-IL');
+      }
+      if (typeof value === 'string') {
+        return new Date(value).toLocaleDateString(language === 'en' ? 'en-US' : 'he-IL');
+      }
+      return String(value);
+    } catch {
+      return String(value);
+    }
+  };
+
+  const handleExportPDF = () => {
+    if (!patentData) return;
+
+    const titleValue = patentData.projectTitle || patentData.title || t('notSpecified', 'לא צוין');
+    const pdfTitle = `${t('patentDetailsTitle', 'פרטי פטנט')} - ${titleValue}`;
+    const dir = language === 'en' ? 'ltr' : 'rtl';
+    const lang = language === 'en' ? 'en' : 'he';
+
+    const percentageLabel = language === 'en' ? 'Percentage' : 'אחוז';
+    const institutionPctLabel = language === 'en' ? 'Institution percentage' : 'אחוז המוסד';
+    const patentStageLabel = language === 'en' ? 'Patent stage' : 'שלב הפטנט';
+    const commercializationUnitTitle = language === 'en' ? 'Commercialization Unit' : 'יחידת מסחור';
+    const contact1Label = language === 'en' ? 'Contact 1' : 'איש קשר 1';
+    const email1Label = language === 'en' ? 'Email 1' : 'אימייל 1';
+    const contact2Label = language === 'en' ? 'Contact 2' : 'איש קשר 2';
+    const email2Label = language === 'en' ? 'Email 2' : 'אימייל 2';
+    const datesTitle = language === 'en' ? 'Dates' : 'תאריכים';
+    const dateLabelSubmission = language === 'en' ? 'Application date' : 'תאריך הגשת הבקשה';
+    const dateLabelInitialReview = language === 'en' ? 'Initial review date' : 'תאריך בדיקה ראשונית';
+    const dateLabelExamination = language === 'en' ? 'Examination date' : 'תאריך בחינה';
+    const dateLabelApproval = language === 'en' ? 'Approval date' : 'תאריך אישור';
+    const dateLabelRegistration = language === 'en' ? 'Registration date' : 'תאריך רישום';
+    const dateLabelPublication = language === 'en' ? 'Publication date' : 'תאריך פרסום';
+    const dateLabelRenewal = language === 'en' ? 'Renewal date' : 'תאריך חידוש';
+    const dateLabelExpiry = language === 'en' ? 'Expiry date' : 'תאריך תפוגה';
+
+    const partners = Array.isArray(patentData.partners) ? patentData.partners : [];
+    const stageBudgets = patentData.stageBudgets || {};
+
+    const partnersHtml = partners.length
+      ? partners
+          .map((p, idx) => {
+            const name = p.name || t('notSpecified', 'לא צוין');
+            const email = p.email || t('notSpecified', 'לא צוין');
+            const institution = p.institution || t('notSpecified', 'לא צוין');
+            const percentage = p.percentage || '';
+            return `
+              <div class="kv">
+                <div class="k">${escapeHtml(`${t('partner', 'שותף')} ${idx + 1}`)}</div>
+                <div class="v">
+                  ${escapeHtml(`${t('partnerName', 'שם השותף')}: ${name}`)}<br/>
+                  ${escapeHtml(`${t('partnerEmail', 'אימייל של השותף')}: ${email}`)}<br/>
+                  ${escapeHtml(`${t('partnerInstitution', 'המוסד של השותף')}: ${institution}`)}
+                  ${percentage ? `<br/>${escapeHtml(`${percentageLabel}: ${percentage}`)}` : ''}
+                </div>
+              </div>
+            `;
+          })
+          .join('')
+      : `<div class="muted">${escapeHtml(t('notSpecified', 'לא צוין'))}</div>`;
+
+    const stageBudgetRowsHtml = Object.entries(stageBudgets)
+      .map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`)
+      .join('');
+
+    const stageBudgetTableHtml = stageBudgetRowsHtml
+      ? `
+        <table>
+          <thead>
+            <tr>
+              <th>${escapeHtml(t('stageBudget', 'תקציב לפי שלבים'))}</th>
+              <th>${escapeHtml(t('amount', 'כמות'))}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${stageBudgetRowsHtml}
+          </tbody>
+        </table>
+      `
+      : '';
+
+    const htmlBody = `
+      <h1>${escapeHtml(pdfTitle)}</h1>
+
+      <div class="section">
+        <h2>${escapeHtml(t('generalDetails', 'פרטים כלליים'))}</h2>
+        <div class="grid">
+          <div class="kv"><div class="k">${escapeHtml(t('projectTitleLabel', 'כותרת הפרוייקט שהוגש לקרן חיצונית'))}</div><div class="v">${escapeHtml(titleValue)}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(institutionPctLabel)}</div><div class="v">${escapeHtml(patentData.institutionPercentage || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('submissionPathLabel', 'מסלול ההגשה לקרן'))}</div><div class="v">${escapeHtml(patentData.submissionPath || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('researcherRoleLabel', 'תפקיד החוקר בהצעת המחקר'))}</div><div class="v">${escapeHtml(patentData.researcherRole || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('researcher', 'חוקר'))}</div><div class="v">${escapeHtml(patentData.researcherName || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('status', 'סטטוס'))}</div><div class="v">${escapeHtml(patentData.status || '')}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(patentStageLabel)}</div><div class="v">${escapeHtml(patentData.patentStage || t('notSpecified', 'לא צוין'))}</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>${escapeHtml(commercializationUnitTitle)}</h2>
+        <div class="grid">
+          <div class="kv"><div class="k">${escapeHtml(commercializationUnitTitle)}</div><div class="v">${escapeHtml(patentData.commercializationUnit || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(contact1Label)}</div><div class="v">${escapeHtml(patentData.commercializationContact1 || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(email1Label)}</div><div class="v">${escapeHtml(patentData.commercializationEmail1 || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(contact2Label)}</div><div class="v">${escapeHtml(patentData.commercializationContact2 || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(email2Label)}</div><div class="v">${escapeHtml(patentData.commercializationEmail2 || t('notSpecified', 'לא צוין'))}</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>${escapeHtml(datesTitle)}</h2>
+        <div class="grid">
+          <div class="kv"><div class="k">${escapeHtml(dateLabelSubmission)}</div><div class="v">${escapeHtml(formatDateForLocale(patentData.submissionDate))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(dateLabelInitialReview)}</div><div class="v">${escapeHtml(formatDateForLocale(patentData.initialReviewDate))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(dateLabelExamination)}</div><div class="v">${escapeHtml(formatDateForLocale(patentData.examinationDate))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(dateLabelApproval)}</div><div class="v">${escapeHtml(formatDateForLocale(patentData.approvalDate))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(dateLabelRegistration)}</div><div class="v">${escapeHtml(formatDateForLocale(patentData.registrationDate))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(dateLabelPublication)}</div><div class="v">${escapeHtml(formatDateForLocale(patentData.publicationDate))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(dateLabelRenewal)}</div><div class="v">${escapeHtml(formatDateForLocale(patentData.renewalDate))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(dateLabelExpiry)}</div><div class="v">${escapeHtml(formatDateForLocale(patentData.expiryDate))}</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>${escapeHtml(t('budgetTitle', 'תקציב'))}</h2>
+        <div class="grid">
+          <div class="kv"><div class="k">${escapeHtml(t('totalBudgetRequested', 'סה"כ התקציב המבוקש (חישוב אוטומטי)'))}</div><div class="v">${escapeHtml(patentData.totalBudget || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('budgetCurrency', 'מטבע התקציב'))}</div><div class="v">${escapeHtml(patentData.currency || 'ILS')}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('budgetConvertedIls', 'התקציב המתורגם לשקלים (חישוב אוטומטי)'))}</div><div class="v">${escapeHtml(patentData.convertedBudget || t('notSpecified', 'לא צוין'))}</div></div>
+        </div>
+        ${stageBudgetTableHtml}
+      </div>
+
+      <div class="section">
+        <h2>${escapeHtml(t('partnersProjectTitle', 'שותפים לפרוייקט'))}</h2>
+        <div class="grid">${partnersHtml}</div>
+      </div>
+
+      ${patentData.notes ? `
+        <div class="section">
+          <h2>${escapeHtml(t('notesFreeText', 'הערות'))}</h2>
+          <div class="kv">
+            <div class="v">${escapeHtml(patentData.notes)}</div>
+          </div>
+        </div>
+      ` : ''}
+
+      <div class="muted" style="margin-top: 20px; font-size: 12px;">
+        ${escapeHtml(language === 'en' ? `Generated on ${new Date().toLocaleString('en-US')}` : `נוצר ב-${new Date().toLocaleDateString('he-IL')} ${new Date().toLocaleTimeString('he-IL')}`)}
+      </div>
+    `;
+
+    exportPrintableHtmlToPdf({ title: pdfTitle, htmlBody, dir, lang });
+  };
+
   return (
     <div className="page-container">
       <div className="page-content">
@@ -392,7 +557,7 @@ const PatentDetail = () => {
             fontSize: '16px'
           }}
         >
-          ← חזרה
+          ← {t('back', 'חזרה')}
         </button>
 
         {loading && (
@@ -411,16 +576,13 @@ const PatentDetail = () => {
           <div style={{ direction: 'rtl', textAlign: 'right' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
               <h1 style={{ margin: 0, color: '#333' }}>פרטי פטנט</h1>
-              {isAdmin() && (
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                 <button
-                  onClick={() => {
-                    // Navigate to new patent form with edit mode
-                    // For now, we'll use the new form - you can enhance this later to support edit mode
-                    navigate(`/patents/new?edit=${id}`);
-                  }}
+                  type="button"
+                  onClick={handleExportPDF}
                   style={{
                     padding: '10px 20px',
-                    background: '#28a745',
+                    background: '#17a2b8',
                     color: 'white',
                     border: 'none',
                     borderRadius: '8px',
@@ -429,9 +591,30 @@ const PatentDetail = () => {
                     fontWeight: 'bold'
                   }}
                 >
-                  ✏️ ערוך פטנט
+                  {t('exportPdf', 'ייצוא ל-PDF')}
                 </button>
-              )}
+                {isAdmin() && (
+                  <button
+                    onClick={() => {
+                      // Navigate to new patent form with edit mode
+                      // For now, we'll use the new form - you can enhance this later to support edit mode
+                      navigate(`/patents/new?edit=${id}`);
+                    }}
+                    style={{
+                      padding: '10px 20px',
+                      background: '#28a745',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '16px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    ✏️ ערוך פטנט
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* פרטים כלליים */}

@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { LanguageProvider } from './context/LanguageContext';
 import NavigationBar from './components/NavigationBar';
 import Home from './pages/home';
 import Dashboard from './pages/Dashboard';
@@ -16,6 +17,7 @@ import NewArticle from './pages/NewArticle';
 import Statistics from './pages/Statistics';
 import ReportFormat from './pages/ReportFormat';
 import SetupFirebase from './pages/SetupFirebase';
+import Settings from './pages/Settings';
 import Login from './pages/Login';
 import './App.css';
 
@@ -41,6 +43,7 @@ function AppContent() {
             <Route path="/articles/:id" element={<ArticleDetail />} />
             <Route path="/statistics" element={<Statistics />} />
             <Route path="/report-format" element={<ReportFormat />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="/setup-firebase" element={<SetupFirebase />} />
       </Routes>
     </div>
@@ -50,9 +53,11 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
+      <LanguageProvider>
+        <BrowserRouter>
+          <AppContent />
+        </BrowserRouter>
+      </LanguageProvider>
     </AuthProvider>
   );
 }

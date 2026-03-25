@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { initializeFirebaseCollections, createUserDocument } from '../utils/initializeFirebase';
+import { useLanguage } from '../context/LanguageContext';
 import './Page.css';
 
 const SetupFirebase = () => {
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
+  const { t } = useLanguage();
   const [userData, setUserData] = useState({
     uid: '',
     name: '',
@@ -55,7 +57,7 @@ const SetupFirebase = () => {
   return (
     <div className="page-container">
       <div className="page-content">
-        <h1>הגדרת Firebase</h1>
+        <h1>{t('setupFirebase', 'הגדרת Firebase')}</h1>
         <p className="welcome-text">
           עמוד זה מאפשר לך לאתחל את מבנה ה-Collections ב-Firebase
         </p>

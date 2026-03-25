@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
 import './UpcomingTasks.css';
 
@@ -10,6 +11,7 @@ const DEFAULT_RANGE_DAYS = 14;
 const UpcomingTasks = () => {
   const navigate = useNavigate();
   const { userRole, user, isAdmin } = useAuth();
+  const { t, language } = useLanguage();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -75,26 +77,26 @@ const UpcomingTasks = () => {
 
             const baseTask = {
               id: taskDoc.id,
-              title: data.title || 'ללא כותרת',
+              title: data.title || t('notSpecified', 'לא צוין'),
               status: data.status || 'pending',
               dueDate,
-              dueDateLabel: dueDate.toLocaleDateString('he-IL'),
+              dueDateLabel: dueDate.toLocaleDateString(language === 'en' ? 'en-US' : 'he-IL'),
               parentId: parentDoc.id,
-              researcherName: parentData.researcherName || parentData.researcher || 'חוקר'
+              researcherName: parentData.researcherName || parentData.researcher || t('researcher', 'חוקר')
             };
 
             if (collectionName === 'researchProposals') {
               return {
                 ...baseTask,
                 type: 'research',
-                parentTitle: parentData.projectTitle || parentData.title || 'ללא כותרת מחקר'
+                parentTitle: parentData.projectTitle || parentData.title || t('notSpecified', 'לא צוין')
               };
             }
 
             return {
               ...baseTask,
               type: 'patent',
-              parentTitle: parentData.title || parentData.projectTitle || 'ללא כותרת פטנט'
+              parentTitle: parentData.title || parentData.projectTitle || t('notSpecified', 'לא צוין')
             };
           }).filter(Boolean);
         };
@@ -118,7 +120,7 @@ const UpcomingTasks = () => {
         setTasks(mergedTasks);
       } catch (err) {
         console.error('Error fetching upcoming tasks:', err);
-        setError('שגיאה בטעינת משימות קרובות');
+        setError(t('upcomingTasksLoadError', 'שגיאה בטעינת משימות קרובות'));
         setTasks([]);
       } finally {
         setLoading(false);
@@ -126,7 +128,7 @@ const UpcomingTasks = () => {
     };
 
     fetchUpcomingTasks();
-  }, [userRole, user?.id, rangeDays]);
+  }, [userRole, user?.id, rangeDays, t, language]);
 
   const handleTaskClick = (task) => {
     if (task.type === 'research') {
@@ -139,22 +141,22 @@ const UpcomingTasks = () => {
   };
 
   const upcomingTitle = useMemo(() => {
-    return 'משימות קרובות';
-  }, []);
+    return t('upcomingTasksTitle', 'משימות קרובות');
+  }, [t]);
 
   const rangeOptions = useMemo(() => ([
-    { value: 7, label: '7 ימים' },
-    { value: 14, label: '14 ימים' },
-    { value: 30, label: 'חודש' },
-    { value: 90, label: '3 חודשים' }
-  ]), []);
+    { value: 7, label: t('range7Days', '7 ימים') },
+    { value: 14, label: t('range14Days', '14 ימים') },
+    { value: 30, label: t('range30Days', 'חודש') },
+    { value: 90, label: t('range90Days', '3 חודשים') }
+  ]), [t]);
 
   return (
     <div className="upcoming-tasks">
       <div className="upcoming-tasks-header">
         <h2 className="upcoming-tasks-title">{upcomingTitle}</h2>
         <label className="upcoming-tasks-range">
-          <span className="upcoming-tasks-range-label">תאריך הגשה</span>
+          <span className="upcoming-tasks-range-label">{t('dueDate', 'תאריך יעד')}</span>
           <select
             className="upcoming-tasks-range-select"
             value={rangeDays}
@@ -171,7 +173,7 @@ const UpcomingTasks = () => {
 
       {loading && (
         <div className="upcoming-tasks-empty">
-          <p>טוען משימות קרובות...</p>
+          <p>{t('loadingUpcomingTasks', 'טוען משימות קרובות...')}</p>
         </div>
       )}
 
@@ -183,7 +185,7 @@ const UpcomingTasks = () => {
 
       {!loading && !error && tasks.length === 0 && (
         <div className="upcoming-tasks-empty">
-          <p>אין משימות בטווח הנבחר</p>
+          <p>{t('noTasksInRange', 'אין משימות בטווח הנבחר')}</p>
         </div>
       )}
 
@@ -198,14 +200,14 @@ const UpcomingTasks = () => {
             >
               <div className="upcoming-task-header">
                 <span className={`upcoming-task-type upcoming-task-type--${task.type}`}>
-                  {task.type === 'research' ? 'מחקר' : 'פטנט'}
+                  {task.type === 'research' ? t('research', 'מחקרים') : t('patents', 'פטנטים')}
                 </span>
                 <span className="upcoming-task-date">{task.dueDateLabel}</span>
               </div>
               <h3 className="upcoming-task-title">{task.title}</h3>
               <p className="upcoming-task-parent">{task.parentTitle}</p>
               {isAdmin() && (
-                <p className="upcoming-task-researcher">חוקר: {task.researcherName}</p>
+                <p className="upcoming-task-researcher">{t('researcher', 'חוקר')}: {task.researcherName}</p>
               )}
             </button>
           ))}

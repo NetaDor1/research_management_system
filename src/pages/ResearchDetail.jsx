@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { doc, getDoc, collection, addDoc, updateDoc, deleteDoc, query, where, getDocs, serverTimestamp, onSnapshot, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
 import ResearchInfoSection from '../components/research/ResearchInfoSection';
 import ResearchPeriodSection from '../components/research/ResearchPeriodSection';
@@ -13,12 +14,14 @@ import TasksSection from '../components/research/TasksSection';
 import WorkPlanSection from '../components/research/WorkPlanSection';
 import './Page.css';
 import './Research.css';
+import { exportPrintableHtmlToPdf, escapeHtml } from '../utils/exportPdf';
 
 const ResearchDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { isAdmin, userRole, user } = useAuth();
+  const { t, language } = useLanguage();
   const [researchData, setResearchData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -371,6 +374,193 @@ const ResearchDetail = () => {
     }
   }, [loading, location.hash]);
 
+  const formatDateForLocale = (value) => {
+    if (!value) return t('notSpecified', 'לא צוין');
+    try {
+      if (value && typeof value.toDate === 'function') {
+        return value.toDate().toLocaleDateString(language === 'en' ? 'en-US' : 'he-IL');
+      }
+      if (value && value.seconds) {
+        return new Date(value.seconds * 1000).toLocaleDateString(language === 'en' ? 'en-US' : 'he-IL');
+      }
+      if (typeof value === 'string') {
+        return new Date(value).toLocaleDateString(language === 'en' ? 'en-US' : 'he-IL');
+      }
+      return String(value);
+    } catch {
+      return String(value);
+    }
+  };
+
+  const handleExportPDF = () => {
+    if (!researchData) return;
+
+    const titleValue = researchData.projectTitle || researchData.title || t('notSpecified', 'לא צוין');
+    const pdfTitle = `${t('researchDetailsTitle', 'פרטי מחקר')} - ${titleValue}`;
+    const dir = language === 'en' ? 'ltr' : 'rtl';
+    const lang = language === 'en' ? 'en' : 'he';
+
+    const budgetComponents = researchData.budgetComponents || {};
+    const partners = Array.isArray(researchData.partners) ? researchData.partners : [];
+    const workPlanTasks = Array.isArray(researchData.workPlanTasks) ? researchData.workPlanTasks : [];
+
+    const budgetRowsHtml = Object.entries(budgetComponents)
+      .map(([k, v]) => {
+        return `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`;
+      })
+      .join('');
+
+    const budgetTableHtml = budgetRowsHtml
+      ? `
+        <table>
+          <thead>
+            <tr>
+              <th>${escapeHtml(t('budgetComponentsLabel', 'רכיבי התקציב'))}</th>
+              <th>${escapeHtml(t('amount', 'כמות'))}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${budgetRowsHtml}
+          </tbody>
+        </table>
+      `
+      : '';
+
+    const partnersHtml = partners.length
+      ? partners
+          .map((p, idx) => {
+            const name = p.name || t('notSpecified', 'לא צוין');
+            const email = p.email || t('notSpecified', 'לא צוין');
+            const institution = p.institution || t('notSpecified', 'לא צוין');
+            const country = p.country || '';
+            return `
+              <div class="kv">
+                <div class="k">${escapeHtml(`${t('partner', 'שותף')} ${idx + 1}`)}</div>
+                <div class="v">
+                  ${escapeHtml(`${t('partnerName', 'שם השותף')}: ${name}`)}<br/>
+                  ${escapeHtml(`${t('partnerEmail', 'אימייל של השותף')}: ${email}`)}<br/>
+                  ${escapeHtml(`${t('partnerInstitution', 'המוסד של השותף')}: ${institution}`)}
+                  ${country ? `<br/>${escapeHtml(`${t('partnerCountry', 'מדינה שבה השותף נמצא')}: ${country}`)}` : ''}
+                </div>
+              </div>
+            `;
+          })
+          .join('')
+      : `<div class="muted">${escapeHtml(t('notSpecified', 'לא צוין'))}</div>`;
+
+    const workPlanTasksHtml = workPlanTasks.length
+      ? `
+        <table>
+          <thead>
+            <tr>
+              <th>${escapeHtml(t('task', 'משימה'))}</th>
+              <th>${escapeHtml(t('status', 'סטטוס'))}</th>
+              <th>${escapeHtml(t('dueDate', 'תאריך יעד'))}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${workPlanTasks
+              .map((task) => {
+                const title = task.title || task.name || t('notSpecified', 'לא צוין');
+                const status = task.status || '';
+                const due = formatDateForLocale(task.dueDate || task.targetDate || task.date);
+                return `<tr><td>${escapeHtml(title)}</td><td>${escapeHtml(status)}</td><td>${escapeHtml(due)}</td></tr>`;
+              })
+              .join('')}
+          </tbody>
+        </table>
+      `
+      : '';
+
+    const htmlBody = `
+      <h1>${escapeHtml(pdfTitle)}</h1>
+
+      <div class="section">
+        <h2>${escapeHtml(t('generalDetails', 'פרטים כלליים'))}</h2>
+        <div class="grid">
+          <div class="kv"><div class="k">${escapeHtml(t('projectTitleLabel', 'כותרת הפרוייקט שהוגש לקרן חיצונית'))}</div><div class="v">${escapeHtml(titleValue)}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('fundNameLabel', 'שם הקרן אליה הוגשה הבקשה'))}</div><div class="v">${escapeHtml(researchData.fundName || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('fundTypeLabel', 'סוג הקרן'))}</div><div class="v">${escapeHtml(researchData.fundType || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('submissionPathLabel', 'מסלול ההגשה לקרן'))}</div><div class="v">${escapeHtml(researchData.submissionPath || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('researcherRoleLabel', 'תפקיד החוקר בהצעת המחקר'))}</div><div class="v">${escapeHtml(researchData.researcherRole || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('proposalStageLabel', 'שלב ההצעה'))}</div><div class="v">${escapeHtml(researchData.proposalStage || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('submissionTypeLabel', 'סוג הגשה'))}</div><div class="v">${escapeHtml(researchData.submissionType || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('researcher', 'חוקר'))}</div><div class="v">${escapeHtml(researchData.researcherName || t('notSpecified', 'לא צוין'))}</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>${escapeHtml(t('researchPeriod', 'תקופת המחקר'))}</h2>
+        <div class="grid">
+          <div class="kv"><div class="k">${escapeHtml(t('startDateLabel', 'תאריך לועזי של תחילת המחקר (dd/mm/yyyy)'))}</div><div class="v">${escapeHtml(formatDateForLocale(researchData.researchStartDate))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('endDateLabel', 'תאריך לועזי של סוף המחקר (dd/mm/yyyy)'))}</div><div class="v">${escapeHtml(formatDateForLocale(researchData.researchEndDate))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('totalResearchYears', 'סה"כ תקופת המחקר בשנים (חישוב אוטומטי)'))}</div><div class="v">${escapeHtml(researchData.researchDurationYears || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('academicYearLabel', 'שנה אקדמית (תרגום אוטומטי)'))}</div><div class="v">${escapeHtml(researchData.academicYear || t('notSpecified', 'לא צוין'))}</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>${escapeHtml(t('budgetTitle', 'תקציב'))}</h2>
+        <div class="grid">
+          <div class="kv"><div class="k">${escapeHtml(t('totalBudgetRequested', 'סה"כ התקציב המבוקש (חישוב אוטומטי)'))}</div><div class="v">${escapeHtml(researchData.totalBudget || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('budgetCurrency', 'מטבע התקציב'))}</div><div class="v">${escapeHtml(researchData.currency || 'ILS')}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('budgetConvertedIls', 'התקציב המתורגם לשקלים (חישוב אוטומטי)'))}</div><div class="v">${escapeHtml(researchData.convertedBudget || t('notSpecified', 'לא צוין'))}</div></div>
+        </div>
+        ${budgetTableHtml}
+      </div>
+
+      <div class="section">
+        <h2>${escapeHtml(t('partnersProjectTitle', 'שותפים לפרוייקט'))}</h2>
+        <div class="grid">${partnersHtml}</div>
+      </div>
+
+      <div class="section">
+        <h2>${escapeHtml(t('researchDescriptionTitle', 'תיאור המחקר'))}</h2>
+        <div class="grid">
+          <div class="kv"><div class="k">${escapeHtml(t('abstractLabel', 'Abstract'))}</div><div class="v">${escapeHtml(researchData.abstract || '')}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('scientificBackgroundLabel', 'Scientific background'))}</div><div class="v">${escapeHtml(researchData.scientificBackground || '')}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('researchObjectivesLabel', 'Research objectives'))}</div><div class="v">${escapeHtml(researchData.researchObjectives || '')}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('detailedDescriptionLabel', 'Detailed description'))}</div><div class="v">${escapeHtml(researchData.detailedDescription || '')}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('significanceLabel', 'Significance'))}</div><div class="v">${escapeHtml(researchData.significanceInnovation || '')}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('applicabilityLabel', 'Applicability'))}</div><div class="v">${escapeHtml(researchData.applicability || '')}</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>${escapeHtml(t('additionalInfoTitle', 'מידע נוסף'))}</h2>
+        <div class="grid">
+          <div class="kv"><div class="k">${escapeHtml(t('expectedResponseDateLabel', 'תאריך משוער'))}</div><div class="v">${escapeHtml(formatDateForLocale(researchData.expectedResponseDate))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('notesFreeText', 'הערות'))}</div><div class="v">${escapeHtml(researchData.notes || '')}</div></div>
+        </div>
+      </div>
+
+      ${researchData.digitalSignature?.signed
+        ? `
+          <div class="section">
+            <h2>${escapeHtml(t('digitalSignatureTitle', 'חתימה דיגיטלית'))}</h2>
+            <div class="grid">
+              <div class="kv"><div class="k">${escapeHtml(t('signedBy', 'חתום על ידי'))}</div><div class="v">${escapeHtml(researchData.digitalSignature.signer || '')}</div></div>
+              <div class="kv"><div class="k">${escapeHtml(t('signatureDate', 'תאריך חתימה'))}</div><div class="v">${escapeHtml(formatDateForLocale(researchData.digitalSignature.date))}</div></div>
+            </div>
+          </div>
+        `
+        : ''
+      }
+
+      ${workPlanTasksHtml
+        ? `
+          <div class="section">
+            <h2>${escapeHtml(t('workPlan', 'תוכנית עבודה'))}</h2>
+            ${workPlanTasksHtml}
+          </div>
+        `
+        : ''
+      }
+    `;
+
+    exportPrintableHtmlToPdf({ title: pdfTitle, htmlBody, dir, lang });
+  };
+
   return (
     <div className="page-container">
       <div className="page-content">
@@ -387,7 +577,7 @@ const ResearchDetail = () => {
             fontSize: '16px'
           }}
         >
-          ← חזרה
+          ← {t('back', 'חזרה')}
         </button>
 
         {loading && (
@@ -406,12 +596,13 @@ const ResearchDetail = () => {
           <div style={{ direction: 'rtl', textAlign: 'right' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
               <h1 style={{ margin: 0, color: '#333' }}>פרטי מחקר</h1>
-              {isAdmin() && (
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                 <button
-                  onClick={() => navigate(`/research/new?edit=${id}`)}
+                  type="button"
+                  onClick={handleExportPDF}
                   style={{
                     padding: '10px 20px',
-                    background: '#28a745',
+                    background: '#17a2b8',
                     color: 'white',
                     border: 'none',
                     borderRadius: '8px',
@@ -420,9 +611,26 @@ const ResearchDetail = () => {
                     fontWeight: 'bold'
                   }}
                 >
-                  ✏️ ערוך מחקר
+                  {t('exportPdf', 'ייצוא ל-PDF')}
                 </button>
-              )}
+                {isAdmin() && (
+                  <button
+                    onClick={() => navigate(`/research/new?edit=${id}`)}
+                    style={{
+                      padding: '10px 20px',
+                      background: '#28a745',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '16px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    ✏️ ערוך מחקר
+                  </button>
+                )}
+              </div>
             </div>
 
             <ResearchInfoSection researchData={researchData} />

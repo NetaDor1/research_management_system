@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import './Page.css';
 import './Research.css';
 
@@ -32,6 +33,7 @@ const mockPatentsData = [
 
 const Dashboard = () => {
   const { userRole, user, setUserRole, setUser } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   // Filter data based on user role
@@ -91,17 +93,19 @@ const Dashboard = () => {
     <div className="page-container">
       <div className="page-content">
         <h1>
-          {userRole === 'ADMIN' ? 'לוח בקרה - רשות המחקר' : `לוח בקרה - ${user?.name || 'חוקר'}`}
+          {userRole === 'ADMIN'
+            ? t('dashboardTitleAdmin', 'לוח בקרה - רשות המחקר')
+            : `${t('dashboardTitleResearcher', 'לוח בקרה')} - ${user?.name || t('researcher', 'חוקר')}`}
         </h1>
         <p className="welcome-text">
           {userRole === 'ADMIN' 
-            ? 'ברוכים הבאים למערכת ניהול מחקר. כאן תוכלו לנהל ולעקוב אחר כל המחקרים, המאמרים והפטנטים במכללה.'
-            : 'ברוכים הבאים למערכת ניהול מחקר. כאן תוכלו לראות ולנהל את המחקרים, המאמרים והפטנטים שלכם.'}
+            ? t('dashboardWelcomeAdmin', 'ברוכים הבאים למערכת ניהול מחקר. כאן תוכלו לנהל ולעקוב אחר כל המחקרים, המאמרים והפטנטים במכללה.')
+            : t('dashboardWelcomeResearcher', 'ברוכים הבאים למערכת ניהול מחקר. כאן תוכלו לראות ולנהל את המחקרים, המאמרים והפטנטים שלכם.')}
         </p>
 
         {/* Role Switcher for Testing */}
         <div className="role-switcher">
-          <span>תפקיד נוכחי: <strong>{userRole === 'ADMIN' ? 'רשות המחקר (ADMIN)' : 'חוקר (RESEARCHER)'}</strong></span>
+          <span>{t('roleCurrent', 'תפקיד נוכחי')}: <strong>{userRole === 'ADMIN' ? 'Research Authority (ADMIN)' : 'Researcher (RESEARCHER)'}</strong></span>
           <button 
             className="role-switch-btn"
             onClick={() => {
@@ -116,7 +120,7 @@ const Dashboard = () => {
               setUserRole(newRole);
             }}
           >
-            החלף ל-{userRole === 'ADMIN' ? 'חוקר' : 'רשות המחקר'}
+            {t('switchTo', 'החלף ל')}-{userRole === 'ADMIN' ? t('researcher', 'חוקר') : t('researchAuthority', 'רשות המחקר')}
           </button>
         </div>
 
@@ -125,11 +129,11 @@ const Dashboard = () => {
           <div className="stat-card" onClick={() => navigate('/research')}>
             <div className="stat-icon">🔬</div>
             <div className="stat-info">
-              <h3>מחקרים</h3>
+              <h3>{t('research', 'מחקרים')}</h3>
               <div className="stat-numbers">
                 <span className="stat-total">{stats.totalResearch}</span>
                 <span className="stat-details">
-                  {stats.pendingResearch} בהמתנה • {stats.awardedResearch} אושרו
+                  {stats.pendingResearch} {t('pendingCount', 'בהמתנה')} • {stats.awardedResearch} {t('approvedCount', 'אושרו')}
                 </span>
               </div>
             </div>
@@ -138,11 +142,11 @@ const Dashboard = () => {
           <div className="stat-card" onClick={() => navigate('/articles')}>
             <div className="stat-icon">📄</div>
             <div className="stat-info">
-              <h3>מאמרים</h3>
+              <h3>{t('articles', 'מאמרים')}</h3>
               <div className="stat-numbers">
                 <span className="stat-total">{stats.totalArticles}</span>
                 <span className="stat-details">
-                  {stats.publishedArticles} פורסמו
+                  {stats.publishedArticles} {t('publishedCount', 'פורסמו')}
                 </span>
               </div>
             </div>
@@ -151,11 +155,11 @@ const Dashboard = () => {
           <div className="stat-card" onClick={() => navigate('/patents')}>
             <div className="stat-icon">📜</div>
             <div className="stat-info">
-              <h3>פטנטים</h3>
+              <h3>{t('patents', 'פטנטים')}</h3>
               <div className="stat-numbers">
                 <span className="stat-total">{stats.totalPatents}</span>
                 <span className="stat-details">
-                  {stats.registeredPatents} רשומים
+                  {stats.registeredPatents} {t('registeredCount', 'רשומים')}
                 </span>
               </div>
             </div>
@@ -164,7 +168,7 @@ const Dashboard = () => {
 
         {/* Recent Items */}
         <div className="dashboard-recent">
-          <h2>פריטים אחרונים</h2>
+          <h2>{t('recentItems', 'פריטים אחרונים')}</h2>
           <div className="recent-items">
             {userResearch.slice(0, 3).map((research) => (
               <div key={research.id} className="recent-item" onClick={() => navigate(`/research/${research.id}`)}>
@@ -173,8 +177,8 @@ const Dashboard = () => {
                   <h4>{research.title}</h4>
                   {userRole === 'ADMIN' && <p className="recent-researcher">{research.researcher}</p>}
                   <span className={`recent-status status-${research.status}`}>
-                    {research.status === 'awarded' ? 'זכייה' : 
-                     research.status === 'pending' ? 'המתנה' : 'לא אושר'}
+                    {research.status === 'awarded' ? t('awarded', 'זכייה') : 
+                     research.status === 'pending' ? t('pending', 'המתנה') : t('rejected', 'לא אושר')}
                   </span>
                 </div>
               </div>

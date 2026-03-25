@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp, Timestamp, query, where, getDocs, arrayUnion } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { db, storage } from '../services/firebase';
 import './Page.css';
 import './Research.css';
@@ -11,6 +12,7 @@ const NewPatent = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, userRole } = useAuth();
+  const { t } = useLanguage();
   const editId = searchParams.get('edit');
 
   // Options for dropdowns
@@ -562,8 +564,8 @@ const NewPatent = () => {
   return (
     <div className="page-container">
       <div className="page-content" style={{ maxWidth: '1200px' }}>
-        <h1>הוספת פטנט חדש</h1>
-        <p className="form-subtitle">בקשה לקניין רוחני (כמערכת גמול הצטיינות)</p>
+        <h1>{t('newPatentTitle', 'הוספת פטנט חדש')}</h1>
+        <p className="form-subtitle">{t('newPatentSubtitle', 'בקשה לקניין רוחני (כמערכת גמול הצטיינות)')}</p>
 
         <form onSubmit={handleSubmit} className="research-form">
           {/* כותרת הפרוייקט */}
@@ -1027,10 +1029,10 @@ const NewPatent = () => {
               }} 
               className="cancel-btn"
             >
-              ביטול
+              {t('cancel', 'ביטול')}
             </button>
             <button type="submit" className="submit-btn" disabled={isSubmitting}>
-              {isSubmitting ? 'שומר...' : 'שמור פטנט'}
+              {isSubmitting ? t('saving', 'שומר...') : t('savePatent', 'שמור פטנט')}
             </button>
           </div>
         </form>

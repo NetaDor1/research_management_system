@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { useStatisticsData } from '../components/statistics/useStatisticsData';
 import {
   isIsraeliFund, 
@@ -14,6 +15,7 @@ import './Research.css';
 
 const Statistics = () => {
   const { isAdmin, user, userRole } = useAuth();
+  const { t } = useLanguage();
   const { researchData, loading, error } = useStatisticsData(userRole, user?.id);
   
   // Filters for admin view
@@ -199,7 +201,7 @@ const Statistics = () => {
     return (
       <div className="page-container">
         <div className="page-content">
-          <p>טוען נתונים...</p>
+          <p>{t('loadingData', 'טוען נתונים...')}</p>
         </div>
       </div>
     );
@@ -219,7 +221,7 @@ const Statistics = () => {
     <div className="page-container">
       <div className="page-content">
         <h1>
-          {isAdmin() ? 'סטטיסטיקות רשות המחקר' : 'הסטטיסטיקות שלי'}
+          {isAdmin() ? t('adminStatistics', 'סטטיסטיקות רשות המחקר') : t('myStatistics', 'הסטטיסטיקות שלי')}
         </h1>
         <p className="welcome-text">
           {isAdmin() 

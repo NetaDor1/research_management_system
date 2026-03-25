@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import './Login.css';
 
 const Login = () => {
   const navigate = useNavigate();
   const { setUser, setUserRole } = useAuth();
+  const { t } = useLanguage();
   
   const [formData, setFormData] = useState({
     email: '',
@@ -35,7 +37,8 @@ const Login = () => {
     try {
       // Basic validation
       if (!formData.email || !formData.password) {
-        setError('אנא מלא את כל השדות');
+        setError(t('fillAllFields', 'אנא מלא את כל השדות'));
+        
         setLoading(false);
         return;
       }
@@ -43,7 +46,7 @@ const Login = () => {
       // Email validation
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.email)) {
-        setError('כתובת אימייל לא תקינה');
+        setError(t('invalidEmail', 'כתובת אימייל לא תקינה'));
         setLoading(false);
         return;
       }
@@ -67,7 +70,7 @@ const Login = () => {
       navigate('/');
     } catch (err) {
       console.error('Login error:', err);
-      setError('שגיאה בהתחברות. אנא נסה שוב.');
+      setError(t('loginError', 'שגיאה בהתחברות. אנא נסה שוב.'));
     } finally {
       setLoading(false);
     }
@@ -77,8 +80,8 @@ const Login = () => {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <h1>התחברות למערכת</h1>
-          <p>ברוכים הבאים למערכת ניהול מחקר</p>
+          <h1>{t('loginTitle', 'התחברות למערכת')}</h1>
+          <p>{t('welcome', 'ברוכים הבאים למערכת ניהול מחקר')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
@@ -89,14 +92,14 @@ const Login = () => {
           )}
 
           <div className="form-group">
-            <label htmlFor="email">כתובת אימייל</label>
+            <label htmlFor="email">{t('email', 'כתובת אימייל')}</label>
             <input
               type="email"
               id="email"
               name="email"
               value={formData.email}
               onChange={handleChange}
-              placeholder="הכנס כתובת אימייל"
+              placeholder={t('enterEmail', 'הכנס כתובת אימייל')}
               required
               autoComplete="email"
               dir="ltr"
@@ -104,7 +107,7 @@ const Login = () => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="password">סיסמה</label>
+            <label htmlFor="password">{t('password', 'סיסמה')}</label>
             <div className="password-input-wrapper">
               <input
                 type={showPassword ? 'text' : 'password'}
@@ -112,7 +115,7 @@ const Login = () => {
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                placeholder="הכנס סיסמה"
+                placeholder={t('enterPassword', 'הכנס סיסמה')}
                 required
                 autoComplete="current-password"
                 dir="ltr"
@@ -121,7 +124,7 @@ const Login = () => {
                 type="button"
                 className="password-toggle"
                 onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? 'הסתר סיסמה' : 'הצג סיסמה'}
+                aria-label={showPassword ? t('hidePassword', 'הסתר סיסמה') : t('showPassword', 'הצג סיסמה')}
               >
                 {showPassword ? '👁️' : '👁️‍🗨️'}
               </button>
@@ -129,8 +132,8 @@ const Login = () => {
           </div>
 
           <div className="form-group">
-            <span className="form-label">תפקיד</span>
-            <div className="role-options" role="radiogroup" aria-label="תפקיד">
+            <span className="form-label">{t('role', 'תפקיד')}</span>
+            <div className="role-options" role="radiogroup" aria-label={t('role', 'תפקיד')}>
               <label className="role-option">
                 <input
                   type="radio"
@@ -140,7 +143,7 @@ const Login = () => {
                   onChange={handleChange}
                   required
                 />
-                חוקר
+                {t('researcher', 'חוקר')}
               </label>
               <label className="role-option">
                 <input
@@ -151,7 +154,7 @@ const Login = () => {
                   onChange={handleChange}
                   required
                 />
-                רשות המחקר
+                {t('researchAuthority', 'רשות המחקר')}
               </label>
             </div>
           </div>
@@ -161,18 +164,18 @@ const Login = () => {
             className="login-button"
             disabled={loading}
           >
-            {loading ? 'מתחבר...' : 'התחבר'}
+            {loading ? t('loggingIn', 'מתחבר...') : t('login', 'התחבר')}
           </button>
         </form>
 
         <div className="login-footer">
           <p>
-            שכחת את הסיסמה?{' '}
+            {t('forgotPassword', 'שכחת את הסיסמה?')}{' '}
             <a href="#" onClick={(e) => {
               e.preventDefault();
-              alert('פונקציונליות איפוס סיסמה תתווסף בהמשך');
+              alert('Password reset functionality will be added later');
             }}>
-              לחץ כאן
+              {t('clickHere', 'לחץ כאן')}
             </a>
           </p>
         </div>

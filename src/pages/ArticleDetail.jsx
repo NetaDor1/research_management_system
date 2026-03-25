@@ -2,14 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
 import './Page.css';
 import './Research.css';
+import { exportPrintableHtmlToPdf, escapeHtml } from '../utils/exportPdf';
 
 const ArticleDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAdmin, userRole, user } = useAuth();
+  const { t, language } = useLanguage();
   const [articleData, setArticleData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -163,6 +166,87 @@ const ArticleDetail = () => {
     return '/articles';
   };
 
+  const formatDateForLocale = (value) => {
+    if (!value) return t('notSpecified', 'לא צוין');
+    try {
+      if (value && typeof value.toDate === 'function') {
+        return value.toDate().toLocaleDateString(language === 'en' ? 'en-US' : 'he-IL');
+      }
+      if (value && value.seconds) {
+        return new Date(value.seconds * 1000).toLocaleDateString(language === 'en' ? 'en-US' : 'he-IL');
+      }
+      if (typeof value === 'string') {
+        return new Date(value).toLocaleDateString(language === 'en' ? 'en-US' : 'he-IL');
+      }
+      return String(value);
+    } catch {
+      return String(value);
+    }
+  };
+
+  const handleExportPDF = () => {
+    if (!articleData) return;
+
+    const titleValue = articleData.title || t('notSpecified', 'לא צוין');
+    const pdfTitle = `${t('articleDetailsTitle', 'פרטי מאמר')} - ${titleValue}`;
+    const dir = language === 'en' ? 'ltr' : 'rtl';
+    const lang = language === 'en' ? 'en' : 'he';
+
+    const statusLabel =
+      articleData.status === 'published'
+        ? t('published', 'פורסם')
+        : articleData.status === 'in-review'
+          ? t('inReview', 'בביקורת')
+          : articleData.status === 'rejected'
+            ? t('rejected', 'נדחה')
+            : articleData.status || t('notSpecified', 'לא צוין');
+
+    const publicationTypeLabel =
+      articleData.publicationType === 'journal'
+        ? t('journal', 'כתב עת')
+        : articleData.publicationType === 'conference'
+          ? t('conference', 'כנס')
+          : articleData.publicationType || t('notSpecified', 'לא צוין');
+
+    const htmlBody = `
+      <h1>${escapeHtml(pdfTitle)}</h1>
+
+      <div class="section">
+        <h2>${escapeHtml(t('generalDetails', 'פרטים כלליים'))}</h2>
+        <div class="grid">
+          <div class="kv"><div class="k">${escapeHtml(t('articleTitleLabel', 'כותרת המאמר'))}</div><div class="v">${escapeHtml(titleValue)}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('publishedJournalName', 'שם העיתון בו פורסם'))}</div><div class="v">${escapeHtml(articleData.journalName || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('journalRankingLabel', 'דירוג העיתון'))}</div><div class="v">${escapeHtml(articleData.journalRanking || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('publicationYearLabel', 'שנת הפרסום'))}</div><div class="v">${escapeHtml(articleData.publicationYear || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('publicationDateLabel', 'תאריך פרסום'))}</div><div class="v">${escapeHtml(formatDateForLocale(articleData.publicationDate))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('publicationTypeLabel', 'סוג פרסום'))}</div><div class="v">${escapeHtml(publicationTypeLabel)}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('researcher', 'חוקר'))}</div><div class="v">${escapeHtml(articleData.researcherName || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('status', 'סטטוס'))}</div><div class="v">${escapeHtml(statusLabel)}</div></div>
+        </div>
+      </div>
+
+      ${articleData.articleLink ? `
+        <div class="section">
+          <h2>${escapeHtml(t('articleLinkLabel', 'קישור למאמר'))}</h2>
+          <div class="kv"><div class="v"><a href="${escapeHtml(articleData.articleLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(articleData.articleLink)}</a></div></div>
+        </div>
+      ` : ''}
+
+      ${articleData.notes ? `
+        <div class="section">
+          <h2>${escapeHtml(t('notesFreeText', 'הערות'))}</h2>
+          <div class="kv"><div class="v">${escapeHtml(articleData.notes)}</div></div>
+        </div>
+      ` : ''}
+
+      <div class="muted" style="margin-top: 20px; font-size: 12px;">
+        ${escapeHtml(language === 'en' ? `Generated on ${new Date().toLocaleString('en-US')}` : `נוצר ב-${new Date().toLocaleDateString('he-IL')} ${new Date().toLocaleTimeString('he-IL')}`)}
+      </div>
+    `;
+
+    exportPrintableHtmlToPdf({ title: pdfTitle, htmlBody, dir, lang });
+  };
+
   return (
     <div className="page-container">
       <div className="page-content">
@@ -179,7 +263,7 @@ const ArticleDetail = () => {
             fontSize: '16px'
           }}
         >
-          ← חזרה
+          ← {t('back', 'חזרה')}
         </button>
 
         {loading && (
@@ -196,7 +280,25 @@ const ArticleDetail = () => {
 
         {!loading && !error && articleData && (
           <div style={{ direction: 'rtl', textAlign: 'right' }}>
-            <h1 style={{ marginBottom: '30px', color: '#333' }}>פרטי מאמר</h1>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+              <h1 style={{ margin: 0, color: '#333' }}>פרטי מאמר</h1>
+              <button
+                type="button"
+                onClick={handleExportPDF}
+                style={{
+                  padding: '10px 20px',
+                  background: '#17a2b8',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: 'bold'
+                }}
+              >
+                {t('exportPdf', 'ייצוא ל-PDF')}
+              </button>
+            </div>
 
             <div style={{ 
               background: '#f9f9f9', 

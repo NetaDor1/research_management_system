@@ -2,12 +2,14 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
 import DetailModal from '../components/DetailModal';
 import './Research.css';
 
 const Patents = () => {
   const { isAdmin, user, userRole } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -204,13 +206,13 @@ const Patents = () => {
   const getStatusLabel = (status) => {
     switch (status) {
       case 'registered':
-        return 'רשום';
+        return t('registered', 'רשום');
       case 'approved':
-        return 'אושר';
+        return t('approved', 'אושר');
       case 'in-process':
-        return 'בהליך';
+        return t('inProcess', 'בהליך');
       case 'rejected':
-        return 'נדחה';
+        return t('rejected', 'נדחה');
       default:
         return status;
     }
@@ -235,11 +237,11 @@ const Patents = () => {
     <div className="research-page">
       <div className="research-content">
         <div className="research-header">
-        <h1>אוסף פטנטים</h1>
+        <h1>{t('patentsCollection', 'אוסף פטנטים')}</h1>
         <div className="search-container">
           <input
             type="text"
-            placeholder="חיפוש"
+            placeholder={t('search', 'חיפוש')}
             className="search-input"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -247,28 +249,28 @@ const Patents = () => {
         </div>
         <div className="filters-container">
           <div className="filter-group">
-            <label>סינון לפי:</label>
+            <label>{t('filterBy', 'סינון לפי:')}</label>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
               className="filter-select"
             >
-              <option value="all">סטטוס</option>
-              <option value="registered">רשום</option>
-              <option value="approved">אושר</option>
-              <option value="in-process">בהליך</option>
-              <option value="rejected">נדחה</option>
+              <option value="all">{t('status', 'סטטוס')}</option>
+              <option value="registered">{t('registered', 'רשום')}</option>
+              <option value="approved">{t('approved', 'אושר')}</option>
+              <option value="in-process">{t('inProcess', 'בהליך')}</option>
+              <option value="rejected">{t('rejected', 'נדחה')}</option>
             </select>
           </div>
           <div className="sort-group">
-            <label>מיון לפי:</label>
+            <label>{t('sortBy', 'מיון לפי:')}</label>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
               className="filter-select"
             >
-              <option value="alphabetical">אלף בית</option>
-              <option value="date">תאריך רישום</option>
+              <option value="alphabetical">{t('alphabetical', 'אלף בית')}</option>
+              <option value="date">{t('date', 'תאריך')} {t('registered', 'רישום')}</option>
             </select>
           </div>
         </div>
@@ -276,7 +278,7 @@ const Patents = () => {
 
       {loading && (
         <div className="no-results">
-          <p>טוען פטנטים...</p>
+          <p>{t('loadingData', 'טוען נתונים...')}</p>
         </div>
       )}
 
@@ -293,7 +295,7 @@ const Patents = () => {
             onClick={handleAddPatent}
             type="button"
           >
-            <h3 className="add-research-title">הוספת פטנט חדש</h3>
+            <h3 className="add-research-title">{t('addNewPatent', 'הוספת פטנט חדש')}</h3>
           </button>
         )}
 
@@ -303,7 +305,7 @@ const Patents = () => {
             className="research-card"
             onClick={() => handlePatentClick(patent.id)}
           >
-            {patent.isNew && <span className="new-badge">חדש!</span>}
+            {patent.isNew && <span className="new-badge">{t('newBadge', 'חדש!')}</span>}
             <h3 className="research-title">{patent.title}</h3>
             <p className="research-researcher">{patent.researcher}</p>
             <button className={`status-button ${getStatusClass(patent.status)}`}>
@@ -315,7 +317,7 @@ const Patents = () => {
 
       {!loading && !error && filteredAndSorted.length === 0 && (
         <div className="no-results">
-          <p>לא נמצאו פטנטים</p>
+          <p>{t('noPatentsFound', 'לא נמצאו פטנטים')}</p>
         </div>
       )}
 

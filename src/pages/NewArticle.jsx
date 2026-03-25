@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { collection, addDoc, serverTimestamp, Timestamp, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
 import './Page.css';
 import './Research.css';
@@ -10,6 +11,7 @@ const NewArticle = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, userRole } = useAuth();
+  const { t } = useLanguage();
   const editId = searchParams.get('edit');
 
   // Options for journal ranking
@@ -73,7 +75,7 @@ const NewArticle = () => {
         setResearchOptions(options);
       } catch (err) {
         console.error('Error loading research options:', err);
-        setResearchLoadError('שגיאה בטעינת רשימת מחקרים');
+        setResearchLoadError(t('loadingResearchListError', 'שגיאה בטעינת רשימת מחקרים'));
         setResearchOptions([]);
       } finally {
         setResearchLoading(false);
@@ -127,21 +129,21 @@ const NewArticle = () => {
     const newErrors = {};
     
     if (!formData.title.trim()) {
-      newErrors.title = 'כותרת המאמר חובה';
+      newErrors.title = `${t('articleTitleLabel', 'כותרת המאמר')} חובה`;
     }
     if (!formData.journalName.trim()) {
-      newErrors.journalName = 'שם העיתון חובה';
+      newErrors.journalName = `${t('publishedJournalName', 'שם העיתון בו פורסם')} חובה`;
     }
     if (!formData.journalRanking) {
-      newErrors.journalRanking = 'דירוג העיתון חובה';
+      newErrors.journalRanking = `${t('journalRankingLabel', 'דירוג העיתון')} חובה`;
     }
     if (!formData.publicationYear) {
-      newErrors.publicationYear = 'שנת הפרסום חובה';
+      newErrors.publicationYear = `${t('publicationYearLabel', 'שנת הפרסום')} חובה`;
     } else if (formData.publicationYear.length !== 4 || isNaN(formData.publicationYear)) {
-      newErrors.publicationYear = 'שנת הפרסום חייבת להיות 4 ספרות';
+      newErrors.publicationYear = `${t('publicationYearLabel', 'שנת הפרסום')} חייבת להיות 4 ספרות`;
     }
     if (formData.articleLink && !isValidUrl(formData.articleLink)) {
-      newErrors.articleLink = 'קישור לא תקין';
+      newErrors.articleLink = 'Invalid link';
     }
 
     setErrors(newErrors);
@@ -161,7 +163,7 @@ const NewArticle = () => {
     e.preventDefault();
     
     if (!validateForm()) {
-      alert('יש למלא את כל השדות החובה');
+      alert(t('fillRequiredFields', 'יש למלא את כל השדות החובה'));
       return;
     }
 
@@ -232,7 +234,7 @@ const NewArticle = () => {
       }
 
       console.log('Article saved successfully!');
-      alert('המאמר נשמר בהצלחה!');
+      alert(t('saveArticleSuccess', 'המאמר נשמר בהצלחה!'));
       navigate(backPath);
     } catch (error) {
       console.error('Error saving article:', error);
@@ -258,36 +260,36 @@ const NewArticle = () => {
   return (
     <div className="page-container">
       <div className="page-content" style={{ maxWidth: '800px' }}>
-        <h1>הוספת מאמר חדש</h1>
-        <p className="form-subtitle">מלא/י את הפרטים הבאים להוספת מאמר</p>
+        <h1>{t('newArticleTitle', 'הוספת מאמר חדש')}</h1>
+        <p className="form-subtitle">{t('newArticleSubtitle', 'מלא/י את הפרטים הבאים להוספת מאמר')}</p>
 
         <form onSubmit={handleSubmit} className="research-form">
           <div className="form-section">
-            <h2>פרטי המאמר</h2>
+            <h2>{t('articleDetailsTitle', 'פרטי המאמר')}</h2>
             
             <div className="form-group">
-              <label>כותרת המאמר *</label>
+              <label>{t('articleTitleLabel', 'כותרת המאמר')} *</label>
               <input
                 type="text"
                 name="title"
                 value={formData.title}
                 onChange={handleInputChange}
                 className={errors.title ? 'error' : ''}
-                placeholder="הכנס כותרת המאמר"
+                placeholder={t('enterArticleTitle', 'הכנס כותרת המאמר')}
                 required
               />
               {errors.title && <span className="error-message">{errors.title}</span>}
             </div>
 
             <div className="form-group">
-              <label>קישור למחקר קיים</label>
+              <label>{t('linkExistingResearch', 'קישור למחקר קיים')}</label>
               <select
                 name="researchProposalId"
                 value={formData.researchProposalId}
                 onChange={handleInputChange}
                 disabled={researchLoading}
               >
-                <option value="">בחר מחקר מהרשימה</option>
+                <option value="">{t('selectResearchFromList', 'בחר מחקר מהרשימה')}</option>
                 {researchOptions.map(option => (
                   <option key={option.id} value={option.id}>
                     {option.title}{userRole === 'ADMIN' ? ` - ${option.researcherName}` : ''}
@@ -298,21 +300,21 @@ const NewArticle = () => {
             </div>
 
             <div className="form-group">
-              <label>שם העיתון בו פורסם *</label>
+              <label>{t('publishedJournalName', 'שם העיתון בו פורסם')} *</label>
               <input
                 type="text"
                 name="journalName"
                 value={formData.journalName}
                 onChange={handleInputChange}
                 className={errors.journalName ? 'error' : ''}
-                placeholder="הכנס שם העיתון"
+                placeholder={t('enterJournalName', 'הכנס שם העיתון')}
                 required
               />
               {errors.journalName && <span className="error-message">{errors.journalName}</span>}
             </div>
 
             <div className="form-group">
-              <label>דירוג העיתון *</label>
+              <label>{t('journalRankingLabel', 'דירוג העיתון')} *</label>
               <select
                 name="journalRanking"
                 value={formData.journalRanking}
@@ -320,7 +322,7 @@ const NewArticle = () => {
                 className={errors.journalRanking ? 'error' : ''}
                 required
               >
-                <option value="">בחר דירוג</option>
+                <option value="">{t('selectRanking', 'בחר דירוג')}</option>
                 {journalRankingOptions.map(option => (
                   <option key={option} value={option}>{option}</option>
                 ))}
@@ -329,14 +331,14 @@ const NewArticle = () => {
             </div>
 
             <div className="form-group">
-              <label>שנת הפרסום *</label>
+              <label>{t('publicationYearLabel', 'שנת הפרסום')} *</label>
               <input
                 type="number"
                 name="publicationYear"
                 value={formData.publicationYear}
                 onChange={handleInputChange}
                 className={errors.publicationYear ? 'error' : ''}
-                placeholder="שנה (4 ספרות, למשל: 2024)"
+                placeholder={t('publicationYearPlaceholder', 'שנה (4 ספרות, למשל: 2024)')}
                 min="1900"
                 max="2100"
                 maxLength={4}
@@ -346,7 +348,7 @@ const NewArticle = () => {
             </div>
 
             <div className="form-group">
-              <label>קישור למאמר</label>
+              <label>{t('articleLinkLabel', 'קישור למאמר')}</label>
               <input
                 type="url"
                 name="articleLink"
@@ -363,7 +365,7 @@ const NewArticle = () => {
                   rel="noopener noreferrer"
                   style={{ display: 'block', marginTop: '8px', color: '#667eea' }}
                 >
-                  פתח קישור →
+                  {t('openLink', 'פתח קישור')} →
                 </a>
               )}
             </div>
@@ -372,10 +374,10 @@ const NewArticle = () => {
           {/* כפתורי שליחה */}
           <div className="form-actions">
             <button type="button" onClick={() => navigate(backPath)} className="cancel-btn">
-              ביטול
+              {t('cancel', 'ביטול')}
             </button>
             <button type="submit" className="submit-btn" disabled={isSubmitting}>
-              {isSubmitting ? 'שומר...' : 'שמור מאמר'}
+              {isSubmitting ? t('saving', 'שומר...') : t('saveArticle', 'שמור מאמר')}
             </button>
           </div>
         </form>

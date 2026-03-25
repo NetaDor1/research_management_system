@@ -1,6 +1,7 @@
 import React from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
+import { useLanguage } from '../context/LanguageContext';
 import './TasksCalendar.css';
 
 /**
@@ -27,6 +28,8 @@ import './TasksCalendar.css';
  * @param {Function} onEventClick - Callback when an event is clicked
  */
 const TasksCalendar = ({ tasks = [], onEventClick }) => {
+  const { t, isRTL } = useLanguage();
+
   // Convert tasks to FullCalendar events
   const events = React.useMemo(() => {
     if (!tasks || tasks.length === 0) {
@@ -46,8 +49,8 @@ const TasksCalendar = ({ tasks = [], onEventClick }) => {
       // Create title with research proposal name first, then task name
       const parentTitle = task.parentTitle || task.researchProposalTitle;
       const eventTitle = parentTitle
-        ? `${parentTitle} - ${task.title || 'ללא כותרת'}`
-        : task.title || 'ללא כותרת';
+        ? `${parentTitle} - ${task.title || t('notSpecified', 'לא צוין')}`
+        : task.title || t('notSpecified', 'לא צוין');
       
       return {
         id: task.id,
@@ -66,7 +69,7 @@ const TasksCalendar = ({ tasks = [], onEventClick }) => {
         }
       };
     }).filter(event => event !== null); // Remove invalid events
-  }, [tasks]);
+  }, [tasks, t]);
   
   console.log('TasksCalendar rendering with', events.length, 'events');
 
@@ -89,12 +92,12 @@ const TasksCalendar = ({ tasks = [], onEventClick }) => {
     <div className="tasks-calendar-container">
       {events.length > 0 && (
         <div style={{ marginBottom: '10px', fontSize: '14px', color: '#666', textAlign: 'right' }}>
-          {events.length} משימות בלוח השנה
+          {events.length} {t('calendarTasksCount', 'משימות בלוח השנה')}
         </div>
       )}
       {events.length === 0 && (
         <div style={{ marginBottom: '10px', fontSize: '14px', color: '#999', textAlign: 'right' }}>
-          אין משימות להצגה בלוח השנה
+          {t('calendarNoTasks', 'אין משימות להצגה בלוח השנה')}
         </div>
       )}
       <div style={{ width: '100%' }}>
@@ -108,7 +111,7 @@ const TasksCalendar = ({ tasks = [], onEventClick }) => {
             center: 'title',
             right: 'next'
           }}
-          direction="rtl" // Right-to-left for Hebrew
+          direction={isRTL ? 'rtl' : 'ltr'}
           height="auto"
           contentHeight="auto"
           aspectRatio={1.35}

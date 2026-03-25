@@ -1,20 +1,22 @@
 import React from 'react';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const ResearchDescriptionSection = ({ formData, handleChange }) => {
+  const { t } = useLanguage();
   return (
     <div className="form-section">
-      <h2>תיאור המחקר</h2>
+      <h2>{t('researchDescriptionTitle', 'תיאור המחקר')}</h2>
       
       <div className="form-group">
         <label htmlFor="abstract">
-          Abstract - תקציר
+          {t('abstractLabel', 'Abstract - תקציר')}
         </label>
         <textarea
           id="abstract"
           name="abstract"
           value={formData.abstract}
           onChange={handleChange}
-          placeholder="הזינו תקציר המחקר"
+          placeholder={t('enterAbstract', 'הזינו תקציר המחקר')}
           rows="6"
           style={{ width: '100%', minHeight: '120px' }}
         />
@@ -22,14 +24,14 @@ const ResearchDescriptionSection = ({ formData, handleChange }) => {
 
       <div className="form-group">
         <label htmlFor="scientificBackground">
-          Scientific background and state of the art - רקע מדעי ומצב טכנולוגי חדש
+          {t('scientificBackgroundLabel', 'Scientific background and state of the art - רקע מדעי ומצב טכנולוגי חדש')}
         </label>
         <textarea
           id="scientificBackground"
           name="scientificBackground"
           value={formData.scientificBackground}
           onChange={handleChange}
-          placeholder="הזינו רקע מדעי ומצב טכנולוגי חדש"
+          placeholder={t('enterScientificBackground', 'הזינו רקע מדעי ומצב טכנולוגי חדש')}
           rows="8"
           style={{ width: '100%', minHeight: '160px' }}
         />
@@ -37,14 +39,14 @@ const ResearchDescriptionSection = ({ formData, handleChange }) => {
 
       <div className="form-group">
         <label htmlFor="researchObjectives">
-          מטרות מחקר ומטרות ספציפיות - Research objectives and specific aims
+          {t('researchObjectivesLabel', 'מטרות מחקר ומטרות ספציפיות - Research objectives and specific aims')}
         </label>
         <textarea
           id="researchObjectives"
           name="researchObjectives"
           value={formData.researchObjectives}
           onChange={handleChange}
-          placeholder="הזינו מטרות מחקר ומטרות ספציפיות"
+          placeholder={t('enterResearchObjectives', 'הזינו מטרות מחקר ומטרות ספציפיות')}
           rows="8"
           style={{ width: '100%', minHeight: '160px' }}
         />
@@ -52,14 +54,14 @@ const ResearchDescriptionSection = ({ formData, handleChange }) => {
 
       <div className="form-group">
         <label htmlFor="detailedDescription">
-          Detailed description of the proposed research - תיאור מפורט של המחקר המוצע
+          {t('detailedDescriptionLabel', 'Detailed description of the proposed research - תיאור מפורט של המחקר המוצע')}
         </label>
         <textarea
           id="detailedDescription"
           name="detailedDescription"
           value={formData.detailedDescription}
           onChange={handleChange}
-          placeholder="הזינו תיאור מפורט של המחקר המוצע"
+          placeholder={t('enterDetailedDescription', 'הזינו תיאור מפורט של המחקר המוצע')}
           rows="10"
           style={{ width: '100%', minHeight: '200px' }}
         />
@@ -67,14 +69,14 @@ const ResearchDescriptionSection = ({ formData, handleChange }) => {
 
       <div className="form-group">
         <label htmlFor="significanceInnovation">
-          Significance, innovation and potential benefits of the proposed research - משמעות, חדשנות ותועלת פוטנציאלית של המחקר המוצע
+          {t('significanceLabel', 'Significance, innovation and potential benefits of the proposed research - משמעות, חדשנות ותועלת פוטנציאלית של המחקר המוצע')}
         </label>
         <textarea
           id="significanceInnovation"
           name="significanceInnovation"
           value={formData.significanceInnovation}
           onChange={handleChange}
-          placeholder="הזינו משמעות, חדשנות ותועלת פוטנציאלית של המחקר המוצע"
+          placeholder={t('enterSignificance', 'הזינו משמעות, חדשנות ותועלת פוטנציאלית של המחקר המוצע')}
           rows="8"
           style={{ width: '100%', minHeight: '160px' }}
         />
@@ -82,14 +84,14 @@ const ResearchDescriptionSection = ({ formData, handleChange }) => {
 
       <div className="form-group">
         <label htmlFor="applicability">
-          Applicability - ישימות
+          {t('applicabilityLabel', 'Applicability - ישימות')}
         </label>
         <textarea
           id="applicability"
           name="applicability"
           value={formData.applicability}
           onChange={handleChange}
-          placeholder="הזינו ישימות המחקר"
+          placeholder={t('enterApplicability', 'הזינו ישימות המחקר')}
           rows="6"
           style={{ width: '100%', minHeight: '120px' }}
         />

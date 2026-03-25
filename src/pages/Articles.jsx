@@ -2,12 +2,14 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
 import DetailModal from '../components/DetailModal';
 import './Research.css';
 
 const Articles = () => {
   const { isAdmin, user, userRole } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -211,11 +213,11 @@ const Articles = () => {
   const getStatusLabel = (status) => {
     switch (status) {
       case 'published':
-        return 'פורסם';
+        return t('published', 'פורסם');
       case 'in-review':
-        return 'בביקורת';
+        return t('inReview', 'בביקורת');
       case 'rejected':
-        return 'נדחה';
+        return t('rejected', 'נדחה');
       default:
         return status;
     }
@@ -238,11 +240,11 @@ const Articles = () => {
     <div className="research-page">
       <div className="research-content">
         <div className="research-header">
-        <h1>אוסף מאמרים</h1>
+        <h1>{t('articlesCollection', 'אוסף מאמרים')}</h1>
         <div className="search-container">
           <input
             type="text"
-            placeholder="חיפוש"
+            placeholder={t('search', 'חיפוש')}
             className="search-input"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -250,16 +252,16 @@ const Articles = () => {
         </div>
         <div className="filters-container">
           <div className="filter-group">
-            <label>סינון לפי:</label>
+            <label>{t('filterBy', 'סינון לפי:')}</label>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
               className="filter-select"
             >
-              <option value="all">סטטוס</option>
-              <option value="published">פורסם</option>
-              <option value="in-review">בביקורת</option>
-              <option value="rejected">נדחה</option>
+              <option value="all">{t('status', 'סטטוס')}</option>
+              <option value="published">{t('published', 'פורסם')}</option>
+              <option value="in-review">{t('inReview', 'בביקורת')}</option>
+              <option value="rejected">{t('rejected', 'נדחה')}</option>
             </select>
             <select
               value={filterType}
@@ -267,19 +269,19 @@ const Articles = () => {
               className="filter-select"
             >
               <option value="all">סוג פרסום</option>
-              <option value="journal">כתב עת</option>
-              <option value="conference">כנס</option>
+              <option value="journal">{t('journal', 'כתב עת')}</option>
+              <option value="conference">{t('conference', 'כנס')}</option>
             </select>
           </div>
           <div className="sort-group">
-            <label>מיון לפי:</label>
+            <label>{t('sortBy', 'מיון לפי:')}</label>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
               className="filter-select"
             >
-              <option value="alphabetical">אלף בית</option>
-              <option value="date">תאריך פרסום</option>
+              <option value="alphabetical">{t('alphabetical', 'אלף בית')}</option>
+              <option value="date">{t('date', 'תאריך')} {t('published', 'פרסום')}</option>
             </select>
           </div>
         </div>
@@ -287,7 +289,7 @@ const Articles = () => {
 
       {loading && (
         <div className="no-results">
-          <p>טוען מאמרים...</p>
+          <p>{t('loadingData', 'טוען נתונים...')}</p>
         </div>
       )}
 
@@ -304,7 +306,7 @@ const Articles = () => {
             onClick={handleAddArticle}
             type="button"
           >
-            <h3 className="add-research-title">הוספת מאמר חדש</h3>
+            <h3 className="add-research-title">{t('addNewArticle', 'הוספת מאמר חדש')}</h3>
           </button>
         )}
 
@@ -314,7 +316,7 @@ const Articles = () => {
             className="research-card"
             onClick={() => handleArticleClick(article.id)}
           >
-            {article.isNew && <span className="new-badge">חדש!</span>}
+            {article.isNew && <span className="new-badge">{t('newBadge', 'חדש!')}</span>}
             <h3 className="research-title">{article.title}</h3>
             <p className="research-researcher">{article.researcher}</p>
             <button className={`status-button ${getStatusClass(article.status)}`}>
@@ -326,7 +328,7 @@ const Articles = () => {
 
       {!loading && !error && filteredAndSorted.length === 0 && (
         <div className="no-results">
-          <p>לא נמצאו מאמרים</p>
+          <p>{t('noArticlesFound', 'לא נמצאו מאמרים')}</p>
         </div>
       )}
 

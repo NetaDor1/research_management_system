@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, where, orderBy, onSnapshot, collectionGroup, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
 import TasksCalendarContainer from '../components/TasksCalendarContainer';
 import UpcomingTasks from '../components/UpcomingTasks';
@@ -10,6 +11,7 @@ import './Research.css';
 
 const Home = () => {
   const { isAdmin, user, userRole } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   // Research state
@@ -485,8 +487,8 @@ const Home = () => {
     return (
       <div className="page-container">
         <div className="page-content">
-          <h1>עמוד הבית - רשות המחקר</h1>
-          <p className="welcome-text">ברוכים הבאים למערכת ניהול מחקר</p>
+          <h1>{t('adminHomeTitle', 'עמוד הבית - רשות המחקר')}</h1>
+          <p className="welcome-text">{t('welcome', 'ברוכים הבאים למערכת ניהול מחקר')}</p>
           
           <UpcomingTasks />
 
@@ -519,8 +521,8 @@ const Home = () => {
   return (
     <div className="page-container">
       <div className="page-content">
-        <h1>עמוד הבית</h1>
-        <p className="welcome-text">ברוכים הבאים למערכת ניהול מחקר</p>
+        <h1>{t('homePageTitle', 'עמוד הבית')}</h1>
+        <p className="welcome-text">{t('welcome', 'ברוכים הבאים למערכת ניהול מחקר')}</p>
 
         <UpcomingTasks />
 

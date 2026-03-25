@@ -1,13 +1,16 @@
 import React from 'react';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const BasicInfoSection = ({ formData, errors, handleChange, fundOptions, fundTypeOptions, submissionPathOptions, submissionTypeOptions, researcherRoleOptions, proposalStageOptions }) => {
+  const { t } = useLanguage();
+
   return (
     <div className="form-section">
-      <h2>פרטים כלליים</h2>
+      <h2>{t('generalDetails', 'פרטים כלליים')}</h2>
       
       <div className="form-group">
         <label htmlFor="projectTitle">
-          כותרת הפרוייקט שהוגש לקרן חיצונית <span className="required">*</span>
+          {t('projectTitleLabel', 'כותרת הפרוייקט שהוגש לקרן חיצונית')} <span className="required">*</span>
         </label>
         <input
           type="text"
@@ -16,7 +19,7 @@ const BasicInfoSection = ({ formData, errors, handleChange, fundOptions, fundTyp
           value={formData.projectTitle}
           onChange={handleChange}
           className={errors.projectTitle ? 'error' : ''}
-          placeholder="הזינו את כותרת הפרוייקט"
+          placeholder={t('enterProjectTitle', 'הזינו את כותרת הפרוייקט')}
         />
         {errors.projectTitle && <span className="error-message">{errors.projectTitle}</span>}
       </div>
@@ -24,7 +27,7 @@ const BasicInfoSection = ({ formData, errors, handleChange, fundOptions, fundTyp
       <div className="form-row">
         <div className="form-group">
           <label htmlFor="fundName">
-            שם הקרן אליה הוגשה הבקשה <span className="required">*</span>
+            {t('fundNameLabel', 'שם הקרן אליה הוגשה הבקשה')} <span className="required">*</span>
           </label>
           <select
             id="fundName"
@@ -33,7 +36,7 @@ const BasicInfoSection = ({ formData, errors, handleChange, fundOptions, fundTyp
             onChange={handleChange}
             className={errors.fundName ? 'error' : ''}
           >
-            <option value="">בחרו קרן</option>
+            <option value="">{t('selectFund', 'בחרו קרן')}</option>
             {fundOptions.map(fund => (
               <option key={fund} value={fund}>{fund}</option>
             ))}
@@ -43,7 +46,7 @@ const BasicInfoSection = ({ formData, errors, handleChange, fundOptions, fundTyp
 
         <div className="form-group">
           <label htmlFor="fundType">
-            סוג הקרן
+            {t('fundTypeLabel', 'סוג הקרן')}
           </label>
           <select
             id="fundType"
@@ -51,7 +54,7 @@ const BasicInfoSection = ({ formData, errors, handleChange, fundOptions, fundTyp
             value={formData.fundType}
             onChange={handleChange}
           >
-            <option value="">בחרו סוג קרן</option>
+            <option value="">{t('selectFundType', 'בחרו סוג קרן')}</option>
             {fundTypeOptions.map(type => (
               <option key={type} value={type}>{type}</option>
             ))}
@@ -62,7 +65,7 @@ const BasicInfoSection = ({ formData, errors, handleChange, fundOptions, fundTyp
       <div className="form-row">
         <div className="form-group">
           <label htmlFor="submissionPath">
-            מסלול ההגשה לקרן <span className="required">*</span>
+            {t('submissionPathLabel', 'מסלול ההגשה לקרן')} <span className="required">*</span>
           </label>
           <select
             id="submissionPath"
@@ -71,7 +74,7 @@ const BasicInfoSection = ({ formData, errors, handleChange, fundOptions, fundTyp
             onChange={handleChange}
             className={errors.submissionPath ? 'error' : ''}
           >
-            <option value="">בחרו מסלול</option>
+            <option value="">{t('selectPath', 'בחרו מסלול')}</option>
             {submissionPathOptions.map(path => (
               <option key={path} value={path}>{path}</option>
             ))}
@@ -81,7 +84,7 @@ const BasicInfoSection = ({ formData, errors, handleChange, fundOptions, fundTyp
 
         <div className="form-group">
           <label htmlFor="submissionType">
-            סוג הגשה
+            {t('submissionTypeLabel', 'סוג הגשה')}
           </label>
           <select
             id="submissionType"
@@ -89,7 +92,7 @@ const BasicInfoSection = ({ formData, errors, handleChange, fundOptions, fundTyp
             value={formData.submissionType}
             onChange={handleChange}
           >
-            <option value="">בחרו סוג הגשה</option>
+            <option value="">{t('selectSubmissionType', 'בחרו סוג הגשה')}</option>
             {submissionTypeOptions.map(type => (
               <option key={type} value={type}>{type}</option>
             ))}
@@ -100,7 +103,7 @@ const BasicInfoSection = ({ formData, errors, handleChange, fundOptions, fundTyp
       <div className="form-row">
         <div className="form-group">
           <label htmlFor="researcherRole">
-            תפקיד החוקר בהצעת המחקר <span className="required">*</span>
+            {t('researcherRoleLabel', 'תפקיד החוקר בהצעת המחקר')} <span className="required">*</span>
           </label>
           <select
             id="researcherRole"
@@ -109,7 +112,7 @@ const BasicInfoSection = ({ formData, errors, handleChange, fundOptions, fundTyp
             onChange={handleChange}
             className={errors.researcherRole ? 'error' : ''}
           >
-            <option value="">בחרו תפקיד</option>
+            <option value="">{t('selectRole', 'בחרו תפקיד')}</option>
             {researcherRoleOptions.map(role => (
               <option key={role} value={role}>{role}</option>
             ))}
@@ -119,7 +122,7 @@ const BasicInfoSection = ({ formData, errors, handleChange, fundOptions, fundTyp
 
         <div className="form-group">
           <label htmlFor="proposalStage">
-            שלב ההצעה <span className="required">*</span>
+            {t('proposalStageLabel', 'שלב ההצעה')} <span className="required">*</span>
           </label>
           <select
             id="proposalStage"
@@ -128,7 +131,7 @@ const BasicInfoSection = ({ formData, errors, handleChange, fundOptions, fundTyp
             onChange={handleChange}
             className={errors.proposalStage ? 'error' : ''}
           >
-            <option value="">בחרו שלב</option>
+            <option value="">{t('selectStage', 'בחרו שלב')}</option>
             {proposalStageOptions.map(stage => (
               <option key={stage} value={stage}>{stage}</option>
             ))}

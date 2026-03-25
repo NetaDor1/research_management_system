@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const ResearchPeriodSection = ({ 
   formData, 
@@ -10,14 +11,15 @@ const ResearchPeriodSection = ({
   startDatePickerRef,
   endDatePickerRef
 }) => {
+  const { t } = useLanguage();
   return (
     <div className="form-section">
-      <h2>תקופת המחקר</h2>
+      <h2>{t('researchPeriod', 'תקופת המחקר')}</h2>
       
       <div className="form-row">
         <div className="form-group">
           <label htmlFor="researchStartDate">
-            תאריך לועזי של תחילת המחקר (dd/mm/yyyy) <span className="required">*</span>
+            {t('startDateLabel', 'תאריך לועזי של תחילת המחקר (dd/mm/yyyy)')} <span className="required">*</span>
           </label>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', position: 'relative' }}>
             <input
@@ -47,7 +49,7 @@ const ResearchPeriodSection = ({
                   cursor: 'pointer',
                   zIndex: 2
                 }}
-                title="בחר תאריך מלוח שנה"
+                title={t('chooseDate', 'בחר תאריך מלוח שנה')}
               />
               <div
                 style={{
@@ -90,7 +92,7 @@ const ResearchPeriodSection = ({
 
         <div className="form-group">
           <label htmlFor="researchEndDate">
-            תאריך לועזי של סוף המחקר (dd/mm/yyyy) <span className="required">*</span>
+            {t('endDateLabel', 'תאריך לועזי של סוף המחקר (dd/mm/yyyy)')} <span className="required">*</span>
           </label>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', position: 'relative' }}>
             <input
@@ -120,7 +122,7 @@ const ResearchPeriodSection = ({
                   cursor: 'pointer',
                   zIndex: 2
                 }}
-                title="בחר תאריך מלוח שנה"
+                title={t('chooseDate', 'בחר תאריך מלוח שנה')}
               />
               <div
                 style={{
@@ -165,7 +167,7 @@ const ResearchPeriodSection = ({
       <div className="form-row">
         <div className="form-group">
           <label htmlFor="researchDurationYears">
-            סה"כ תקופת המחקר בשנים (חישוב אוטומטי)
+            {t('totalResearchYears', 'סה"כ תקופת המחקר בשנים (חישוב אוטומטי)')}
           </label>
           <input
             type="text"
@@ -174,13 +176,13 @@ const ResearchPeriodSection = ({
             value={formData.researchDurationYears}
             readOnly
             className="readonly-field"
-            placeholder="יחושב אוטומטית"
+            placeholder={t('autoCalculated', 'יחושב אוטומטית')}
           />
         </div>
 
         <div className="form-group">
           <label htmlFor="academicYear">
-            שנה אקדמית (תרגום אוטומטי)
+            {t('academicYearLabel', 'שנה אקדמית (תרגום אוטומטי)')}
           </label>
           <input
             type="text"
@@ -189,7 +191,7 @@ const ResearchPeriodSection = ({
             value={formData.academicYear}
             readOnly
             className="readonly-field"
-            placeholder="יחושב אוטומטית"
+            placeholder={t('autoCalculated', 'יחושב אוטומטית')}
           />
         </div>
       </div>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const DocumentsSection = ({ 
   formData, 
@@ -7,13 +8,14 @@ const DocumentsSection = ({
   handleDocumentChecklistChange,
   requiredDocuments
 }) => {
+  const { t } = useLanguage();
   return (
     <div className="form-section">
-      <h2>מסמכים</h2>
+      <h2>{t('documentsTitle', 'מסמכים')}</h2>
       
       <div className="form-group">
         <label htmlFor="researchProposalFile">
-          מסמך הצעת המחקר שהוגשה
+          {t('researchProposalFileLabel', 'מסמך הצעת המחקר שהוגשה')}
         </label>
         <input
           type="file"
@@ -28,7 +30,7 @@ const DocumentsSection = ({
       </div>
 
       <div className="form-group">
-        <label>רשימת צ'קליסט של מסמכים להגשה מטעם המוסד</label>
+        <label>{t('documentsChecklistLabel', "רשימת צ'קליסט של מסמכים להגשה מטעם המוסד")}</label>
         <div className="checklist-grid">
           {requiredDocuments.map(doc => (
             <label key={doc} className="checkbox-label">
@@ -45,7 +47,7 @@ const DocumentsSection = ({
 
       <div className="form-group">
         <label htmlFor="officialDocuments">
-          מסמכים רשמיים ואישורים
+          {t('officialDocumentsLabel', 'מסמכים רשמיים ואישורים')}
         </label>
         <input
           type="file"

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLanguage } from '../../../context/LanguageContext';
 
 const AdditionalInfoSection = ({ 
   formData, 
@@ -8,13 +9,14 @@ const AdditionalInfoSection = ({
   convertDateToISO,
   expectedDatePickerRef
 }) => {
+  const { t } = useLanguage();
   return (
     <div className="form-section">
-      <h2>מידע נוסף</h2>
+      <h2>{t('additionalInfoTitle', 'מידע נוסף')}</h2>
       
       <div className="form-group">
         <label htmlFor="expectedResponseDate">
-          תאריך משוער לקבלת תשובות קבלה / דחיה מהקרנות החיצוניות
+          {t('expectedResponseDateLabel', 'תאריך משוער לקבלת תשובות קבלה / דחיה מהקרנות החיצוניות')}
         </label>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', position: 'relative' }}>
           <input
@@ -43,7 +45,7 @@ const AdditionalInfoSection = ({
                 cursor: 'pointer',
                 zIndex: 2
               }}
-              title="בחר תאריך מלוח שנה"
+              title={t('chooseDate', 'בחר תאריך מלוח שנה')}
             />
             <div
               style={{
@@ -85,14 +87,14 @@ const AdditionalInfoSection = ({
 
       <div className="form-group">
         <label htmlFor="notes">
-          הערות (כתיבה חופשית)
+          {t('notesFreeText', 'הערות (כתיבה חופשית)')}
         </label>
         <textarea
           id="notes"
           name="notes"
           value={formData.notes}
           onChange={handleChange}
-          placeholder="הערות נוספות"
+          placeholder={t('additionalNotes', 'הערות נוספות')}
           rows="6"
         />
       </div>

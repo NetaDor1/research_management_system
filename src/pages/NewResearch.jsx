@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { db, storage } from '../services/firebase';
 import BasicInfoSection from '../components/research/form/BasicInfoSection';
 import ResearchPeriodSection from '../components/research/form/ResearchPeriodSection';
@@ -20,6 +21,7 @@ const NewResearch = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, userRole } = useAuth();
+  const { t } = useLanguage();
   const editId = searchParams.get('edit');
   
   // Options for dropdowns
@@ -1134,9 +1136,9 @@ const NewResearch = () => {
   return (
     <div className="page-container">
       <div className="page-content">
-        <h1>הגשה לקרנות מחקר</h1>
+        <h1>{t('submitResearchTitle', 'הגשה לקרנות מחקר')}</h1>
         <p className="welcome-text">
-          מלאו את הפרטים הבאים כדי להגיש הצעת מחקר חדשה
+          {t('submitResearchSubtitle', 'מלאו את הפרטים הבאים כדי להגיש הצעת מחקר חדשה')}
         </p>
 
         <form onSubmit={handleSubmit} className="research-form">
@@ -1229,13 +1231,13 @@ const NewResearch = () => {
                 window.location.assign(targetPath);
               }}
             >
-              ביטול
+              {t('cancel', 'ביטול')}
             </button>
             <button type="button" className="btn-export-pdf" onClick={handleExportPDF}>
-              ייצוא PDF
+              {t('exportPdfShort', 'ייצוא PDF')}
             </button>
             <button type="submit" className="btn-submit">
-              הגשת הצעה
+              {t('submitProposal', 'הגשת הצעה')}
             </button>
           </div>
         </form>
