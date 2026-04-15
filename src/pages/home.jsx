@@ -7,6 +7,7 @@ import { db } from '../services/firebase';
 import { createNotification } from '../services/notifications';
 import TasksCalendarContainer from '../components/TasksCalendarContainer';
 import UpcomingTasks from '../components/UpcomingTasks';
+import { shouldShowNewBadge } from '../utils/newBadge';
 import './Page.css';
 import './Research.css';
 
@@ -623,7 +624,7 @@ const Home = () => {
                 className="research-card"
                 onClick={() => handleResearchClick(research.id)}
               >
-                {research.isNew && <span className="new-badge">חדש!</span>}
+                {shouldShowNewBadge(research.isNew, research.submissionDate) && <span className="new-badge">חדש!</span>}
                 <h3 className="research-title">{research.title}</h3>
                 <p className="research-researcher">{research.researcher}</p>
                 <button className={`status-button ${getStatusClass(research.status, 'research')}`}>
@@ -678,7 +679,7 @@ const Home = () => {
                 className="research-card"
                 onClick={() => handlePatentClick(patent.id)}
               >
-                {patent.isNew && <span className="new-badge">חדש!</span>}
+                {shouldShowNewBadge(patent.isNew, patent.registrationDate) && <span className="new-badge">חדש!</span>}
                 <h3 className="research-title">{patent.title}</h3>
                 <p className="research-researcher">{patent.researcher}</p>
                 <button className={`status-button ${getStatusClass(patent.status, 'patent')}`}>
@@ -733,7 +734,7 @@ const Home = () => {
                 className="research-card"
                 onClick={() => handleArticleClick(article.id)}
               >
-                {article.isNew && <span className="new-badge">חדש!</span>}
+                {shouldShowNewBadge(article.isNew, article.publicationDate) && <span className="new-badge">חדש!</span>}
                 <h3 className="research-title">{article.title}</h3>
                 <p className="research-researcher">{article.researcher}</p>
                 <button className={`status-button ${getStatusClass(article.status, 'article')}`}>

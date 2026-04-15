@@ -167,6 +167,7 @@ const NewResearch = () => {
     partners: [{ name: '', email: '', institution: '', country: '' }],
     researchProposalFile: null,
     requiredDocumentsChecklist: {},
+    requiredDocumentsFiles: {},
     officialDocuments: [],
     digitalSignature: { signed: false, date: '', signer: '' },
     expectedResponseDate: '',
@@ -190,6 +191,52 @@ const NewResearch = () => {
   const endDatePickerRef = useRef(null);
   const expectedDatePickerRef = useRef(null);
   const [loadingExisting, setLoadingExisting] = useState(false);
+
+  // Normalize work-plan tasks so edit mode can load both old/new schemas.
+  const normalizeWorkPlanTasks = (tasks) => {
+    if (!Array.isArray(tasks)) return [];
+
+    return tasks.map((task, index) => {
+      const rawStart =
+        task?.startMonth ??
+        task?.start_month ??
+        task?.fromMonth ??
+        task?.monthStart ??
+        task?.start ??
+        task?.from ??
+        1;
+      const rawEnd =
+        task?.endMonth ??
+        task?.end_month ??
+        task?.toMonth ??
+        task?.monthEnd ??
+        task?.end ??
+        task?.to ??
+        rawStart;
+
+      const startMonthParsed = Number(rawStart);
+      const endMonthParsed = Number(rawEnd);
+
+      const startMonth = Number.isFinite(startMonthParsed) && startMonthParsed > 0 ? startMonthParsed : 1;
+      const endMonth =
+        Number.isFinite(endMonthParsed) && endMonthParsed >= startMonth
+          ? endMonthParsed
+          : startMonth;
+
+      return {
+        id: task?.id || `task-${Date.now()}-${index}`,
+        title:
+          task?.title ||
+          task?.taskTitle ||
+          task?.name ||
+          task?.taskName ||
+          task?.label ||
+          '',
+        startMonth,
+        endMonth,
+      };
+    });
+  };
 
   // Calculate research duration automatically
   useEffect(() => {
@@ -326,6 +373,7 @@ const NewResearch = () => {
             ? data.partners
             : [{ name: '', email: '', institution: '', country: '' }],
           requiredDocumentsChecklist: data.requiredDocumentsChecklist || {},
+          requiredDocumentsFiles: data.requiredDocumentsFiles || {},
           digitalSignature: data.digitalSignature || { signed: false, date: '', signer: '' },
           expectedResponseDate: timestampToDisplayDate(data.expectedResponseDate),
           notes: data.notes || '',
@@ -335,7 +383,13 @@ const NewResearch = () => {
           detailedDescription: data.detailedDescription || '',
           significanceInnovation: data.significanceInnovation || '',
           applicability: data.applicability || '',
-          workPlanTasks: data.workPlanTasks || []
+          workPlanTasks: normalizeWorkPlanTasks(
+            data.workPlanTasks ||
+            data.workPlan ||
+            data.ganttTasks ||
+            data.tasks ||
+            []
+          )
         }));
 
         setHasPartners(Boolean(data.partners && data.partners.length > 0));
@@ -561,14 +615,40 @@ const NewResearch = () => {
     });
   };
 
-  const handleDocumentChecklistChange = (document, checked) => {
-    setFormData(prev => ({
+  const handleRequiredDocumentUpload = (documentName, selectedFiles) => {
+    const files = Array.from(selectedFiles || []);
+    if (files.length === 0) return;
+
+    setFormData((prev) => ({
       ...prev,
+      requiredDocumentsFiles: {
+        ...prev.requiredDocumentsFiles,
+        [documentName]: [...(prev.requiredDocumentsFiles?.[documentName] || []), ...files],
+      },
       requiredDocumentsChecklist: {
         ...prev.requiredDocumentsChecklist,
-        [document]: checked
-      }
+        [documentName]: true,
+      },
     }));
+  };
+
+  const handleRemoveRequiredDocumentFile = (documentName, fileIndex) => {
+    setFormData((prev) => {
+      const currentFiles = [...(prev.requiredDocumentsFiles?.[documentName] || [])];
+      currentFiles.splice(fileIndex, 1);
+      const nextRequiredDocumentsFiles = {
+        ...(prev.requiredDocumentsFiles || {}),
+        [documentName]: currentFiles,
+      };
+      return {
+        ...prev,
+        requiredDocumentsFiles: nextRequiredDocumentsFiles,
+        requiredDocumentsChecklist: {
+          ...prev.requiredDocumentsChecklist,
+          [documentName]: currentFiles.length > 0,
+        },
+      };
+    });
   };
 
   const handlePartnerChange = (index, field, value) => {
@@ -715,6 +795,11 @@ const NewResearch = () => {
 
       // Prepare research data
       const existingStatus = previousResearchRef.current?.status;
+      const existingHasPatent = previousResearchRef.current?.hasPatent;
+      const existingCreatedAt = previousResearchRef.current?.createdAt;
+      const existingSubmissionDate = previousResearchRef.current?.submissionDate;
+      const existingIsNew = previousResearchRef.current?.isNew;
+      const existingApprovedBudget = previousResearchRef.current?.approvedBudget;
       const existingResearcherName = previousResearchRef.current?.researcherName || '';
       const finalResearcherId = isEdit && userRole === 'ADMIN' && existingResearcherId
         ? existingResearcherId
@@ -722,6 +807,12 @@ const NewResearch = () => {
       const finalResearcherName = isEdit && userRole === 'ADMIN' && existingResearcherName
         ? existingResearcherName
         : researcherName;
+      const requiredDocumentsChecklistFromFiles = requiredDocuments.reduce((acc, docName) => {
+        const filesForDoc = formData.requiredDocumentsFiles?.[docName] || [];
+        acc[docName] = filesForDoc.length > 0;
+        return acc;
+      }, {});
+
       const researchData = {
         // פרטים כלליים
         projectTitle: formData.projectTitle,
@@ -752,7 +843,8 @@ const NewResearch = () => {
         partners: hasPartners ? formData.partners.filter(p => p.name || p.email || p.institution || p.country) || [] : [],
         
         // מסמכים (הקישורים עצמם יעודכנו לאחר העלאת הקבצים)
-        requiredDocumentsChecklist: formData.requiredDocumentsChecklist || {},
+        requiredDocumentsChecklist: requiredDocumentsChecklistFromFiles,
+        requiredDocumentsFiles: previousResearchRef.current?.requiredDocumentsFiles || {},
         
         // חתימה
         digitalSignature: formData.digitalSignature || { signed: false, signer: '', date: null },
@@ -770,17 +862,20 @@ const NewResearch = () => {
         applicability: formData.applicability || '',
         
         // תוכנית עבודה
-        workPlanTasks: formData.workPlanTasks || [],
+        workPlanTasks: normalizeWorkPlanTasks(formData.workPlanTasks || []),
         
         // סטטוס
         status: isEdit ? (existingStatus || 'pending') : 'pending',
-        hasPatent: false,
+        hasPatent: isEdit ? Boolean(existingHasPatent) : false,
+        approvedBudget: isEdit ? (existingApprovedBudget ?? null) : null,
         
         // תאריכים
-        submissionDate: researchStartDate || serverTimestamp(),
-        createdAt: serverTimestamp(),
+        submissionDate: isEdit
+          ? (existingSubmissionDate || researchStartDate || serverTimestamp())
+          : (researchStartDate || serverTimestamp()),
+        createdAt: isEdit ? (existingCreatedAt || serverTimestamp()) : serverTimestamp(),
         updatedAt: serverTimestamp(),
-        isNew: true
+        isNew: isEdit ? Boolean(existingIsNew) : true
       };
 
       console.log('Research data prepared:', researchData);
@@ -798,8 +893,9 @@ const NewResearch = () => {
       }
 
       // Upload files after document creation
-      let proposalFileUrl = '';
-      let officialDocsUrls = [];
+      let proposalFileUrl = previousResearchRef.current?.researchProposalFileUrl || '';
+      let officialDocsUrls = [...(previousResearchRef.current?.officialDocuments || [])];
+      let requiredDocumentsFilesUrls = { ...(previousResearchRef.current?.requiredDocumentsFiles || {}) };
       
       if (docId && formData.researchProposalFile) {
         try {
@@ -817,13 +913,15 @@ const NewResearch = () => {
       if (docId && formData.officialDocuments && formData.officialDocuments.length > 0) {
         try {
           console.log('Uploading official documents...');
+          const uploadedOfficialDocs = [];
           for (let idx = 0; idx < formData.officialDocuments.length; idx++) {
             const file = formData.officialDocuments[idx];
             const fileRef = ref(storage, `researchProposals/${docId}/official/${Date.now()}-${idx}-${file.name}`);
             await uploadBytes(fileRef, file);
             const url = await getDownloadURL(fileRef);
-            officialDocsUrls.push(url);
+            uploadedOfficialDocs.push(url);
           }
+          officialDocsUrls = [...officialDocsUrls, ...uploadedOfficialDocs];
           console.log('Official documents uploaded:', officialDocsUrls.length);
         } catch (fileError) {
           console.error('Error uploading official documents:', fileError);
@@ -831,13 +929,62 @@ const NewResearch = () => {
         }
       }
 
+      // Upload files per required document category (supports multiple files per category).
+      if (docId) {
+        try {
+          const nextRequiredDocumentsFiles = {};
+          for (const docName of requiredDocuments) {
+            const docFiles = formData.requiredDocumentsFiles?.[docName] || [];
+            const uploadedOrExisting = [];
+
+            for (let idx = 0; idx < docFiles.length; idx++) {
+              const fileItem = docFiles[idx];
+
+              // Keep existing metadata entries when editing.
+              if (fileItem && typeof fileItem === 'object' && fileItem.url) {
+                uploadedOrExisting.push(fileItem);
+                continue;
+              }
+
+              if (fileItem instanceof File) {
+                const safeDocName = encodeURIComponent(docName);
+                const fileRef = ref(
+                  storage,
+                  `researchProposals/${docId}/required/${safeDocName}/${Date.now()}-${idx}-${fileItem.name}`
+                );
+                await uploadBytes(fileRef, fileItem);
+                const url = await getDownloadURL(fileRef);
+                uploadedOrExisting.push({
+                  name: fileItem.name,
+                  url,
+                  uploadedAt: new Date().toISOString(),
+                });
+              }
+            }
+
+            nextRequiredDocumentsFiles[docName] = uploadedOrExisting;
+          }
+
+          requiredDocumentsFilesUrls = nextRequiredDocumentsFiles;
+        } catch (requiredDocsError) {
+          console.error('Error uploading required document files:', requiredDocsError);
+        }
+      }
+
       // Update document with file URLs if any files were uploaded
-      if (docId && (proposalFileUrl || officialDocsUrls.length > 0)) {
+      if (docId && (proposalFileUrl || officialDocsUrls.length > 0 || Object.keys(requiredDocumentsFilesUrls).length > 0)) {
         try {
           console.log('Updating document with file URLs...');
+          const nextRequiredChecklist = requiredDocuments.reduce((acc, docName) => {
+            acc[docName] = (requiredDocumentsFilesUrls[docName] || []).length > 0;
+            return acc;
+          }, {});
+
           await updateDoc(doc(db, 'researchProposals', docId), {
             researchProposalFileUrl: proposalFileUrl || null,
             officialDocuments: officialDocsUrls,
+            requiredDocumentsFiles: requiredDocumentsFilesUrls,
+            requiredDocumentsChecklist: nextRequiredChecklist,
             updatedAt: serverTimestamp(),
           });
           console.log('Document updated with file URLs');
@@ -1296,7 +1443,8 @@ const NewResearch = () => {
             formData={formData}
             handleChange={handleChange}
             handleFileUpload={handleFileUpload}
-            handleDocumentChecklistChange={handleDocumentChecklistChange}
+            handleRequiredDocumentUpload={handleRequiredDocumentUpload}
+            handleRemoveRequiredDocumentFile={handleRemoveRequiredDocumentFile}
             requiredDocuments={requiredDocuments}
           />
 

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
 import DetailModal from '../components/DetailModal';
+import { shouldShowNewBadge } from '../utils/newBadge';
 import './Research.css';
 
 const Research = () => {
@@ -332,7 +333,9 @@ const Research = () => {
             className="research-card"
             onClick={() => handleResearchClick(research.id)}
           >
-            {research.isNew && <span className="new-badge">{t('newBadge', 'חדש!')}</span>}
+            {shouldShowNewBadge(research.isNew, research.submissionDate) && (
+              <span className="new-badge">{t('newBadge', 'חדש!')}</span>
+            )}
             <h3 className="research-title">{research.title}</h3>
             <p className="research-researcher">{research.researcher}</p>
             <button className={`status-button ${getStatusClass(research.status)}`}>

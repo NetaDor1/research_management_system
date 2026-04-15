@@ -70,8 +70,13 @@ const WorkPlanSection = ({ initialTasks = [], onTasksChange, readOnly = false })
     }));
   };
 
-  // Filter out empty tasks (tasks without title)
-  const validTasks = tasks.filter(task => task.title && task.title.trim() !== '');
+  // Normalize tasks for preview and support legacy task title fields.
+  const validTasks = tasks
+    .map((task) => ({
+      ...task,
+      title: task?.title || task?.taskTitle || task?.name || task?.taskName || '',
+    }))
+    .filter(task => task.title && task.title.trim() !== '');
 
   return (
     <div className="work-plan-section">

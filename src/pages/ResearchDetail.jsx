@@ -36,6 +36,10 @@ const ResearchDetail = () => {
   const [linkedArticles, setLinkedArticles] = useState([]);
   const [linkedArticlesLoading, setLinkedArticlesLoading] = useState(true);
   const [linkedArticlesError, setLinkedArticlesError] = useState('');
+  const [proposalStatus, setProposalStatus] = useState('pending');
+  const [approvedBudgetInput, setApprovedBudgetInput] = useState('');
+  const [approvedBudgetComponentsInput, setApprovedBudgetComponentsInput] = useState({});
+  const [savingProposalDecision, setSavingProposalDecision] = useState(false);
 
   useEffect(() => {
     const fetchResearch = async () => {
@@ -107,6 +111,33 @@ const ResearchDetail = () => {
 
     return () => unsubscribe();
   }, [id]);
+
+  useEffect(() => {
+    if (!researchData) return;
+    setProposalStatus(researchData.status || 'pending');
+    const requestedComponents = researchData.budgetComponents || {};
+    const existingApprovedComponents = researchData.approvedBudgetComponents || {};
+    const nextApprovedComponents = {};
+    Object.keys(requestedComponents).forEach((key) => {
+      const currentValue = existingApprovedComponents[key];
+      nextApprovedComponents[key] =
+        currentValue !== undefined && currentValue !== null
+          ? String(currentValue)
+          : String(requestedComponents[key] ?? '');
+    });
+    setApprovedBudgetComponentsInput(nextApprovedComponents);
+  }, [researchData]);
+
+  useEffect(() => {
+    const requestedComponents = researchData?.budgetComponents || {};
+    const total = Object.keys(requestedComponents).reduce((sum, key) => {
+      const normalized = String(approvedBudgetComponentsInput[key] ?? '').replace(/,/g, '').trim();
+      if (!normalized) return sum;
+      const n = Number(normalized);
+      return Number.isNaN(n) ? sum : sum + n;
+    }, 0);
+    setApprovedBudgetInput(String(total));
+  }, [approvedBudgetComponentsInput, researchData]);
 
   useEffect(() => {
     if (!id || !db) return;
@@ -191,6 +222,98 @@ const ResearchDetail = () => {
       link,
       eventKey
     });
+  };
+
+  const handleSaveProposalDecision = async () => {
+    if (!isAdmin() || !id || !db || !researchData) return;
+
+    const shouldSetApprovedBudget = proposalStatus === 'awarded';
+    let parsedApprovedBudget = null;
+
+    const requestedComponents = researchData.budgetComponents || {};
+    const approvedBudgetComponentsPayload = {};
+    let approvedComponentsTotal = 0;
+
+    Object.keys(requestedComponents).forEach((componentKey) => {
+      const rawValue = approvedBudgetComponentsInput[componentKey];
+      const normalized = String(rawValue || '').replace(/,/g, '').trim();
+      if (!normalized) {
+        approvedBudgetComponentsPayload[componentKey] = null;
+        return;
+      }
+      const parsed = Number(normalized);
+      if (Number.isNaN(parsed) || parsed < 0) {
+        approvedBudgetComponentsPayload[componentKey] = NaN;
+        return;
+      }
+      approvedBudgetComponentsPayload[componentKey] = parsed;
+      approvedComponentsTotal += parsed;
+    });
+
+    const hasInvalidApprovedComponent = Object.values(approvedBudgetComponentsPayload).some(
+      (value) => Number.isNaN(value)
+    );
+    if (hasInvalidApprovedComponent) {
+      alert('יש להזין סכומים תקינים (מספרים חיוביים או 0) בכל רכיבי התקציב שהוזנו.');
+      return;
+    }
+
+    if (shouldSetApprovedBudget) {
+      parsedApprovedBudget = approvedComponentsTotal;
+    }
+
+    setSavingProposalDecision(true);
+    try {
+      const payload = {
+        status: proposalStatus,
+        approvedBudget: shouldSetApprovedBudget ? parsedApprovedBudget : null,
+        approvedBudgetComponents: approvedBudgetComponentsPayload,
+        updatedAt: serverTimestamp(),
+      };
+
+      await updateDoc(doc(db, 'researchProposals', id), payload);
+
+      if (researchData.researcherId) {
+        const titleByStatus =
+          proposalStatus === 'awarded'
+            ? 'הצעת המחקר אושרה'
+            : proposalStatus === 'rejected'
+              ? 'הצעת המחקר נדחתה'
+              : 'סטטוס הצעת מחקר עודכן';
+
+        const messageByStatus =
+          proposalStatus === 'awarded'
+            ? `הצעת המחקר "${researchData.projectTitle || researchData.title || ''}" אושרה. תקציב שאושר: ${parsedApprovedBudget?.toLocaleString('he-IL')} ₪`
+            : proposalStatus === 'rejected'
+              ? `הצעת המחקר "${researchData.projectTitle || researchData.title || ''}" נדחתה.`
+              : `סטטוס הצעת המחקר "${researchData.projectTitle || researchData.title || ''}" עודכן להמתנה.`;
+
+        await createNotification({
+          userId: researchData.researcherId,
+          title: titleByStatus,
+          message: messageByStatus,
+          type: 'research_status',
+          entityType: 'research',
+          entityId: id,
+          link: `/research/${id}`,
+          eventKey: `research_status:${id}:${proposalStatus}:${Date.now()}`,
+        });
+      }
+
+      setResearchData((prev) => ({
+        ...prev,
+        status: proposalStatus,
+        approvedBudget: shouldSetApprovedBudget ? parsedApprovedBudget : null,
+        approvedBudgetComponents: approvedBudgetComponentsPayload,
+      }));
+
+      alert('סטטוס ההצעה עודכן בהצלחה.');
+    } catch (err) {
+      console.error('Error updating proposal decision:', err);
+      alert(`שגיאה בעדכון סטטוס ההצעה: ${err.message || 'שגיאה לא ידועה'}`);
+    } finally {
+      setSavingProposalDecision(false);
+    }
   };
 
   // Handle adding a new task
@@ -651,6 +774,15 @@ const ResearchDetail = () => {
 
         {!loading && !error && researchData && (
           <div style={{ direction: 'rtl', textAlign: 'right' }}>
+            {/*
+              Edit permissions:
+              - Admin can always edit.
+              - Researcher can edit only until proposal is approved (awarded).
+            */}
+            {(() => {
+              const canEditResearch =
+                isAdmin() || (userRole === 'RESEARCHER' && researchData.status !== 'awarded');
+              return (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
               <h1 style={{ margin: 0, color: '#333' }}>פרטי מחקר</h1>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -670,7 +802,7 @@ const ResearchDetail = () => {
                 >
                   {t('exportPdf', 'ייצוא ל-PDF')}
                 </button>
-                {isAdmin() && (
+                {canEditResearch && (
                   <button
                     onClick={() => navigate(`/research/new?edit=${id}`)}
                     style={{
@@ -689,8 +821,140 @@ const ResearchDetail = () => {
                 )}
               </div>
             </div>
+              );
+            })()}
 
             <ResearchInfoSection researchData={researchData} />
+            {isAdmin() && (
+              <div
+                style={{
+                  background: '#f9f9f9',
+                  padding: '24px',
+                  borderRadius: '8px',
+                  marginBottom: '20px',
+                  border: '1px solid #e2e8f0',
+                }}
+              >
+                <h2 style={{ marginTop: 0, marginBottom: '16px', color: '#667eea' }}>
+                  אישור הצעת מחקר ומימון
+                </h2>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                    gap: '16px',
+                    alignItems: 'end',
+                  }}
+                >
+                  <div>
+                    <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '6px', color: '#666' }}>
+                      סטטוס הצעה
+                    </label>
+                    <select
+                      value={proposalStatus}
+                      onChange={(e) => setProposalStatus(e.target.value)}
+                      style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
+                    >
+                      <option value="pending">בהמתנה</option>
+                      <option value="awarded">מאושר</option>
+                      <option value="rejected">נדחה</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '6px', color: '#666' }}>
+                      תקציב שהתקבל (₪)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={approvedBudgetInput}
+                      readOnly
+                      disabled
+                      placeholder="מחושב אוטומטית מסכומי הרכיבים"
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        borderRadius: '6px',
+                        border: '1px solid #ddd',
+                        background: '#f1f5f9',
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <button
+                      type="button"
+                      onClick={handleSaveProposalDecision}
+                      disabled={savingProposalDecision}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        background: savingProposalDecision ? '#94a3b8' : '#2b6cb0',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: savingProposalDecision ? 'not-allowed' : 'pointer',
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      {savingProposalDecision ? 'שומר...' : 'שמור החלטה'}
+                    </button>
+                  </div>
+                </div>
+                {Object.keys(researchData.budgetComponents || {}).length > 0 && (
+                  <div style={{ marginTop: '18px' }}>
+                    <h3 style={{ marginTop: 0, marginBottom: '10px', color: '#475569', fontSize: '16px' }}>
+                      רכיבי תקציב: מבוקש מול התקבל
+                    </h3>
+                    <div style={{ display: 'grid', gap: '10px' }}>
+                      {Object.entries(researchData.budgetComponents || {}).map(([componentKey, requestedValue]) => (
+                        <div
+                          key={componentKey}
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'minmax(150px, 1.5fr) minmax(120px, 1fr) minmax(140px, 1fr)',
+                            gap: '10px',
+                            alignItems: 'center',
+                            background: '#fff',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            padding: '10px',
+                          }}
+                        >
+                          <div style={{ fontWeight: 'bold', color: '#334155' }}>{componentKey}</div>
+                          <div style={{ color: '#334155' }}>
+                            מבוקש: {Number(requestedValue || 0).toLocaleString('he-IL')}
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={approvedBudgetComponentsInput[componentKey] ?? ''}
+                            onChange={(e) =>
+                              setApprovedBudgetComponentsInput((prev) => ({
+                                ...prev,
+                                [componentKey]: e.target.value,
+                              }))
+                            }
+                            placeholder="התקבל"
+                            style={{
+                              width: '100%',
+                              padding: '8px',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              background: proposalStatus === 'awarded' ? '#fff' : '#f8fafc',
+                            }}
+                            disabled={proposalStatus !== 'awarded'}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <ResearchPeriodSection researchData={researchData} />
             <BudgetSection researchData={researchData} />
             <PartnersSection researchData={researchData} />
@@ -772,17 +1036,35 @@ const ResearchDetail = () => {
                 </div>
               </div>
             )}
-            <div id="research-tasks">
-              <TasksSection
-                tasks={tasks}
-                researchProposalId={id}
-                isAdmin={isAdmin()}
-                onAddTask={handleAddTask}
-                onDeleteTask={handleDeleteTask}
-                onSaveEditTask={handleEditTask}
-                uploading={uploading}
-              />
-            </div>
+            {researchData.status === 'awarded' ? (
+              <div id="research-tasks">
+                <TasksSection
+                  tasks={tasks}
+                  researchProposalId={id}
+                  isAdmin={isAdmin()}
+                  onAddTask={handleAddTask}
+                  onDeleteTask={handleDeleteTask}
+                  onSaveEditTask={handleEditTask}
+                  uploading={uploading}
+                />
+              </div>
+            ) : (
+              <div
+                id="research-tasks"
+                style={{
+                  background: '#f9f9f9',
+                  padding: '30px',
+                  borderRadius: '8px',
+                  marginBottom: '20px',
+                  border: '1px solid #e2e8f0',
+                }}
+              >
+                <h2 style={{ marginTop: 0, marginBottom: '12px', color: '#667eea' }}>משימות והגשות</h2>
+                <p style={{ margin: 0, color: '#555', lineHeight: 1.6 }}>
+                  ניתן לחלק משימות ולהגיש מסמכים רק לאחר שהמחקר מאושר (זכה).
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

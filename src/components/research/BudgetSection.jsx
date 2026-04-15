@@ -63,29 +63,57 @@ const BudgetSection = ({ researchData }) => {
             {formatCurrency(researchData.convertedBudget, 'ILS')}
           </span>
         </div>
+
+        <div>
+          <label style={{ 
+            display: 'block', 
+            fontWeight: 'bold', 
+            marginBottom: '5px',
+            color: '#666'
+          }}>
+            תקציב שאושר:
+          </label>
+          <span style={{ fontSize: '16px' }}>
+            {researchData.approvedBudget !== undefined && researchData.approvedBudget !== null
+              ? formatCurrency(researchData.approvedBudget, 'ILS')
+              : 'לא צוין'}
+          </span>
+        </div>
       </div>
 
       {researchData.budgetComponents && Object.keys(researchData.budgetComponents).length > 0 && (
         <div style={{ marginTop: '20px' }}>
-          <h3 style={{ marginBottom: '15px', color: '#666' }}>רכיבי תקציב:</h3>
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-            gap: '15px'
-          }}>
-            {Object.entries(researchData.budgetComponents).map(([key, value]) => (
-              <div key={key} style={{
-                padding: '15px',
-                background: '#fff',
-                borderRadius: '4px',
-                border: '1px solid #ddd'
-              }}>
-                <span style={{ fontWeight: 'bold', color: '#666' }}>{key}:</span>
-                <span style={{ marginRight: '10px' }}>
-                  {formatCurrency(value, researchData.currency)}
-                </span>
-              </div>
-            ))}
+          <h3 style={{ marginBottom: '15px', color: '#666' }}>רכיבי תקציב (מבוקש / התקבל):</h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'right', padding: '10px', borderBottom: '1px solid #ddd' }}>רכיב</th>
+                  <th style={{ textAlign: 'right', padding: '10px', borderBottom: '1px solid #ddd' }}>מבוקש</th>
+                  <th style={{ textAlign: 'right', padding: '10px', borderBottom: '1px solid #ddd' }}>התקבל</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(researchData.budgetComponents).map(([key, value]) => {
+                  const approvedValue = researchData.approvedBudgetComponents?.[key];
+                  return (
+                    <tr key={key}>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9', fontWeight: 'bold', color: '#475569' }}>
+                        {key}
+                      </td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9' }}>
+                        {formatCurrency(value, researchData.currency)}
+                      </td>
+                      <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9' }}>
+                        {approvedValue !== undefined && approvedValue !== null
+                          ? formatCurrency(approvedValue, researchData.currency)
+                          : 'לא צוין'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
 import DetailModal from '../components/DetailModal';
+import { shouldShowNewBadge } from '../utils/newBadge';
 import './Research.css';
 
 const Patents = () => {
@@ -305,7 +306,9 @@ const Patents = () => {
             className="research-card"
             onClick={() => handlePatentClick(patent.id)}
           >
-            {patent.isNew && <span className="new-badge">{t('newBadge', 'חדש!')}</span>}
+            {shouldShowNewBadge(patent.isNew, patent.registrationDate) && (
+              <span className="new-badge">{t('newBadge', 'חדש!')}</span>
+            )}
             <h3 className="research-title">{patent.title}</h3>
             <p className="research-researcher">{patent.researcher}</p>
             <button className={`status-button ${getStatusClass(patent.status)}`}>
