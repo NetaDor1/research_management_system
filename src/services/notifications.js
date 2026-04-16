@@ -9,7 +9,8 @@ export const createNotification = async ({
   entityType = '',
   entityId = '',
   link = '',
-  eventKey = ''
+  eventKey = '',
+  targetRole = ''
 }) => {
   if (!db || !userId) return null;
 
@@ -25,6 +26,8 @@ export const createNotification = async ({
     read: false,
     createdAt: serverTimestamp()
   };
+
+  if (targetRole) payload.targetRole = targetRole;
 
   const docRef = await addDoc(collection(db, 'notifications'), payload);
   return docRef.id;

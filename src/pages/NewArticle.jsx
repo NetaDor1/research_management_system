@@ -236,6 +236,23 @@ const NewArticle = () => {
         }
       }
 
+      // ── Notify admin when RESEARCHER creates/edits article ──────────────────────
+      if (userRole === 'RESEARCHER') {
+        await createNotification({
+          userId: 'ADMIN',
+          targetRole: 'ADMIN',
+          title: editId ? 'חוקר עדכן מאמר' : 'חוקר הוסיף מאמר חדש',
+          message: editId
+            ? `${user?.name || 'חוקר'} עדכן/ה את המאמר "${formData.title}".`
+            : `${user?.name || 'חוקר'} הוסיף/ה מאמר חדש: "${formData.title}".`,
+          type: editId ? 'researcher_edit_article' : 'researcher_new_article',
+          entityType: 'article',
+          entityId: docId,
+          link: `/articles/${docId}`,
+          eventKey: `${editId ? 'researcher_edit_article' : 'researcher_new_article'}:${docId}:${Date.now()}`
+        });
+      }
+
       if (userRole === 'ADMIN') {
         let targetResearcherId = existingResearcherId;
         if (!editId && formData.researchProposalId) {

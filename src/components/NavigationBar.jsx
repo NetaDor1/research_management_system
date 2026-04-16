@@ -79,36 +79,75 @@ const NavigationBar = () => {
     return () => unsubscribe();
   }, [user?.id]);
 
-  // Admin: unread messages from researchers
+  // Admin: unread messages from researchers + unread replies on admin-sent messages
   useEffect(() => {
     if (!db || !isAdmin()) return undefined;
-    const q = query(collection(db, 'researcherMessages'), where('read', '==', false));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => setUnreadMessages(snapshot.size),
-      () => setUnreadMessages(0)
+
+    // Researcher→admin messages not yet read by admin
+    const qReceived = query(collection(db, 'researcherMessages'), where('read', '==', false));
+    // Admin→researcher messages where researcher has replied and admin hasn't read the reply
+    const qSentReplied = query(
+      collection(db, 'researcherMessages'),
+      where('fromAdmin', '==', true),
+      where('researcherRead', '==', false)
     );
-    return () => unsubscribe();
+
+    let receivedCount = 0;
+    let repliedCount = 0;
+    const update = () => setUnreadMessages(receivedCount + repliedCount);
+
+    const unsubReceived = onSnapshot(qReceived, (snap) => {
+      receivedCount = snap.docs.filter((d) => d.data().fromAdmin !== true).length;
+      update();
+    }, () => {});
+    const unsubReplied = onSnapshot(qSentReplied, (snap) => {
+      // Only count those that actually have replies
+      repliedCount = snap.docs.filter((d) => (d.data().replies || []).length > 0).length;
+      update();
+    }, () => {});
+
+    return () => { unsubReceived(); unsubReplied(); };
   }, [isAdmin]);
 
-  // Researcher: unread admin replies in outbox
+  // Researcher: unread admin replies in outbox + unread incoming messages from admin
   useEffect(() => {
     if (!db || !user?.id || isAdmin()) return undefined;
-    const q = query(
+    const qOutbox = query(
       collection(db, 'researcherMessages'),
       where('fromUserId', '==', user.id),
       where('researcherRead', '==', false)
     );
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => setUnreadMessages(snapshot.size),
-      () => setUnreadMessages(0)
+    const qIncoming = query(
+      collection(db, 'researcherMessages'),
+      where('fromAdmin', '==', true),
+      where('toUserId', '==', user.id),
+      where('read', '==', false)
     );
-    return () => unsubscribe();
+    let outboxCount = 0;
+    let incomingCount = 0;
+    const update = () => setUnreadMessages(outboxCount + incomingCount);
+    const unsubOutbox = onSnapshot(qOutbox, (s) => { outboxCount = s.size; update(); }, () => {});
+    const unsubIncoming = onSnapshot(qIncoming, (s) => { incomingCount = s.size; update(); }, () => {});
+    return () => { unsubOutbox(); unsubIncoming(); };
   }, [user?.id, isAdmin]);
+
+  const totalUnread = unreadCount + unreadMessages;
 
   return (
     <>
+      {/* Bell Button */}
+      <button
+        className="bell-button"
+        onClick={handleNavigate('/notifications')}
+        aria-label="התראות"
+        type="button"
+      >
+        <span style={{ fontSize: '22px', lineHeight: 1 }}>🔔</span>
+        {totalUnread > 0 && (
+          <span className="bell-badge">{totalUnread > 99 ? '99+' : totalUnread}</span>
+        )}
+      </button>
+
       {/* Menu Button */}
       <button 
         className={`menu-button ${isOpen ? 'active' : ''}`}
@@ -151,22 +190,7 @@ const NavigationBar = () => {
                 onClick={handleNavigate(item.path)}
                 type="button"
               >
-                <span className="nav-label">
-                  {item.label}
-                  {item.path === '/notifications' && (unreadCount + unreadMessages) > 0 && (
-                    <span style={{
-                      marginRight: '8px',
-                      background: '#e53e3e',
-                      color: 'white',
-                      borderRadius: '999px',
-                      padding: '2px 8px',
-                      fontSize: '12px',
-                      fontWeight: 'bold'
-                    }}>
-                      {unreadCount + unreadMessages}
-                    </span>
-                  )}
-                </span>
+                <span className="nav-label">{item.label}</span>
               </button>
             </li>
           ))}

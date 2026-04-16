@@ -415,60 +415,121 @@ const Home = () => {
     };
   }, [userRole, user?.id]);
 
+  // ─── Admin: deadline reminders for all researchers (7 days + 2 days) ──────────
+  useEffect(() => {
+    const ensureAdminDueSoonNotifications = async () => {
+      if (!db || userRole !== 'ADMIN' || tasks.length === 0) return;
+
+      const now = new Date();
+      const inSevenDays = new Date(); inSevenDays.setDate(now.getDate() + 7);
+      const inTwoDays  = new Date(); inTwoDays.setDate(now.getDate() + 2);
+
+      // Collect candidate tasks for both windows
+      const candidateTasks = tasks.filter((task) => {
+        if (!task.dueDate) return false;
+        const due = new Date(task.dueDate);
+        return !isNaN(due.getTime()) && due >= now && due <= inSevenDays;
+      });
+      if (candidateTasks.length === 0) return;
+
+      const existingSnap = await getDocs(
+        query(collection(db, 'notifications'), where('targetRole', '==', 'ADMIN'), where('type', '==', 'task_due_soon'))
+      );
+      const existingKeys = new Set(existingSnap.docs.map((d) => d.data().eventKey).filter(Boolean));
+
+      const toCreate = [];
+      candidateTasks.forEach((task) => {
+        const due = new Date(task.dueDate);
+        const dueLabel = due.toLocaleDateString('he-IL');
+        const link = task.researchProposalId
+          ? `/research/${task.researchProposalId}#tasks`
+          : task.patentId ? `/patents/${task.patentId}` : '';
+
+        // 7-day reminder
+        const key7 = `admin_task_due_7days:${task.id}:${task.dueDate}`;
+        if (!existingKeys.has(key7)) {
+          toCreate.push(createNotification({
+            userId: 'ADMIN', targetRole: 'ADMIN',
+            title: 'תזכורת: מועד הגשה בעוד שבוע',
+            message: `המשימה "${task.title}" מגיעה למועד ההגשה בעוד כשבוע (${dueLabel}).`,
+            type: 'task_due_soon', entityType: 'task', entityId: task.id, link, eventKey: key7
+          }));
+        }
+
+        // 2-day reminder (only if within 2 days)
+        if (due <= inTwoDays) {
+          const key2 = `admin_task_due_2days:${task.id}:${task.dueDate}`;
+          if (!existingKeys.has(key2)) {
+            toCreate.push(createNotification({
+              userId: 'ADMIN', targetRole: 'ADMIN',
+              title: 'תזכורת: מועד הגשה מחר-מחרתיים',
+              message: `המשימה "${task.title}" מגיעה למועד ההגשה בקרוב מאוד (${dueLabel}).`,
+              type: 'task_due_soon', entityType: 'task', entityId: task.id, link, eventKey: key2
+            }));
+          }
+        }
+      });
+
+      await Promise.all(toCreate);
+    };
+    ensureAdminDueSoonNotifications();
+  }, [tasks, userRole]);
+
+  // ─── Researcher: deadline reminders (7 days + 2 days) ────────────────────────
   useEffect(() => {
     const ensureDueSoonNotifications = async () => {
       if (!db || userRole !== 'RESEARCHER' || !user?.id || tasks.length === 0) return;
 
       const now = new Date();
-      const inTwoDays = new Date();
-      inTwoDays.setDate(now.getDate() + 2);
+      const inSevenDays = new Date(); inSevenDays.setDate(now.getDate() + 7);
+      const inTwoDays  = new Date(); inTwoDays.setDate(now.getDate() + 2);
 
-      const dueSoonTasks = tasks.filter((task) => {
-        if (!task.dueDate || task.researcherId !== user.id) return false;
+      const candidateTasks = tasks.filter((task) => {
+        if (!task.dueDate) return false;
         const due = new Date(task.dueDate);
-        if (isNaN(due.getTime())) return false;
-        return due >= now && due <= inTwoDays;
+        return !isNaN(due.getTime()) && due >= now && due <= inSevenDays;
       });
-
-      if (dueSoonTasks.length === 0) return;
+      if (candidateTasks.length === 0) return;
 
       const existingSnap = await getDocs(
-        query(
-          collection(db, 'notifications'),
-          where('userId', '==', user.id),
-          where('type', '==', 'task_due_soon')
-        )
+        query(collection(db, 'notifications'), where('userId', '==', user.id), where('type', '==', 'task_due_soon'))
       );
+      const existingKeys = new Set(existingSnap.docs.map((d) => d.data().eventKey).filter(Boolean));
 
-      const existingKeys = new Set(
-        existingSnap.docs.map((docItem) => docItem.data().eventKey).filter(Boolean)
-      );
+      const toCreate = [];
+      candidateTasks.forEach((task) => {
+        const due = new Date(task.dueDate);
+        const dueLabel = due.toLocaleDateString('he-IL');
+        const link = task.researchProposalId
+          ? `/research/${task.researchProposalId}#tasks`
+          : task.patentId ? `/patents/${task.patentId}` : '';
 
-      await Promise.all(
-        dueSoonTasks.map((task) => {
-          const eventKey = `task_due_soon:${task.id}:${task.dueDate}`;
-          if (existingKeys.has(eventKey)) return Promise.resolve();
-
-          const dueLabel = new Date(task.dueDate).toLocaleDateString('he-IL');
-          const link = task.researchProposalId
-            ? `/research/${task.researchProposalId}#tasks`
-            : task.patentId
-              ? `/patents/${task.patentId}`
-              : '';
-
-          return createNotification({
+        // 7-day reminder
+        const key7 = `task_due_7days:${task.id}:${task.dueDate}`;
+        if (!existingKeys.has(key7)) {
+          toCreate.push(createNotification({
             userId: user.id,
-            title: 'תזכורת: מועד הגשה מתקרב',
-            message: `המשימה "${task.title}" מתקרבת למועד ההגשה (${dueLabel}).`,
-            type: 'task_due_soon',
-            entityType: 'task',
-            entityId: task.id,
-            link,
-            eventKey
-          });
-        })
-      );
+            title: 'תזכורת: מועד הגשה בעוד שבוע',
+            message: `המשימה "${task.title}" מגיעה למועד ההגשה בעוד כשבוע (${dueLabel}).`,
+            type: 'task_due_soon', entityType: 'task', entityId: task.id, link, eventKey: key7
+          }));
+        }
 
+        // 2-day reminder (only if within 2 days)
+        if (due <= inTwoDays) {
+          const key2 = `task_due_2days:${task.id}:${task.dueDate}`;
+          if (!existingKeys.has(key2)) {
+            toCreate.push(createNotification({
+              userId: user.id,
+              title: 'תזכורת: מועד הגשה מחר-מחרתיים',
+              message: `המשימה "${task.title}" מגיעה למועד ההגשה בקרוב מאוד (${dueLabel}).`,
+              type: 'task_due_soon', entityType: 'task', entityId: task.id, link, eventKey: key2
+            }));
+          }
+        }
+      });
+
+      await Promise.all(toCreate);
     };
 
     ensureDueSoonNotifications();

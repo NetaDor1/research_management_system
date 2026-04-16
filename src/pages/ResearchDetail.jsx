@@ -905,9 +905,20 @@ const ResearchDetail = () => {
                 </div>
                 {Object.keys(researchData.budgetComponents || {}).length > 0 && (
                   <div style={{ marginTop: '18px' }}>
-                    <h3 style={{ marginTop: 0, marginBottom: '10px', color: '#475569', fontSize: '16px' }}>
+                    <h3 style={{ marginTop: 0, marginBottom: '6px', fontSize: '16px' }}>
                       רכיבי תקציב: מבוקש מול התקבל
                     </h3>
+                    {isAdmin() && (
+                      <p style={{
+                        margin: '0 0 12px',
+                        fontSize: '13px',
+                      
+                        borderRadius: '6px',
+                        padding: '7px 12px'
+                      }}>
+                        עריכת רכיבי תקציב זמינה רק לאחר שינוי סטטוס ההצעה ל"הצעה מאושרת"
+                      </p>
+                    )}
                     <div style={{ display: 'grid', gap: '10px' }}>
                       {Object.entries(researchData.budgetComponents || {}).map(([componentKey, requestedValue]) => (
                         <div

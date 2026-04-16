@@ -1,3 +1,47 @@
+/* Bell Button */
+.bell-button {
+  position: fixed;
+  top: 20px;
+  right: 86px;
+  z-index: 1001;
+  background: white;
+  border: none;
+  border-radius: 12px;
+  width: 56px;
+  height: 56px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
+  transition: all 0.2s ease;
+  position: fixed;
+}
+
+.bell-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.bell-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: #e53e3e;
+  color: white;
+  border-radius: 999px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  border: 2px solid white;
+}
+
 /* Menu Button */
 .menu-button {
   position: fixed;
@@ -220,6 +264,13 @@
   .menu-button {
     top: 15px;
     right: 15px;
+    width: 48px;
+    height: 48px;
+  }
+
+  .bell-button {
+    top: 15px;
+    right: 73px;
     width: 48px;
     height: 48px;
   }

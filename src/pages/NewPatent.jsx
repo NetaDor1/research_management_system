@@ -553,6 +553,23 @@ const NewPatent = () => {
         }
       }
 
+      // ── Notify admin when RESEARCHER creates/edits patent ───────────────────────
+      if (userRole === 'RESEARCHER') {
+        await createNotification({
+          userId: 'ADMIN',
+          targetRole: 'ADMIN',
+          title: isEdit ? 'חוקר עדכן פטנט' : 'חוקר הוסיף פטנט חדש',
+          message: isEdit
+            ? `${user?.name || 'חוקר'} עדכן/ה את הפטנט "${formData.projectTitle}".`
+            : `${user?.name || 'חוקר'} הוסיף/ה פטנט חדש: "${formData.projectTitle}".`,
+          type: isEdit ? 'researcher_edit_patent' : 'researcher_new_patent',
+          entityType: 'patent',
+          entityId: docId,
+          link: `/patents/${docId}`,
+          eventKey: `${isEdit ? 'researcher_edit_patent' : 'researcher_new_patent'}:${docId}:${Date.now()}`
+        });
+      }
+
       if (userRole === 'ADMIN') {
         let targetResearcherId = existingResearcherId;
         if (!isEdit && formData.researchProposalId) {

@@ -994,6 +994,23 @@ const NewResearch = () => {
         }
       }
 
+      // ── Notify admin when RESEARCHER creates or edits a proposal ────────────────
+      if (userRole === 'RESEARCHER') {
+        await createNotification({
+          userId: 'ADMIN',
+          targetRole: 'ADMIN',
+          title: isEdit ? 'חוקר עדכן הצעת מחקר' : 'חוקר הגיש הצעת מחקר חדשה',
+          message: isEdit
+            ? `${user?.name || 'חוקר'} עדכן/ה את הצעת המחקר "${formData.projectTitle}".`
+            : `${user?.name || 'חוקר'} הגיש/ה הצעת מחקר חדשה: "${formData.projectTitle}".`,
+          type: isEdit ? 'researcher_edit_proposal' : 'researcher_new_proposal',
+          entityType: 'research',
+          entityId: docId,
+          link: `/research/${docId}`,
+          eventKey: `${isEdit ? 'researcher_edit_proposal' : 'researcher_new_proposal'}:${docId}:${Date.now()}`
+        });
+      }
+
       if (isEdit && userRole === 'ADMIN' && existingResearcherId) {
         const previous = previousResearchRef.current || {};
         const notifications = [];
