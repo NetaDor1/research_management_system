@@ -1,4 +1,5 @@
 import React from 'react';
+import { normalizeAcademicYear } from '../../utils/academicYear';
 
 const formatDate = (timestamp) => {
   if (!timestamp) return 'לא צוין';
@@ -20,6 +21,10 @@ const formatDate = (timestamp) => {
 
 const ResearchPeriodSection = ({ researchData }) => {
   if (!researchData) return null;
+  const displayAcademicYear = normalizeAcademicYear(
+    researchData.academicYear,
+    researchData.researchStartDate
+  );
 
   return (
     <div style={{ 
@@ -80,7 +85,7 @@ const ResearchPeriodSection = ({ researchData }) => {
           }}>
             שנה אקדמית:
           </label>
-          <span style={{ fontSize: '16px' }}>{researchData.academicYear || 'לא צוין'}</span>
+          <span style={{ fontSize: '16px' }}>{displayAcademicYear || 'לא צוין'}</span>
         </div>
       </div>
     </div>

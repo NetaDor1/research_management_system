@@ -11,10 +11,13 @@ import ResearchPeriodSection from '../components/research/form/ResearchPeriodSec
 import BudgetSection from '../components/research/form/BudgetSection';
 import PartnersSection from '../components/research/form/PartnersSection';
 import ResearchDescriptionSection from '../components/research/form/ResearchDescriptionSection';
+import BibliographySection from '../components/research/form/BibliographySection';
 import DocumentsSection from '../components/research/form/DocumentsSection';
 import DigitalSignatureSection from '../components/research/form/DigitalSignatureSection';
 import AdditionalInfoSection from '../components/research/form/AdditionalInfoSection';
 import WorkPlanSection from '../components/research/WorkPlanSection';
+import { getHebrewAcademicYearFromDate, normalizeAcademicYear } from '../utils/academicYear';
+import { navigateBackOrFallback } from '../utils/navigation';
 import './Page.css';
 import './Research.css';
 
@@ -120,34 +123,6 @@ const NewResearch = () => {
     'אישור מוסדי'
   ];
 
-  // Helper function to convert Gregorian date to Hebrew academic year
-  const getHebrewAcademicYear = (date) => {
-    const d = new Date(date);
-    const year = d.getFullYear();
-    const month = d.getMonth() + 1;
-    
-    // Academic year starts in October (month 10)
-    let academicYear = year;
-    if (month >= 10) {
-      academicYear = year + 1;
-    }
-    
-    // Convert to Hebrew year (simplified - actual conversion is more complex)
-    const hebrewYear = academicYear - 3760;
-    const hebrewLetters = ['תשפ"א', 'תשפ"ב', 'תשפ"ג', 'תשפ"ד', 'תשפ"ה', 'תשפ"ו', 'תשפ"ז', 'תשפ"ח', 'תשפ"ט', 'תש"צ'];
-    const index = (hebrewYear - 5781) % 10;
-    
-    if (index >= 0 && index < hebrewLetters.length) {
-      return hebrewLetters[index];
-    }
-    
-    // Fallback calculation
-    const baseYear = 5781; // תשפ"א
-    const diff = hebrewYear - baseYear;
-    const letterIndex = diff % 10;
-    return hebrewLetters[letterIndex] || `תשפ"${String.fromCharCode(1488 + letterIndex)}`;
-  };
-
   const [formData, setFormData] = useState({
     projectTitle: '',
     fundName: '',
@@ -165,10 +140,8 @@ const NewResearch = () => {
     convertedBudget: '',
     budgetComponents: {},
     partners: [{ name: '', email: '', institution: '', country: '' }],
-    researchProposalFile: null,
     requiredDocumentsChecklist: {},
     requiredDocumentsFiles: {},
-    officialDocuments: [],
     digitalSignature: { signed: false, date: '', signer: '' },
     expectedResponseDate: '',
     notes: '',
@@ -178,6 +151,14 @@ const NewResearch = () => {
     detailedDescription: '',
     significanceInnovation: '',
     applicability: '',
+    principalInvestigatorName: '',
+    biographicalSummaryName: '',
+    biographicalSummaryPositionTitle: '',
+    bibliographyEducationTraining: [{ institutionLocation: '', degree: '', monthYear: '', fieldOfStudy: '' }],
+    bibliographyPersonalStatement: '',
+    bibliographyPositionsAndHonors: '',
+    bibliographySelectedPublications: '',
+    bibliographyResearchSupport: '',
     workPlanTasks: []
   });
 
@@ -259,7 +240,7 @@ const NewResearch = () => {
           }));
 
           // Calculate academic year
-          const academicYear = getHebrewAcademicYear(start);
+          const academicYear = getHebrewAcademicYearFromDate(start);
           setFormData(prev => ({
             ...prev,
             academicYear: academicYear
@@ -364,7 +345,7 @@ const NewResearch = () => {
           researchStartDate: timestampToDisplayDate(data.researchStartDate),
           researchEndDate: timestampToDisplayDate(data.researchEndDate),
           researchDurationYears: data.researchDurationYears || '',
-          academicYear: data.academicYear || '',
+          academicYear: normalizeAcademicYear(data.academicYear, data.researchStartDate),
           totalBudget: data.totalBudget || '',
           currency: data.currency || 'ILS',
           convertedBudget: data.convertedBudget || '',
@@ -383,6 +364,17 @@ const NewResearch = () => {
           detailedDescription: data.detailedDescription || '',
           significanceInnovation: data.significanceInnovation || '',
           applicability: data.applicability || '',
+          principalInvestigatorName: data.principalInvestigatorName || '',
+          biographicalSummaryName: data.biographicalSummaryName || '',
+          biographicalSummaryPositionTitle: data.biographicalSummaryPositionTitle || '',
+          bibliographyEducationTraining:
+            (Array.isArray(data.bibliographyEducationTraining) && data.bibliographyEducationTraining.length > 0)
+              ? data.bibliographyEducationTraining
+              : [{ institutionLocation: '', degree: '', monthYear: '', fieldOfStudy: '' }],
+          bibliographyPersonalStatement: data.bibliographyPersonalStatement || '',
+          bibliographyPositionsAndHonors: data.bibliographyPositionsAndHonors || '',
+          bibliographySelectedPublications: data.bibliographySelectedPublications || '',
+          bibliographyResearchSupport: data.bibliographyResearchSupport || '',
           workPlanTasks: normalizeWorkPlanTasks(
             data.workPlanTasks ||
             data.workPlan ||
@@ -674,14 +666,42 @@ const NewResearch = () => {
     }));
   };
 
-  const handleFileUpload = (e, type) => {
-    const files = Array.from(e.target.files);
-    if (type === 'official') {
-      setFormData(prev => ({
+  const handleBibliographyEducationChange = (index, field, value) => {
+    setFormData((prev) => {
+      const nextRows = [...(prev.bibliographyEducationTraining || [])];
+      if (!nextRows[index]) {
+        nextRows[index] = { institutionLocation: '', degree: '', monthYear: '', fieldOfStudy: '' };
+      }
+      nextRows[index] = {
+        ...nextRows[index],
+        [field]: value,
+      };
+      return {
         ...prev,
-        officialDocuments: [...prev.officialDocuments, ...files]
-      }));
-    }
+        bibliographyEducationTraining: nextRows,
+      };
+    });
+  };
+
+  const addBibliographyEducationRow = () => {
+    setFormData((prev) => ({
+      ...prev,
+      bibliographyEducationTraining: [
+        ...(prev.bibliographyEducationTraining || []),
+        { institutionLocation: '', degree: '', monthYear: '', fieldOfStudy: '' },
+      ],
+    }));
+  };
+
+  const removeBibliographyEducationRow = (index) => {
+    setFormData((prev) => {
+      const rows = [...(prev.bibliographyEducationTraining || [])];
+      const next = rows.filter((_, i) => i !== index);
+      return {
+        ...prev,
+        bibliographyEducationTraining: next.length > 0 ? next : [{ institutionLocation: '', degree: '', monthYear: '', fieldOfStudy: '' }],
+      };
+    });
   };
 
   const handleDigitalSignature = () => {
@@ -761,6 +781,11 @@ const NewResearch = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (loadingExisting) {
+      alert('הנתונים הקיימים עדיין בטעינה. נסו שוב בעוד רגע.');
+      return;
+    }
     
     if (!validateForm()) {
       alert('יש למלא את כל השדות החובה');
@@ -807,6 +832,23 @@ const NewResearch = () => {
       const finalResearcherName = isEdit && userRole === 'ADMIN' && existingResearcherName
         ? existingResearcherName
         : researcherName;
+      const normalizedFormWorkPlanTasks = normalizeWorkPlanTasks(formData.workPlanTasks || []);
+      const normalizedExistingWorkPlanTasks = normalizeWorkPlanTasks(
+        previousResearchRef.current?.workPlanTasks ||
+        previousResearchRef.current?.workPlan ||
+        previousResearchRef.current?.ganttTasks ||
+        previousResearchRef.current?.tasks ||
+        []
+      );
+      // Guard against accidental reset in edit mode:
+      // if form tasks are empty but existing DB tasks are present, keep existing tasks.
+      const finalWorkPlanTasks = (
+        isEdit &&
+        normalizedFormWorkPlanTasks.length === 0 &&
+        normalizedExistingWorkPlanTasks.length > 0
+      )
+        ? normalizedExistingWorkPlanTasks
+        : normalizedFormWorkPlanTasks;
       const requiredDocumentsChecklistFromFiles = requiredDocuments.reduce((acc, docName) => {
         const filesForDoc = formData.requiredDocumentsFiles?.[docName] || [];
         acc[docName] = filesForDoc.length > 0;
@@ -860,9 +902,17 @@ const NewResearch = () => {
         detailedDescription: formData.detailedDescription || '',
         significanceInnovation: formData.significanceInnovation || '',
         applicability: formData.applicability || '',
+        principalInvestigatorName: formData.principalInvestigatorName || '',
+        biographicalSummaryName: formData.biographicalSummaryName || '',
+        biographicalSummaryPositionTitle: formData.biographicalSummaryPositionTitle || '',
+        bibliographyEducationTraining: formData.bibliographyEducationTraining || [],
+        bibliographyPersonalStatement: formData.bibliographyPersonalStatement || '',
+        bibliographyPositionsAndHonors: formData.bibliographyPositionsAndHonors || '',
+        bibliographySelectedPublications: formData.bibliographySelectedPublications || '',
+        bibliographyResearchSupport: formData.bibliographyResearchSupport || '',
         
         // תוכנית עבודה
-        workPlanTasks: normalizeWorkPlanTasks(formData.workPlanTasks || []),
+        workPlanTasks: finalWorkPlanTasks,
         
         // סטטוס
         status: isEdit ? (existingStatus || 'pending') : 'pending',
@@ -893,41 +943,7 @@ const NewResearch = () => {
       }
 
       // Upload files after document creation
-      let proposalFileUrl = previousResearchRef.current?.researchProposalFileUrl || '';
-      let officialDocsUrls = [...(previousResearchRef.current?.officialDocuments || [])];
       let requiredDocumentsFilesUrls = { ...(previousResearchRef.current?.requiredDocumentsFiles || {}) };
-      
-      if (docId && formData.researchProposalFile) {
-        try {
-          console.log('Uploading proposal file...');
-          const fileRef = ref(storage, `researchProposals/${docId}/proposal/${formData.researchProposalFile.name}`);
-          await uploadBytes(fileRef, formData.researchProposalFile);
-          proposalFileUrl = await getDownloadURL(fileRef);
-          console.log('Proposal file uploaded:', proposalFileUrl);
-        } catch (fileError) {
-          console.error('Error uploading proposal file:', fileError);
-          // Continue even if file upload fails
-        }
-      }
-
-      if (docId && formData.officialDocuments && formData.officialDocuments.length > 0) {
-        try {
-          console.log('Uploading official documents...');
-          const uploadedOfficialDocs = [];
-          for (let idx = 0; idx < formData.officialDocuments.length; idx++) {
-            const file = formData.officialDocuments[idx];
-            const fileRef = ref(storage, `researchProposals/${docId}/official/${Date.now()}-${idx}-${file.name}`);
-            await uploadBytes(fileRef, file);
-            const url = await getDownloadURL(fileRef);
-            uploadedOfficialDocs.push(url);
-          }
-          officialDocsUrls = [...officialDocsUrls, ...uploadedOfficialDocs];
-          console.log('Official documents uploaded:', officialDocsUrls.length);
-        } catch (fileError) {
-          console.error('Error uploading official documents:', fileError);
-          // Continue even if file upload fails
-        }
-      }
 
       // Upload files per required document category (supports multiple files per category).
       if (docId) {
@@ -972,7 +988,7 @@ const NewResearch = () => {
       }
 
       // Update document with file URLs if any files were uploaded
-      if (docId && (proposalFileUrl || officialDocsUrls.length > 0 || Object.keys(requiredDocumentsFilesUrls).length > 0)) {
+      if (docId && Object.keys(requiredDocumentsFilesUrls).length > 0) {
         try {
           console.log('Updating document with file URLs...');
           const nextRequiredChecklist = requiredDocuments.reduce((acc, docName) => {
@@ -981,8 +997,6 @@ const NewResearch = () => {
           }, {});
 
           await updateDoc(doc(db, 'researchProposals', docId), {
-            researchProposalFileUrl: proposalFileUrl || null,
-            officialDocuments: officialDocsUrls,
             requiredDocumentsFiles: requiredDocumentsFilesUrls,
             requiredDocumentsChecklist: nextRequiredChecklist,
             updatedAt: serverTimestamp(),
@@ -1327,23 +1341,11 @@ const NewResearch = () => {
 
         <div class="info-section">
           <h2>מסמכים</h2>
-          <div class="info-row">
-            <span class="info-label">מסמך הצעת המחקר:</span>
-            <span class="info-value">${formData.researchProposalFile ? formData.researchProposalFile.name : '<span class="empty-field">לא הועלה</span>'}</span>
-          </div>
           ${documentsHTML ? `
             <div style="margin-top: 15px;">
               <strong>מסמכים שהוגשו:</strong>
               <ul>
                 ${documentsHTML}
-              </ul>
-            </div>
-          ` : ''}
-          ${formData.officialDocuments.length > 0 ? `
-            <div style="margin-top: 15px;">
-              <strong>מסמכים רשמיים:</strong>
-              <ul>
-                ${formData.officialDocuments.map(doc => `<li>${doc.name}</li>`).join('')}
               </ul>
             </div>
           ` : ''}
@@ -1458,8 +1460,6 @@ const NewResearch = () => {
 
           <DocumentsSection
             formData={formData}
-            handleChange={handleChange}
-            handleFileUpload={handleFileUpload}
             handleRequiredDocumentUpload={handleRequiredDocumentUpload}
             handleRemoveRequiredDocumentFile={handleRemoveRequiredDocumentFile}
             requiredDocuments={requiredDocuments}
@@ -1479,15 +1479,31 @@ const NewResearch = () => {
             expectedDatePickerRef={expectedDatePickerRef}
           />
 
-          <WorkPlanSection
-            initialTasks={formData.workPlanTasks || []}
-            onTasksChange={(tasks) => {
-              setFormData(prev => ({
-                ...prev,
-                workPlanTasks: tasks
-              }));
-            }}
-            readOnly={false}
+          {editId && loadingExisting ? (
+            <div className="form-section">
+              <h2>תוכנית עבודה / Gantt</h2>
+              <p style={{ margin: 0, color: '#64748b' }}>טוען נתוני גאנט קיימים...</p>
+            </div>
+          ) : (
+            <WorkPlanSection
+              initialTasks={formData.workPlanTasks || []}
+              onTasksChange={(tasks) => {
+                setFormData(prev => ({
+                  ...prev,
+                  workPlanTasks: tasks
+                }));
+              }}
+              readOnly={false}
+              suppressParentSync={Boolean(editId && loadingExisting)}
+            />
+          )}
+
+          <BibliographySection
+            formData={formData}
+            handleChange={handleChange}
+            handleBibliographyEducationChange={handleBibliographyEducationChange}
+            addBibliographyEducationRow={addBibliographyEducationRow}
+            removeBibliographyEducationRow={removeBibliographyEducationRow}
           />
 
           {/* Form Actions */}
@@ -1497,7 +1513,7 @@ const NewResearch = () => {
               className="cancel-btn"
               onClick={() => {
                 const targetPath = editId ? `/research/${editId}` : (userRole === 'RESEARCHER' ? '/' : '/research');
-                window.location.assign(targetPath);
+                navigateBackOrFallback(navigate, targetPath);
               }}
             >
               {t('cancel', 'ביטול')}

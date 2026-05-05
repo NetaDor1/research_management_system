@@ -7,6 +7,7 @@ import { db } from '../services/firebase';
 import './Page.css';
 import './Research.css';
 import { exportPrintableHtmlToPdf, escapeHtml } from '../utils/exportPdf';
+import { navigateBackOrFallback } from '../utils/navigation';
 
 const ArticleDetail = () => {
   const { id } = useParams();
@@ -159,12 +160,7 @@ const ArticleDetail = () => {
     }
   };
 
-  const getBackPath = () => {
-    if (userRole === 'RESEARCHER') {
-      return '/';
-    }
-    return '/articles';
-  };
+  const getBackPath = () => (userRole === 'RESEARCHER' ? '/' : '/articles');
 
   const formatDateForLocale = (value) => {
     if (!value) return t('notSpecified', 'לא צוין');
@@ -251,7 +247,7 @@ const ArticleDetail = () => {
     <div className="page-container">
       <div className="page-content">
         <button 
-          onClick={() => navigate(getBackPath())}
+          onClick={() => navigateBackOrFallback(navigate, getBackPath())}
           style={{
             marginBottom: '20px',
             padding: '10px 20px',

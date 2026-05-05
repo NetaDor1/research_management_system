@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useLanguage } from '../context/LanguageContext';
+import { normalizeAcademicYear } from '../utils/academicYear';
 import './DetailModal.css';
 
 const DetailModal = ({ isOpen, onClose, itemId, type }) => {
@@ -129,7 +130,7 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
             </div>
             <div className="detail-item">
               <label>{t('academicYearLabel', 'שנה אקדמית (תרגום אוטומטי)')}:</label>
-              <span>{itemData.academicYear || t('notSpecified', 'לא צוין')}</span>
+              <span>{normalizeAcademicYear(itemData.academicYear, itemData.researchStartDate) || t('notSpecified', 'לא צוין')}</span>
             </div>
           </div>
         </div>

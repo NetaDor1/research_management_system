@@ -12,8 +12,9 @@ import './WorkPlanSection.css';
  * @param {Array} initialTasks - Initial tasks array (for editing existing research)
  * @param {Function} onTasksChange - Callback when tasks change (for form submission)
  * @param {Boolean} readOnly - If true, only display mode (no editing)
+ * @param {Boolean} suppressParentSync - If true, do not push tasks to parent (used while loading edit data)
  */
-const WorkPlanSection = ({ initialTasks = [], onTasksChange, readOnly = false }) => {
+const WorkPlanSection = ({ initialTasks = [], onTasksChange, readOnly = false, suppressParentSync = false }) => {
   const [tasks, setTasks] = useState(initialTasks);
 
   // Update tasks when initialTasks changes (e.g., when loading existing research)
@@ -25,10 +26,10 @@ const WorkPlanSection = ({ initialTasks = [], onTasksChange, readOnly = false })
 
   // Notify parent when tasks change
   useEffect(() => {
-    if (onTasksChange) {
+    if (onTasksChange && !suppressParentSync) {
       onTasksChange(tasks);
     }
-  }, [tasks, onTasksChange]);
+  }, [tasks, onTasksChange, suppressParentSync]);
 
   const handleAddTask = () => {
     const newTask = {

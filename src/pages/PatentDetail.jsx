@@ -9,6 +9,7 @@ import { createNotification } from '../services/notifications';
 import './Page.css';
 import './Research.css';
 import { exportPrintableHtmlToPdf, escapeHtml } from '../utils/exportPdf';
+import { navigateBackOrFallback } from '../utils/navigation';
 
 const PatentDetail = () => {
   const { id } = useParams();
@@ -200,12 +201,7 @@ const PatentDetail = () => {
     }
   };
 
-  const getBackPath = () => {
-    if (userRole === 'RESEARCHER') {
-      return '/';
-    }
-    return '/patents';
-  };
+  const getBackPath = () => (userRole === 'RESEARCHER' ? '/' : '/patents');
 
   const createTaskNotification = async ({ researcherId, title, message, taskId, link, eventKey, type = 'task' }) => {
     if (!researcherId) return;
@@ -609,7 +605,7 @@ const PatentDetail = () => {
     <div className="page-container">
       <div className="page-content">
         <button 
-          onClick={() => navigate(getBackPath())}
+          onClick={() => navigateBackOrFallback(navigate, getBackPath())}
           style={{
             marginBottom: '20px',
             padding: '10px 20px',

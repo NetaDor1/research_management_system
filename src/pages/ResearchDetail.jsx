@@ -16,6 +16,8 @@ import WorkPlanSection from '../components/research/WorkPlanSection';
 import './Page.css';
 import './Research.css';
 import { exportPrintableHtmlToPdf, escapeHtml } from '../utils/exportPdf';
+import { normalizeAcademicYear } from '../utils/academicYear';
+import { navigateBackOrFallback } from '../utils/navigation';
 
 const ResearchDetail = () => {
   const { id } = useParams();
@@ -203,12 +205,7 @@ const ResearchDetail = () => {
     return () => unsubscribe();
   }, [id]);
 
-  const getBackPath = () => {
-    if (userRole === 'RESEARCHER') {
-      return '/';
-    }
-    return '/research';
-  };
+  const getBackPath = () => (userRole === 'RESEARCHER' ? '/' : '/research');
 
   const createTaskNotification = async ({ researcherId, title, message, taskId, link, eventKey, type = 'task' }) => {
     if (!researcherId) return;
@@ -581,6 +578,10 @@ const ResearchDetail = () => {
     const lang = language === 'en' ? 'en' : 'he';
 
     const budgetComponents = researchData.budgetComponents || {};
+    const displayAcademicYear = normalizeAcademicYear(
+      researchData.academicYear,
+      researchData.researchStartDate
+    );
     const partners = Array.isArray(researchData.partners) ? researchData.partners : [];
     const workPlanTasks = Array.isArray(researchData.workPlanTasks) ? researchData.workPlanTasks : [];
 
@@ -675,7 +676,7 @@ const ResearchDetail = () => {
           <div class="kv"><div class="k">${escapeHtml(t('startDateLabel', 'תאריך לועזי של תחילת המחקר (dd/mm/yyyy)'))}</div><div class="v">${escapeHtml(formatDateForLocale(researchData.researchStartDate))}</div></div>
           <div class="kv"><div class="k">${escapeHtml(t('endDateLabel', 'תאריך לועזי של סוף המחקר (dd/mm/yyyy)'))}</div><div class="v">${escapeHtml(formatDateForLocale(researchData.researchEndDate))}</div></div>
           <div class="kv"><div class="k">${escapeHtml(t('totalResearchYears', 'סה"כ תקופת המחקר בשנים (חישוב אוטומטי)'))}</div><div class="v">${escapeHtml(researchData.researchDurationYears || t('notSpecified', 'לא צוין'))}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('academicYearLabel', 'שנה אקדמית (תרגום אוטומטי)'))}</div><div class="v">${escapeHtml(researchData.academicYear || t('notSpecified', 'לא צוין'))}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('academicYearLabel', 'שנה אקדמית (תרגום אוטומטי)'))}</div><div class="v">${escapeHtml(displayAcademicYear || t('notSpecified', 'לא צוין'))}</div></div>
         </div>
       </div>
 
@@ -745,7 +746,7 @@ const ResearchDetail = () => {
     <div className="page-container">
       <div className="page-content">
         <button 
-          onClick={() => navigate(getBackPath())}
+          onClick={() => navigateBackOrFallback(navigate, getBackPath())}
           style={{
             marginBottom: '20px',
             padding: '10px 20px',

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
 import { createNotification } from '../services/notifications';
+import { navigateBackOrFallback } from '../utils/navigation';
 import './Page.css';
 import './Research.css';
 
@@ -416,7 +417,7 @@ const NewArticle = () => {
 
           {/* כפתורי שליחה */}
           <div className="form-actions">
-            <button type="button" onClick={() => navigate(backPath)} className="cancel-btn">
+            <button type="button" onClick={() => navigateBackOrFallback(navigate, backPath)} className="cancel-btn">
               {t('cancel', 'ביטול')}
             </button>
             <button type="submit" className="submit-btn" disabled={isSubmitting}>

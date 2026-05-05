@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp, Timestamp, query, where, getDocs, arrayUnion } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db, storage } from '../services/firebase';
 import { createNotification } from '../services/notifications';
+import { navigateBackOrFallback } from '../utils/navigation';
 import './Page.css';
 import './Research.css';
 
@@ -115,20 +116,33 @@ const NewPatent = () => {
     currency: 'ILS',
     convertedBudget: '',
     stageBudgets: {},
-    patentApplicationFile: null,
     requiredDocumentsChecklist: {},
-    officialDocuments: [],
+    requiredDocumentsFiles: {},
     digitalSignature: { signed: false, date: '', signer: '' },
     notes: ''
   });
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasPartners, setHasPartners] = useState(false);
   const [researchOptions, setResearchOptions] = useState([]);
   const [researchLoading, setResearchLoading] = useState(true);
   const [researchLoadError, setResearchLoadError] = useState('');
   const [existingResearcherId, setExistingResearcherId] = useState('');
   const isEdit = Boolean(editId);
+  const datePickerRefs = useRef({});
+
+  const convertDateToISO = (dateValue) => {
+    if (!dateValue || typeof dateValue !== 'string') return '';
+    const trimmed = dateValue.trim();
+    const ddmmyyyy = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    const match = trimmed.match(ddmmyyyy);
+    if (!match) return '';
+    const [, day, month, year] = match;
+    const iso = `${year}-${month}-${day}`;
+    const parsed = new Date(iso);
+    return Number.isNaN(parsed.getTime()) ? '' : iso;
+  };
 
   // Calculate converted budget based on currency
   useEffect(() => {
@@ -149,6 +163,19 @@ const NewPatent = () => {
       }));
     }
   }, [formData.totalBudget, formData.currency]);
+
+  // Calculate total budget automatically from stage budgets
+  useEffect(() => {
+    const total = Object.values(formData.stageBudgets || {}).reduce((sum, amount) => {
+      const numAmount = parseFloat(amount) || 0;
+      return sum + numAmount;
+    }, 0);
+
+    setFormData((prev) => ({
+      ...prev,
+      totalBudget: total > 0 ? total.toString() : '',
+    }));
+  }, [formData.stageBudgets]);
 
   useEffect(() => {
     const fetchResearchOptions = async () => {
@@ -213,7 +240,7 @@ const NewPatent = () => {
         const data = snap.data();
         setExistingResearcherId(data.researcherId || '');
 
-        // Convert dates (Firestore Timestamp or string) to YYYY-MM-DD
+        // Convert dates (Firestore Timestamp or string) to dd/mm/yyyy
         const convertToInputDate = (value) => {
           if (!value) return '';
           try {
@@ -223,8 +250,13 @@ const NewPatent = () => {
             } else if (value && value.seconds) {
               d = new Date(value.seconds * 1000);
             } else if (typeof value === 'string') {
-              // If already YYYY-MM-DD
-              if (value.length === 10 && value.includes('-')) return value;
+              const asIso = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+              if (asIso) {
+                const [, year, month, day] = asIso;
+                return `${day}/${month}/${year}`;
+              }
+              const asDisplay = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+              if (asDisplay) return value;
               d = new Date(value);
             } else {
               return '';
@@ -233,7 +265,7 @@ const NewPatent = () => {
             const year = d.getFullYear();
             const month = String(d.getMonth() + 1).padStart(2, '0');
             const day = String(d.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
+            return `${day}/${month}/${year}`;
           } catch {
             return '';
           }
@@ -270,9 +302,12 @@ const NewPatent = () => {
           convertedBudget: data.convertedBudget || '',
           stageBudgets: data.stageBudgets || {},
           requiredDocumentsChecklist: data.requiredDocumentsChecklist || {},
+          requiredDocumentsFiles: data.requiredDocumentsFiles || {},
           digitalSignature: data.digitalSignature || { signed: false, date: '', signer: '' },
           notes: data.notes || ''
         }));
+
+        setHasPartners(Boolean(data.partners && data.partners.length > 0));
       } catch (err) {
         console.error('Error loading patent for edit:', err);
       }
@@ -297,6 +332,19 @@ const NewPatent = () => {
         [field]: value
       }
     }));
+  };
+
+  const handleDatePickerChange = (field, isoDate) => {
+    if (!isoDate) {
+      handleDateChange(field, '');
+      return;
+    }
+    const [year, month, day] = isoDate.split('-');
+    if (!year || !month || !day) {
+      handleDateChange(field, '');
+      return;
+    }
+    handleDateChange(field, `${day}/${month}/${year}`);
   };
 
   const handlePartnerChange = (index, field, value) => {
@@ -332,37 +380,58 @@ const NewPatent = () => {
     }));
   };
 
-  const handleFileChange = (field, file) => {
-    if (field === 'patentApplicationFile') {
-      setFormData(prev => ({ ...prev, patentApplicationFile: file }));
-    } else if (field === 'officialDocuments') {
-      setFormData(prev => ({
-        ...prev,
-        officialDocuments: [...(prev.officialDocuments || []), file]
-      }));
-    }
-  };
+  const handleRequiredDocumentUpload = (documentName, selectedFiles) => {
+    const files = Array.from(selectedFiles || []);
+    if (files.length === 0) return;
 
-  const removeOfficialDocument = (index) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      officialDocuments: prev.officialDocuments.filter((_, i) => i !== index)
+      requiredDocumentsFiles: {
+        ...prev.requiredDocumentsFiles,
+        [documentName]: [...(prev.requiredDocumentsFiles?.[documentName] || []), ...files],
+      },
+      requiredDocumentsChecklist: {
+        ...prev.requiredDocumentsChecklist,
+        [documentName]: true,
+      },
     }));
   };
 
-  const handleChecklistChange = (document, checked) => {
-    setFormData(prev => ({
+  const handleRemoveRequiredDocumentFile = (documentName, fileIndex) => {
+    setFormData((prev) => {
+      const currentFiles = [...(prev.requiredDocumentsFiles?.[documentName] || [])];
+      currentFiles.splice(fileIndex, 1);
+
+      return {
+        ...prev,
+        requiredDocumentsFiles: {
+          ...prev.requiredDocumentsFiles,
+          [documentName]: currentFiles,
+        },
+        requiredDocumentsChecklist: {
+          ...prev.requiredDocumentsChecklist,
+          [documentName]: currentFiles.length > 0,
+        },
+      };
+    });
+  };
+
+  const handleDigitalSignature = () => {
+    setFormData((prev) => ({
       ...prev,
-      requiredDocumentsChecklist: {
-        ...prev.requiredDocumentsChecklist,
-        [document]: checked
-      }
+      digitalSignature: {
+        signed: true,
+        date: new Date().toISOString().split('T')[0],
+        signer: user?.name || 'חתימה דיגיטלית',
+      },
     }));
   };
 
   const generateOutlookCalendarLink = (date, title) => {
     if (!date) return '';
-    const dateStr = new Date(date).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const isoDate = convertDateToISO(date);
+    if (!isoDate) return '';
+    const dateStr = new Date(isoDate).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     const encodedTitle = encodeURIComponent(title || 'תאריך פטנט');
     return `https://outlook.live.com/calendar/0/deeplink/compose?subject=${encodedTitle}&startdt=${dateStr}&enddt=${dateStr}`;
   };
@@ -391,11 +460,20 @@ const NewPatent = () => {
     if (!formData.patentStage) {
       newErrors.patentStage = 'שלב הפטנט חובה';
     }
+    const datePattern = /^(\d{2})\/(\d{2})\/(\d{4})$/;
     if (!formData.dates.submissionDate) {
       newErrors.submissionDate = 'תאריך הגשת הבקשה חובה';
+    } else if (!datePattern.test(formData.dates.submissionDate)) {
+      newErrors.submissionDate = 'תאריך לא תקין. נא להזין בפורמט dd/mm/yyyy';
+    } else if (!convertDateToISO(formData.dates.submissionDate)) {
+      newErrors.submissionDate = 'תאריך לא תקין';
     }
-    if (!formData.totalBudget || formData.totalBudget.length > 7) {
-      newErrors.totalBudget = 'תקציב חובה (עד 7 ספרות)';
+    const hasStageBudget = Object.values(formData.stageBudgets || {}).some((amount) => {
+      const numAmount = parseFloat(amount) || 0;
+      return numAmount > 0;
+    });
+    if (!hasStageBudget) {
+      newErrors.totalBudget = 'יש למלא לפחות רכיב תקציב אחד';
     }
 
     setErrors(newErrors);
@@ -422,7 +500,10 @@ const NewPatent = () => {
       const datesTimestamps = {};
       Object.keys(formData.dates).forEach(key => {
         if (formData.dates[key]) {
-          datesTimestamps[key] = Timestamp.fromDate(new Date(formData.dates[key]));
+          const isoDate = convertDateToISO(formData.dates[key]);
+          if (isoDate) {
+            datesTimestamps[key] = Timestamp.fromDate(new Date(isoDate));
+          }
         }
       });
 
@@ -430,6 +511,12 @@ const NewPatent = () => {
       const linkedResearch = formData.researchProposalId
         ? researchOptions.find(option => option.id === formData.researchProposalId)
         : null;
+
+      const requiredDocumentsChecklistFromFiles = requiredDocuments.reduce((acc, docName) => {
+        const filesForDoc = formData.requiredDocumentsFiles?.[docName] || [];
+        acc[docName] = filesForDoc.length > 0;
+        return acc;
+      }, {});
 
       const patentData = {
         // פרטים כלליים
@@ -442,7 +529,9 @@ const NewPatent = () => {
         institutionPercentage: formData.institutionPercentage,
         
         // שותפים
-        partners: formData.partners.filter(p => p.name || p.email || p.institution || p.percentage),
+        partners: hasPartners
+          ? formData.partners.filter(p => p.name || p.email || p.institution || p.percentage)
+          : [],
         
         // יחידת מסחור
         commercializationUnit: formData.commercializationUnit,
@@ -470,7 +559,8 @@ const NewPatent = () => {
         stageBudgets: formData.stageBudgets || {},
         
         // מסמכים (הקישורים עצמם יעודכנו לאחר העלאת הקבצים)
-        requiredDocumentsChecklist: formData.requiredDocumentsChecklist || {},
+        requiredDocumentsChecklist: requiredDocumentsChecklistFromFiles,
+        requiredDocumentsFiles: isEdit ? (formData.requiredDocumentsFiles || {}) : {},
         
         // חתימה
         digitalSignature: formData.digitalSignature || { signed: false, signer: '', date: null },
@@ -501,39 +591,59 @@ const NewPatent = () => {
       }
 
       // Upload files after document creation
-      let applicationFileUrl = '';
-      let officialDocsUrls = [];
+      let requiredDocumentsFilesUrls = { ...(formData.requiredDocumentsFiles || {}) };
       
-      if (docId && formData.patentApplicationFile) {
+      if (docId) {
         try {
-          const fileRef = ref(storage, `patents/${docId}/application/${formData.patentApplicationFile.name}`);
-          await uploadBytes(fileRef, formData.patentApplicationFile);
-          applicationFileUrl = await getDownloadURL(fileRef);
-        } catch (fileError) {
-          console.error('Error uploading application file:', fileError);
-        }
-      }
+          const nextRequiredDocumentsFiles = {};
+          for (const docName of requiredDocuments) {
+            const docFiles = formData.requiredDocumentsFiles?.[docName] || [];
+            const uploadedOrExisting = [];
 
-      if (docId && formData.officialDocuments && formData.officialDocuments.length > 0) {
-        try {
-          for (let idx = 0; idx < formData.officialDocuments.length; idx++) {
-            const file = formData.officialDocuments[idx];
-            const fileRef = ref(storage, `patents/${docId}/official/${Date.now()}-${idx}-${file.name}`);
-            await uploadBytes(fileRef, file);
-            const url = await getDownloadURL(fileRef);
-            officialDocsUrls.push(url);
+            for (let idx = 0; idx < docFiles.length; idx++) {
+              const fileItem = docFiles[idx];
+
+              if (fileItem && typeof fileItem === 'object' && fileItem.url) {
+                uploadedOrExisting.push(fileItem);
+                continue;
+              }
+
+              if (fileItem instanceof File) {
+                const safeDocName = encodeURIComponent(docName);
+                const fileRef = ref(
+                  storage,
+                  `patents/${docId}/required/${safeDocName}/${Date.now()}-${idx}-${fileItem.name}`
+                );
+                await uploadBytes(fileRef, fileItem);
+                const url = await getDownloadURL(fileRef);
+                uploadedOrExisting.push({
+                  name: fileItem.name,
+                  url,
+                  uploadedAt: new Date().toISOString(),
+                });
+              }
+            }
+
+            nextRequiredDocumentsFiles[docName] = uploadedOrExisting;
           }
-        } catch (fileError) {
-          console.error('Error uploading official documents:', fileError);
+
+          requiredDocumentsFilesUrls = nextRequiredDocumentsFiles;
+        } catch (requiredDocsError) {
+          console.error('Error uploading required patent documents:', requiredDocsError);
         }
       }
 
       // Update document with file URLs if any files were uploaded
-      if (docId && (applicationFileUrl || officialDocsUrls.length > 0)) {
+      if (docId && Object.keys(requiredDocumentsFilesUrls).length > 0) {
         try {
+          const nextRequiredChecklist = requiredDocuments.reduce((acc, docName) => {
+            acc[docName] = (requiredDocumentsFilesUrls[docName] || []).length > 0;
+            return acc;
+          }, {});
+
           await updateDoc(doc(db, 'patents', docId), {
-            patentApplicationFileUrl: applicationFileUrl || null,
-            officialDocuments: officialDocsUrls,
+            requiredDocumentsFiles: requiredDocumentsFilesUrls,
+            requiredDocumentsChecklist: nextRequiredChecklist,
             updatedAt: serverTimestamp(),
           });
         } catch (updateError) {
@@ -666,7 +776,39 @@ const NewPatent = () => {
           {/* שותפים */}
           <div className="form-section">
             <h2>שותפים לפטנט</h2>
-            {formData.partners.map((partner, index) => (
+            <div className="form-group">
+              <label>האם קיימים שותפים לפטנט?</label>
+              <div style={{ display: 'flex', gap: '20px', marginTop: '8px' }}>
+                <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="radio"
+                    name="hasPartners"
+                    checked={hasPartners === true}
+                    onChange={() => {
+                      setHasPartners(true);
+                      if (!formData.partners || formData.partners.length === 0) {
+                        setFormData((prev) => ({
+                          ...prev,
+                          partners: [{ name: '', email: '', institution: '', percentage: '' }],
+                        }));
+                      }
+                    }}
+                  />
+                  כן
+                </label>
+                <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="radio"
+                    name="hasPartners"
+                    checked={hasPartners === false}
+                    onChange={() => setHasPartners(false)}
+                  />
+                  לא
+                </label>
+              </div>
+            </div>
+
+            {hasPartners && formData.partners.map((partner, index) => (
               <div key={index} className="partner-group">
                 <h3>שותף {index + 1}</h3>
                 <div className="form-row">
@@ -716,9 +858,11 @@ const NewPatent = () => {
                 )}
               </div>
             ))}
-            <button type="button" onClick={addPartner} className="add-btn">
-              + הוסף שותף
-            </button>
+            {hasPartners && (
+              <button type="button" onClick={addPartner} className="add-btn">
+                + הוסף שותף
+              </button>
+            )}
           </div>
 
           {/* יחידת מסחור */}
@@ -871,12 +1015,55 @@ const NewPatent = () => {
                   <label>{label}</label>
                   <div className="date-input-group">
                     <input
-                      type="date"
+                      type="text"
                       value={formData.dates[key]}
                       onChange={(e) => handleDateChange(key, e.target.value)}
                       className={key === 'submissionDate' && errors.submissionDate ? 'error' : ''}
                       required={key === 'submissionDate'}
+                      placeholder="dd/mm/yyyy"
+                      inputMode="numeric"
+                      maxLength="10"
+                      dir="ltr"
                     />
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                      <input
+                        type="date"
+                        ref={(el) => { datePickerRefs.current[key] = el; }}
+                        value={convertDateToISO(formData.dates[key]) || ''}
+                        onChange={(e) => handleDatePickerChange(key, e.target.value)}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          opacity: 0,
+                          cursor: 'pointer',
+                          zIndex: 2
+                        }}
+                        title="בחר תאריך מלוח שנה"
+                      />
+                      <div
+                        style={{
+                          cursor: 'pointer',
+                          fontSize: '20px',
+                          padding: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: '#f8f9fa',
+                          border: '2px solid #e9ecef',
+                          borderRadius: '8px',
+                          minWidth: '40px',
+                          height: '40px',
+                          transition: 'all 0.2s',
+                          margin: 0,
+                          pointerEvents: 'none'
+                        }}
+                      >
+                        📅
+                      </div>
+                    </div>
                     {formData.dates[key] && (
                       <a
                         href={generateOutlookCalendarLink(formData.dates[key], label)}
@@ -900,43 +1087,6 @@ const NewPatent = () => {
           {/* תקציב */}
           <div className="form-section">
             <h2>תקציב</h2>
-            <div className="form-row">
-              <div className="form-group">
-                <label>הקצאת תקציב לפטנט (7 ספרות) *</label>
-                <input
-                  type="number"
-                  name="totalBudget"
-                  value={formData.totalBudget}
-                  onChange={handleInputChange}
-                  maxLength={7}
-                  className={errors.totalBudget ? 'error' : ''}
-                  required
-                />
-                {errors.totalBudget && <span className="error-message">{errors.totalBudget}</span>}
-              </div>
-              <div className="form-group">
-                <label>מטבע</label>
-                <select
-                  name="currency"
-                  value={formData.currency}
-                  onChange={handleInputChange}
-                >
-                  {currencyOptions.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>תקציב מתורגם (שקלים)</label>
-                <input
-                  type="number"
-                  name="convertedBudget"
-                  value={formData.convertedBudget}
-                  readOnly
-                  style={{ background: '#f5f5f5' }}
-                />
-              </div>
-            </div>
 
             {/* תקציב משוער לכל שלב */}
             <div className="form-group">
@@ -953,6 +1103,42 @@ const NewPatent = () => {
                   />
                 </div>
               ))}
+              {errors.totalBudget && <span className="error-message">{errors.totalBudget}</span>}
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>סה"כ תקציב (חישוב אוטומטי)</label>
+                <input
+                  type="number"
+                  name="totalBudget"
+                  value={formData.totalBudget}
+                  readOnly
+                  style={{ background: '#f5f5f5' }}
+                />
+              </div>
+              <div className="form-group">
+                <label>מטבע</label>
+                <select
+                  name="currency"
+                  value={formData.currency}
+                  onChange={handleInputChange}
+                >
+                  {currencyOptions.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>תקציב מתורגם (שקלים, חישוב אוטומטי)</label>
+                <input
+                  type="number"
+                  name="convertedBudget"
+                  value={formData.convertedBudget}
+                  readOnly
+                  style={{ background: '#f5f5f5' }}
+                />
+              </div>
             </div>
           </div>
 
@@ -960,84 +1146,141 @@ const NewPatent = () => {
           <div className="form-section">
             <h2>מסמכים</h2>
             <div className="form-group">
-              <label>מסמך הבקשה לפטנט</label>
-              <input
-                type="file"
-                onChange={(e) => handleFileChange('patentApplicationFile', e.target.files[0])}
-                accept=".pdf,.doc,.docx"
-              />
-              {formData.patentApplicationFile && (
-                <span className="file-name">{formData.patentApplicationFile.name}</span>
-              )}
-            </div>
-
-            <div className="form-group">
               <label>צ'קליסט מסמכים להגשה</label>
-              <div className="checklist">
-                {requiredDocuments.map(doc => (
-                  <label key={doc} className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={formData.requiredDocumentsChecklist[doc] || false}
-                      onChange={(e) => handleChecklistChange(doc, e.target.checked)}
-                    />
-                    {doc}
-                  </label>
-                ))}
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {requiredDocuments.map((docName) => {
+                  const filesForDoc = formData.requiredDocumentsFiles?.[docName] || [];
+                  return (
+                    <div
+                      key={docName}
+                      style={{
+                        border: '1px solid #dbe2ea',
+                        borderRadius: '8px',
+                        background: '#fff',
+                        padding: '12px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: '10px',
+                          marginBottom: filesForDoc.length > 0 ? '10px' : 0,
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <input type="checkbox" checked={filesForDoc.length > 0} readOnly />
+                          <strong>{docName}</strong>
+                          <span style={{ color: '#64748b', fontSize: '13px' }}>
+                            ({filesForDoc.length} קבצים)
+                          </span>
+                        </div>
+
+                        <label
+                          style={{
+                            cursor: 'pointer',
+                            background: '#667eea',
+                            color: 'white',
+                            borderRadius: '6px',
+                            padding: '8px 12px',
+                            fontSize: '14px',
+                            fontWeight: 'bold',
+                          }}
+                        >
+                          העלאת קבצים
+                          <input
+                            type="file"
+                            multiple
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                              handleRequiredDocumentUpload(docName, e.target.files);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                      </div>
+
+                      {filesForDoc.length > 0 && (
+                        <div style={{ display: 'grid', gap: '8px' }}>
+                          {filesForDoc.map((fileItem, fileIndex) => {
+                            const fileName = typeof fileItem === 'string'
+                              ? fileItem
+                              : fileItem?.name || `file-${fileIndex + 1}`;
+                            const fileUrl = typeof fileItem === 'string'
+                              ? fileItem
+                              : fileItem?.url || (fileItem instanceof File ? URL.createObjectURL(fileItem) : '');
+                            return (
+                              <div
+                                key={`${docName}-${fileIndex}-${fileName}`}
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  gap: '10px',
+                                  background: '#f8fafc',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: '6px',
+                                  padding: '8px 10px',
+                                }}
+                              >
+                                <span style={{ flex: 1, wordBreak: 'break-word' }}>{fileName}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  {fileUrl && (
+                                    <>
+                                      <a href={fileUrl} target="_blank" rel="noopener noreferrer">
+                                        תצוגה מקדימה
+                                      </a>
+                                      <a href={fileUrl} download={fileName}>
+                                        הורדה
+                                      </a>
+                                    </>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveRequiredDocumentFile(docName, fileIndex)}
+                                    style={{
+                                      border: '1px solid #cbd5e1',
+                                      background: 'white',
+                                      borderRadius: '4px',
+                                      padding: '4px 8px',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    הסר
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="form-group">
-              <label>מסמכים רשמיים ואישורים</label>
-              <input
-                type="file"
-                multiple
-                onChange={(e) => {
-                  Array.from(e.target.files).forEach(file => {
-                    handleFileChange('officialDocuments', file);
-                  });
-                }}
-                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-              />
-              {formData.officialDocuments.length > 0 && (
-                <div className="files-list">
-                  {formData.officialDocuments.map((file, index) => (
-                    <div key={index} className="file-item">
-                      <span>{file.name}</span>
-                      <button type="button" onClick={() => removeOfficialDocument(index)} className="remove-btn-small">
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
 
           {/* חתימה דיגיטלית */}
           <div className="form-section">
             <h2>חתימה דיגיטלית</h2>
             <div className="form-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={formData.digitalSignature.signed}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    digitalSignature: {
-                      ...prev.digitalSignature,
-                      signed: e.target.checked,
-                      signer: e.target.checked ? user?.name || '' : '',
-                      date: e.target.checked ? new Date().toISOString().split('T')[0] : ''
-                    }
-                  }))}
-                />
-                אני מאשר/ת את נכונות הפרטים ומאשר/ת את הגשת הבקשה
-              </label>
-              {formData.digitalSignature.signed && (
+              <label>חתימת מורשי חתימה מוסדיים</label>
+              {!formData.digitalSignature.signed ? (
+                <button
+                  type="button"
+                  className="btn-signature"
+                  onClick={handleDigitalSignature}
+                >
+                  חתימה דיגיטלית
+                </button>
+              ) : (
                 <div className="signature-info">
-                  <p>חתום על ידי: {formData.digitalSignature.signer}</p>
-                  <p>תאריך: {formData.digitalSignature.date}</p>
+                  <p>✓ חתום על ידי: {formData.digitalSignature.signer}</p>
+                  <p>תאריך חתימה: {formData.digitalSignature.date}</p>
                 </div>
               )}
             </div>
@@ -1065,9 +1308,9 @@ const NewPatent = () => {
               onClick={() => {
                 // If editing, go back to the patent detail page
                 if (editId) {
-                  navigate(`/patents/${editId}`);
+                  navigateBackOrFallback(navigate, `/patents/${editId}`);
                 } else {
-                  navigate(userRole === 'RESEARCHER' ? '/' : '/patents');
+                  navigateBackOrFallback(navigate, userRole === 'RESEARCHER' ? '/' : '/patents');
                 }
               }} 
               className="cancel-btn"
