@@ -15,6 +15,7 @@ import BibliographySection from '../components/research/form/BibliographySection
 import DocumentsSection from '../components/research/form/DocumentsSection';
 import DigitalSignatureSection from '../components/research/form/DigitalSignatureSection';
 import AdditionalInfoSection from '../components/research/form/AdditionalInfoSection';
+import ResearchProposalReviewAssistant from '../components/research/ResearchProposalReviewAssistant';
 import WorkPlanSection from '../components/research/WorkPlanSection';
 import { getHebrewAcademicYearFromDate, normalizeAcademicYear } from '../utils/academicYear';
 import { navigateBackOrFallback } from '../utils/navigation';
@@ -1526,6 +1527,8 @@ const NewResearch = () => {
             </button>
           </div>
         </form>
+
+        <ResearchProposalReviewAssistant formData={formData} />
       </div>
     </div>
   );
