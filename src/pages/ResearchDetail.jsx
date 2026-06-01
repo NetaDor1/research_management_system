@@ -16,7 +16,17 @@ import TasksSection from '../components/research/TasksSection';
 import WorkPlanSection from '../components/research/WorkPlanSection';
 import './Page.css';
 import './Research.css';
-import { exportPrintableHtmlToPdf, escapeHtml } from '../utils/exportPdf';
+import {
+  exportPrintableHtmlToPdf,
+  escapeHtml,
+  buildResearchProposalHeader,
+  buildMetaSection,
+  buildMetaTable,
+  buildFormFieldsSection,
+  buildFormFieldBlock,
+  buildSectionHeading,
+  buildDocFooter,
+} from '../utils/exportPdf';
 import { normalizeAcademicYear } from '../utils/academicYear';
 import { navigateBackOrFallback } from '../utils/navigation';
 
@@ -633,27 +643,28 @@ const ResearchDetail = () => {
       `
       : '';
 
+    const notSpecified = t('notSpecified', 'לא צוין');
+    const val = (v) => (v === null || v === undefined || v === '' ? notSpecified : String(v));
+
     const partnersHtml = partners.length
       ? partners
           .map((p, idx) => {
-            const name = p.name || t('notSpecified', 'לא צוין');
-            const email = p.email || t('notSpecified', 'לא צוין');
-            const institution = p.institution || t('notSpecified', 'לא צוין');
-            const country = p.country || '';
+            const name = val(p.name);
+            const email = val(p.email);
+            const institution = val(p.institution);
+            const country = p.country ? val(p.country) : '';
             return `
-              <div class="kv">
-                <div class="k">${escapeHtml(`${t('partner', 'שותף')} ${idx + 1}`)}</div>
-                <div class="v">
-                  ${escapeHtml(`${t('partnerName', 'שם השותף')}: ${name}`)}<br/>
-                  ${escapeHtml(`${t('partnerEmail', 'אימייל של השותף')}: ${email}`)}<br/>
-                  ${escapeHtml(`${t('partnerInstitution', 'המוסד של השותף')}: ${institution}`)}
-                  ${country ? `<br/>${escapeHtml(`${t('partnerCountry', 'מדינה שבה השותף נמצא')}: ${country}`)}` : ''}
-                </div>
+              <div class="partner-block">
+                <div class="partner-block-title">${escapeHtml(`${t('partner', 'שותף')} ${idx + 1}`)}</div>
+                ${buildFormFieldBlock(t('partnerName', 'שם השותף'), name)}
+                ${buildFormFieldBlock(t('partnerEmail', 'אימייל של השותף'), email)}
+                ${buildFormFieldBlock(t('partnerInstitution', 'המוסד של השותף'), institution)}
+                ${country ? buildFormFieldBlock(t('partnerCountry', 'מדינה שבה השותף נמצא'), country) : ''}
               </div>
             `;
           })
           .join('')
-      : `<div class="muted">${escapeHtml(t('notSpecified', 'לא צוין'))}</div>`;
+      : buildFormFieldBlock(t('partnersProjectTitle', 'שותפים לפרוייקט'), notSpecified);
 
     const workPlanTasksHtml = workPlanTasks.length
       ? `
@@ -679,90 +690,93 @@ const ResearchDetail = () => {
       `
       : '';
 
+    const headerHtml = buildResearchProposalHeader({
+      titleHe: language === 'en' ? 'Research Program – Full Proposal' : 'תכנית מחקר - הצעה מלאה',
+      titleEn: 'RESEARCH PROPOSAL',
+      metaLines: [
+        { label: language === 'en' ? 'Title' : 'כותרת', value: titleValue },
+        {
+          label: language === 'en' ? 'Project coordinator' : 'רכז הפרויקט',
+          value: val(researchData.researcherName),
+        },
+      ],
+    });
+
     const htmlBody = `
-      <h1>${escapeHtml(pdfTitle)}</h1>
+      ${headerHtml}
+
+      ${buildMetaSection(t('generalDetails', 'פרטים כלליים'), [
+        [t('projectTitleLabel', 'כותרת הפרוייקט שהוגש לקרן חיצונית'), titleValue],
+        [t('fundNameLabel', 'שם הקרן אליה הוגשה הבקשה'), val(researchData.fundName)],
+        [t('fundTypeLabel', 'סוג הקרן'), val(researchData.fundType)],
+        [t('submissionPathLabel', 'מסלול ההגשה לקרן'), val(researchData.submissionPath)],
+        [t('researcherRoleLabel', 'תפקיד החוקר בהצעת המחקר'), val(researchData.researcherRole)],
+        [t('proposalStageLabel', 'שלב ההצעה'), val(researchData.proposalStage)],
+        [t('submissionTypeLabel', 'סוג הגשה'), val(researchData.submissionType)],
+        [t('researcher', 'חוקר'), val(researchData.researcherName)],
+      ])}
+
+      ${buildMetaSection(t('researchPeriod', 'תקופת המחקר'), [
+        [t('startDateLabel', 'תאריך לועזי של תחילת המחקר (dd/mm/yyyy)'), formatDateForLocale(researchData.researchStartDate)],
+        [t('endDateLabel', 'תאריך לועזי של סוף המחקר (dd/mm/yyyy)'), formatDateForLocale(researchData.researchEndDate)],
+        [t('totalResearchYears', 'סה"כ תקופת המחקר בשנים (חישוב אוטומטי)'), val(researchData.researchDurationYears)],
+        [t('academicYearLabel', 'שנה אקדמית (תרגום אוטומטי)'), val(displayAcademicYear)],
+      ])}
 
       <div class="section">
-        <h2>${escapeHtml(t('generalDetails', 'פרטים כלליים'))}</h2>
-        <div class="grid">
-          <div class="kv"><div class="k">${escapeHtml(t('projectTitleLabel', 'כותרת הפרוייקט שהוגש לקרן חיצונית'))}</div><div class="v">${escapeHtml(titleValue)}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('fundNameLabel', 'שם הקרן אליה הוגשה הבקשה'))}</div><div class="v">${escapeHtml(researchData.fundName || t('notSpecified', 'לא צוין'))}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('fundTypeLabel', 'סוג הקרן'))}</div><div class="v">${escapeHtml(researchData.fundType || t('notSpecified', 'לא צוין'))}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('submissionPathLabel', 'מסלול ההגשה לקרן'))}</div><div class="v">${escapeHtml(researchData.submissionPath || t('notSpecified', 'לא צוין'))}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('researcherRoleLabel', 'תפקיד החוקר בהצעת המחקר'))}</div><div class="v">${escapeHtml(researchData.researcherRole || t('notSpecified', 'לא צוין'))}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('proposalStageLabel', 'שלב ההצעה'))}</div><div class="v">${escapeHtml(researchData.proposalStage || t('notSpecified', 'לא צוין'))}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('submissionTypeLabel', 'סוג הגשה'))}</div><div class="v">${escapeHtml(researchData.submissionType || t('notSpecified', 'לא צוין'))}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('researcher', 'חוקר'))}</div><div class="v">${escapeHtml(researchData.researcherName || t('notSpecified', 'לא צוין'))}</div></div>
-        </div>
-      </div>
-
-      <div class="section">
-        <h2>${escapeHtml(t('researchPeriod', 'תקופת המחקר'))}</h2>
-        <div class="grid">
-          <div class="kv"><div class="k">${escapeHtml(t('startDateLabel', 'תאריך לועזי של תחילת המחקר (dd/mm/yyyy)'))}</div><div class="v">${escapeHtml(formatDateForLocale(researchData.researchStartDate))}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('endDateLabel', 'תאריך לועזי של סוף המחקר (dd/mm/yyyy)'))}</div><div class="v">${escapeHtml(formatDateForLocale(researchData.researchEndDate))}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('totalResearchYears', 'סה"כ תקופת המחקר בשנים (חישוב אוטומטי)'))}</div><div class="v">${escapeHtml(researchData.researchDurationYears || t('notSpecified', 'לא צוין'))}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('academicYearLabel', 'שנה אקדמית (תרגום אוטומטי)'))}</div><div class="v">${escapeHtml(displayAcademicYear || t('notSpecified', 'לא צוין'))}</div></div>
-        </div>
-      </div>
-
-      <div class="section">
-        <h2>${escapeHtml(t('budgetTitle', 'תקציב'))}</h2>
-        <div class="grid">
-          <div class="kv"><div class="k">${escapeHtml(t('totalBudgetRequested', 'סה"כ התקציב המבוקש (חישוב אוטומטי)'))}</div><div class="v">${escapeHtml(researchData.totalBudget || t('notSpecified', 'לא צוין'))}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('budgetCurrency', 'מטבע התקציב'))}</div><div class="v">${escapeHtml(researchData.currency || 'ILS')}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('budgetConvertedIls', 'התקציב המתורגם לשקלים (חישוב אוטומטי)'))}</div><div class="v">${escapeHtml(researchData.convertedBudget || t('notSpecified', 'לא צוין'))}</div></div>
-        </div>
+        ${buildSectionHeading(t('budgetTitle', 'תקציב'))}
+        ${buildMetaTable([
+          [t('totalBudgetRequested', 'סה"כ התקציב המבוקש (חישוב אוטומטי)'), val(researchData.totalBudget)],
+          [t('budgetCurrency', 'מטבע התקציב'), val(researchData.currency || 'ILS')],
+          [t('budgetConvertedIls', 'התקציב המתורגם לשקלים (חישוב אוטומטי)'), val(researchData.convertedBudget)],
+        ])}
         ${budgetTableHtml}
       </div>
 
       <div class="section">
-        <h2>${escapeHtml(t('partnersProjectTitle', 'שותפים לפרוייקט'))}</h2>
-        <div class="grid">${partnersHtml}</div>
+        ${buildSectionHeading(t('partnersProjectTitle', 'שותפים לפרוייקט'))}
+        ${partnersHtml}
       </div>
 
-      <div class="section">
-        <h2>${escapeHtml(t('researchDescriptionTitle', 'תיאור המחקר'))}</h2>
-        <div class="grid">
-          <div class="kv"><div class="k">${escapeHtml(t('abstractLabel', 'Abstract'))}</div><div class="v">${escapeHtml(researchData.abstract || '')}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('scientificBackgroundLabel', 'Scientific background'))}</div><div class="v">${escapeHtml(researchData.scientificBackground || '')}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('researchObjectivesLabel', 'Research objectives'))}</div><div class="v">${escapeHtml(researchData.researchObjectives || '')}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('detailedDescriptionLabel', 'Detailed description'))}</div><div class="v">${escapeHtml(researchData.detailedDescription || '')}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('significanceLabel', 'Significance'))}</div><div class="v">${escapeHtml(researchData.significanceInnovation || '')}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('applicabilityLabel', 'Applicability'))}</div><div class="v">${escapeHtml(researchData.applicability || '')}</div></div>
-        </div>
-      </div>
+      ${buildFormFieldsSection(t('researchDescriptionTitle', 'תיאור המחקר'), [
+        [t('abstractLabel', 'Abstract'), val(researchData.abstract)],
+        [t('scientificBackgroundLabel', 'Scientific background and state of the art'), val(researchData.scientificBackground)],
+        [t('researchObjectivesLabel', 'Research objectives and specific aims'), val(researchData.researchObjectives)],
+        [t('detailedDescriptionLabel', 'Detailed description of the proposed research'), val(researchData.detailedDescription)],
+        [t('significanceLabel', 'Significance, innovation and potential benefits of the proposed research'), val(researchData.significanceInnovation)],
+        [t('applicabilityLabel', 'Applicability'), val(researchData.applicability)],
+      ])}
 
-      <div class="section">
-        <h2>${escapeHtml(t('additionalInfoTitle', 'מידע נוסף'))}</h2>
-        <div class="grid">
-          <div class="kv"><div class="k">${escapeHtml(t('expectedResponseDateLabel', 'תאריך משוער'))}</div><div class="v">${escapeHtml(formatDateForLocale(researchData.expectedResponseDate))}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('notesFreeText', 'הערות'))}</div><div class="v">${escapeHtml(researchData.notes || '')}</div></div>
-        </div>
-      </div>
+      ${buildFormFieldsSection(t('additionalInfoTitle', 'מידע נוסף'), [
+        [t('expectedResponseDateLabel', 'תאריך משוער'), formatDateForLocale(researchData.expectedResponseDate)],
+        [t('notesFreeText', 'הערות'), val(researchData.notes)],
+      ])}
 
-      ${researchData.digitalSignature?.signed
-        ? `
-          <div class="section">
-            <h2>${escapeHtml(t('digitalSignatureTitle', 'חתימה דיגיטלית'))}</h2>
-            <div class="grid">
-              <div class="kv"><div class="k">${escapeHtml(t('signedBy', 'חתום על ידי'))}</div><div class="v">${escapeHtml(researchData.digitalSignature.signer || '')}</div></div>
-              <div class="kv"><div class="k">${escapeHtml(t('signatureDate', 'תאריך חתימה'))}</div><div class="v">${escapeHtml(formatDateForLocale(researchData.digitalSignature.date))}</div></div>
-            </div>
-          </div>
-        `
-        : ''
+      ${
+        researchData.digitalSignature?.signed
+          ? buildMetaSection(t('digitalSignatureTitle', 'חתימה דיגיטלית'), [
+              [t('signedBy', 'חתום על ידי'), val(researchData.digitalSignature.signer)],
+              [t('signatureDate', 'תאריך חתימה'), formatDateForLocale(researchData.digitalSignature.date)],
+            ])
+          : ''
       }
 
-      ${workPlanTasksHtml
-        ? `
+      ${
+        workPlanTasksHtml
+          ? `
           <div class="section">
-            <h2>${escapeHtml(t('workPlan', 'תוכנית עבודה'))}</h2>
+            ${buildSectionHeading(t('workPlan', 'Work plan and Gantt'))}
             ${workPlanTasksHtml}
           </div>
         `
-        : ''
+          : ''
       }
+
+      ${buildDocFooter(
+        language === 'en'
+          ? `Generated on ${new Date().toLocaleString('en-US')}`
+          : `נוצר ב-${new Date().toLocaleDateString('he-IL')} ${new Date().toLocaleTimeString('he-IL')}`
+      )}
     `;
 
     exportPrintableHtmlToPdf({ title: pdfTitle, htmlBody, dir, lang });

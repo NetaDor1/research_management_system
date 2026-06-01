@@ -19,6 +19,15 @@ import ResearchProposalReviewAssistant from '../components/research/ResearchProp
 import WorkPlanSection from '../components/research/WorkPlanSection';
 import { getHebrewAcademicYearFromDate, normalizeAcademicYear } from '../utils/academicYear';
 import { navigateBackOrFallback } from '../utils/navigation';
+import {
+  exportPrintableHtmlToPdf,
+  buildResearchProposalHeader,
+  buildMetaSection,
+  buildMetaTable,
+  buildFormFieldBlock,
+  buildSectionHeading,
+  buildDocFooter,
+} from '../utils/exportPdf';
 import './Page.css';
 import './Research.css';
 
@@ -1131,16 +1140,19 @@ const NewResearch = () => {
 
     // Build partners HTML
     const partnersHTML = formData.partners
-      .filter(p => p.name || p.email || p.institution || p.country)
-      .map((partner, index) => `
-        <div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
-          <strong>שותף ${index + 1}:</strong><br>
-          שם: ${partner.name || 'לא צוין'}<br>
-          אימייל: ${partner.email || 'לא צוין'}<br>
-          מוסד: ${partner.institution || 'לא צוין'}<br>
-          מדינה: ${partner.country || 'לא צוין'}
+      .filter((p) => p.name || p.email || p.institution || p.country)
+      .map(
+        (partner, index) => `
+        <div class="partner-block">
+          <div class="partner-block-title">שותף ${index + 1}</div>
+          ${buildFormFieldBlock('שם השותף', partner.name || '')}
+          ${buildFormFieldBlock('אימייל', partner.email || '')}
+          ${buildFormFieldBlock('מוסד', partner.institution || '')}
+          ${buildFormFieldBlock('מדינה', partner.country || '')}
         </div>
-      `).join('');
+      `
+      )
+      .join('');
 
     // Build budget components HTML
     const budgetComponentsHTML = Object.entries(formData.budgetComponents)
@@ -1158,250 +1170,102 @@ const NewResearch = () => {
       .map(([doc]) => `<li>${doc}</li>`)
       .join('');
 
-    // Create printable HTML
-    const printHTML = `
-      <!DOCTYPE html>
-      <html dir="rtl" lang="he">
-      <head>
-        <meta charset="UTF-8">
-        <title>הגשה לקרנות מחקר - ${formData.projectTitle || 'טופס'}</title>
-        <style>
-          @media print {
-            @page {
-              margin: 2cm;
-              size: A4;
-            }
-            .no-print {
-              display: none;
-            }
-          }
-          body {
-            font-family: 'Arial', 'Helvetica', sans-serif;
-            direction: rtl;
-            padding: 20px;
-            color: #333;
-            line-height: 1.6;
-          }
-          h1 {
-            color: #667eea;
-            font-size: 28px;
-            margin-bottom: 10px;
-            text-align: center;
-            border-bottom: 3px solid #667eea;
-            padding-bottom: 10px;
-          }
-          h2 {
-            color: #667eea;
-            font-size: 20px;
-            margin-top: 25px;
-            margin-bottom: 15px;
-            border-bottom: 2px solid #667eea;
-            padding-bottom: 5px;
-          }
-          .info-section {
-            margin-bottom: 20px;
-            page-break-inside: avoid;
-          }
-          .info-row {
-            display: flex;
-            margin-bottom: 10px;
-            padding: 8px;
-            background: #f8f9fa;
-            border-radius: 5px;
-          }
-          .info-label {
-            font-weight: bold;
-            min-width: 200px;
-            color: #495057;
-          }
-          .info-value {
-            flex: 1;
-            color: #212529;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 15px 0;
-          }
-          table th, table td {
-            padding: 10px;
-            border: 1px solid #ddd;
-            text-align: right;
-          }
-          table th {
-            background: #667eea;
-            color: white;
-            font-weight: bold;
-          }
-          ul {
-            margin: 10px 0;
-            padding-right: 20px;
-          }
-          .signature-box {
-            background: #d4edda;
-            border: 2px solid #28a745;
-            padding: 15px;
-            margin-top: 20px;
-            border-radius: 8px;
-          }
-          .empty-field {
-            color: #999;
-            font-style: italic;
-          }
-        </style>
-      </head>
-      <body>
-        <h1>הגשה לקרנות מחקר</h1>
-        <p style="text-align: center; color: #6c757d; margin-bottom: 30px;">
-          טופס הגשת הצעת מחקר
-        </p>
+    const budgetTotalDisplay = formData.totalBudget
+      ? `${formData.totalBudget} ${formData.currency === 'ILS' ? '₪' : formData.currency === 'USD' ? '$' : '€'}`
+      : '';
+    const convertedDisplay = formData.convertedBudget ? `${formData.convertedBudget} ₪` : '';
 
-        <div class="info-section">
-          <h2>פרטים כלליים</h2>
-          <div class="info-row">
-            <span class="info-label">כותרת הפרוייקט:</span>
-            <span class="info-value">${formData.projectTitle || '<span class="empty-field">לא צוין</span>'}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">שם הקרן:</span>
-            <span class="info-value">${formData.fundName || '<span class="empty-field">לא צוין</span>'}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">סוג הקרן:</span>
-            <span class="info-value">${formData.fundType || '<span class="empty-field">לא צוין</span>'}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">מסלול ההגשה:</span>
-            <span class="info-value">${formData.submissionPath || '<span class="empty-field">לא צוין</span>'}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">תפקיד החוקר:</span>
-            <span class="info-value">${formData.researcherRole || '<span class="empty-field">לא צוין</span>'}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">שלב ההצעה:</span>
-            <span class="info-value">${formData.proposalStage || '<span class="empty-field">לא צוין</span>'}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">סוג הגשה:</span>
-            <span class="info-value">${formData.submissionType || '<span class="empty-field">לא צוין</span>'}</span>
-          </div>
-        </div>
+    const htmlBody = `
+      ${buildResearchProposalHeader({
+        metaLines: [
+          { label: 'כותרת', value: formData.projectTitle || '' },
+          { label: 'רכז הפרויקט', value: user?.displayName || user?.email || '' },
+        ],
+      })}
 
-        <div class="info-section">
-          <h2>תקופת המחקר</h2>
-          <div class="info-row">
-            <span class="info-label">תאריך תחילת המחקר:</span>
-            <span class="info-value">${formatDate(formData.researchStartDate) || '<span class="empty-field">לא צוין</span>'}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">תאריך סיום המחקר:</span>
-            <span class="info-value">${formatDate(formData.researchEndDate) || '<span class="empty-field">לא צוין</span>'}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">משך המחקר בשנים:</span>
-            <span class="info-value">${formData.researchDurationYears || '<span class="empty-field">לא חושב</span>'}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">שנה אקדמית:</span>
-            <span class="info-value">${formData.academicYear || '<span class="empty-field">לא חושב</span>'}</span>
-          </div>
-        </div>
+      ${buildMetaSection('פרטים כלליים', [
+        ['כותרת הפרוייקט', formData.projectTitle],
+        ['שם הקרן', formData.fundName],
+        ['סוג הקרן', formData.fundType],
+        ['מסלול ההגשה', formData.submissionPath],
+        ['תפקיד החוקר', formData.researcherRole],
+        ['שלב ההצעה', formData.proposalStage],
+        ['סוג הגשה', formData.submissionType],
+      ].map(([label, value]) => [label, value || 'לא צוין']))}
 
-        <div class="info-section">
-          <h2>תקציב</h2>
-          <div class="info-row">
-            <span class="info-label">סה"כ התקציב המבוקש:</span>
-            <span class="info-value">${formData.totalBudget ? `${formData.totalBudget} ${formData.currency === 'ILS' ? '₪' : formData.currency === 'USD' ? '$' : '€'}` : '<span class="empty-field">לא צוין</span>'}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">התקציב המתורגם לשקלים:</span>
-            <span class="info-value">${formData.convertedBudget ? `${formData.convertedBudget} ₪` : '<span class="empty-field">לא חושב</span>'}</span>
-          </div>
-          ${budgetComponentsHTML ? `
-            <table>
-              <thead>
-                <tr>
-                  <th>רכיב תקציב</th>
-                  <th>סכום</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${budgetComponentsHTML}
-              </tbody>
-            </table>
-          ` : ''}
-        </div>
+      ${buildMetaSection('תקופת המחקר', [
+        ['תאריך תחילת המחקר', formatDate(formData.researchStartDate) || 'לא צוין'],
+        ['תאריך סיום המחקר', formatDate(formData.researchEndDate) || 'לא צוין'],
+        ['משך המחקר בשנים', formData.researchDurationYears || 'לא חושב'],
+        ['שנה אקדמית', formData.academicYear || 'לא חושב'],
+      ])}
 
-        ${partnersHTML ? `
-          <div class="info-section">
-            <h2>שותפים לפרוייקט</h2>
-            ${partnersHTML}
+      <div class="section">
+        ${buildSectionHeading('תקציב')}
+        ${buildMetaTable([
+          ['סה"כ התקציב המבוקש', budgetTotalDisplay || 'לא צוין'],
+          ['התקציב המתורגם לשקלים', convertedDisplay || 'לא חושב'],
+        ])}
+        ${
+          budgetComponentsHTML
+            ? `
+          <table>
+            <thead>
+              <tr>
+                <th>רכיב תקציב</th>
+                <th>סכום</th>
+              </tr>
+            </thead>
+            <tbody>${budgetComponentsHTML}</tbody>
+          </table>`
+            : ''
+        }
+      </div>
+
+      ${
+        partnersHTML
+          ? `
+        <div class="section">
+          ${buildSectionHeading('שותפים לפרוייקט')}
+          ${partnersHTML}
+        </div>`
+          : ''
+      }
+
+      ${
+        documentsHTML
+          ? `
+        <div class="section">
+          ${buildSectionHeading('מסמכים')}
+          <div class="form-field-block">
+            <div class="form-field-label">מסמכים שהוגשו</div>
+            <div class="form-field-value"><ul style="margin:0;padding-inline-start:20pt">${documentsHTML}</ul></div>
           </div>
-        ` : ''}
+        </div>`
+          : ''
+      }
 
-        <div class="info-section">
-          <h2>מסמכים</h2>
-          ${documentsHTML ? `
-            <div style="margin-top: 15px;">
-              <strong>מסמכים שהוגשו:</strong>
-              <ul>
-                ${documentsHTML}
-              </ul>
-            </div>
-          ` : ''}
-        </div>
+      ${
+        formData.digitalSignature.signed
+          ? buildMetaSection('חתימה דיגיטלית', [
+              ['חתום על ידי', formData.digitalSignature.signer],
+              ['תאריך חתימה', formatDate(formData.digitalSignature.date)],
+            ])
+          : ''
+      }
 
-        ${formData.digitalSignature.signed ? `
-          <div class="signature-box">
-            <h2>חתימה דיגיטלית</h2>
-            <div class="info-row">
-              <span class="info-label">חתום על ידי:</span>
-              <span class="info-value">${formData.digitalSignature.signer}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">תאריך חתימה:</span>
-              <span class="info-value">${formatDate(formData.digitalSignature.date)}</span>
-            </div>
-          </div>
-        ` : ''}
+      ${formData.expectedResponseDate ? buildFormFieldBlock('תאריך משוער לתשובה', formatDate(formData.expectedResponseDate)) : ''}
+      ${formData.notes ? buildFormFieldBlock('הערות', formData.notes) : ''}
 
-        ${formData.expectedResponseDate ? `
-          <div class="info-section">
-            <h2>תאריך משוער לתשובה</h2>
-            <div class="info-row">
-              <span class="info-value">${formatDate(formData.expectedResponseDate)}</span>
-            </div>
-          </div>
-        ` : ''}
-
-        ${formData.notes ? `
-          <div class="info-section">
-            <h2>הערות</h2>
-            <div style="padding: 15px; background: #f8f9fa; border-radius: 5px; white-space: pre-wrap;">
-              ${formData.notes}
-            </div>
-          </div>
-        ` : ''}
-
-        <div style="margin-top: 40px; text-align: center; color: #6c757d; font-size: 12px;">
-          נוצר ב-${new Date().toLocaleDateString('he-IL')} ${new Date().toLocaleTimeString('he-IL')}
-        </div>
-      </body>
-      </html>
+      ${buildDocFooter(`נוצר ב-${new Date().toLocaleDateString('he-IL')} ${new Date().toLocaleTimeString('he-IL')}`)}
     `;
 
-    // Open print window
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(printHTML);
-      printWindow.document.close();
-      
-      // Wait for content to load, then print
-      setTimeout(() => {
-        printWindow.print();
-      }, 250);
-    }
+    exportPrintableHtmlToPdf({
+      title: `הגשה לקרנות מחקר - ${formData.projectTitle || 'טופס'}`,
+      htmlBody,
+      dir: 'rtl',
+      lang: 'he',
+    });
   };
 
   return (
