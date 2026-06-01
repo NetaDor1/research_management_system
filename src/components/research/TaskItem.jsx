@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, storage } from '../../services/firebase';
@@ -38,6 +38,7 @@ const TaskItem = ({
 }) => {
   const { user } = useAuth();
   const [fileUploading, setFileUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   const handleFileUpload = async (files, inputElement) => {
     if (!researchProposalId || !task.id || !files || files.length === 0) return;
@@ -55,7 +56,7 @@ const TaskItem = ({
         uploadedFiles.push({
           name: file.name,
           url: url,
-          uploadedAt: serverTimestamp()
+          uploadedAt: new Date().toISOString()
         });
       }
 
@@ -137,6 +138,22 @@ const TaskItem = ({
               <span style={{ marginRight: '15px' }}> | הוגשה: {formatDate(task.submittedAt)}</span>
             )}
           </div>
+
+          {task.attachments && task.attachments.length > 0 && (
+            <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              {task.attachments.map((file, idx) => (
+                <a
+                  key={idx}
+                  href={file.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: '13px', color: '#667eea', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                >
+                  📎 {file.name}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end' }}>
           <span
@@ -193,8 +210,8 @@ const TaskItem = ({
         </div>
       </div>
 
-      {/* File upload for researcher - task can only be marked as complete after uploading files */}
-      {!isAdmin && (
+      {/* File upload for researcher - only show gray box when pending */}
+      {!isAdmin && task.status === 'pending' && (
         <div style={{ marginTop: '15px', padding: '15px', background: '#f0f0f0', borderRadius: '4px' }}>
           {task.status === 'pending' && (
             <>
@@ -210,33 +227,20 @@ const TaskItem = ({
                 onChange={async (e) => {
                   if (e.target.files && e.target.files.length > 0) {
                     await handleFileUpload(Array.from(e.target.files), e.target);
+                    e.target.value = '';
                   }
                 }}
                 disabled={fileUploading}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  borderRadius: '4px',
-                  border: '1px solid #ddd',
-                  fontSize: '14px'
-                }}
+                style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '14px' }}
               />
-              {fileUploading && (
-                <div style={{ marginTop: '10px' }}>
-                  <p style={{ color: '#667eea', fontWeight: 'bold' }}>מעלה קבצים...</p>
-                </div>
-              )}
+              {fileUploading && <p style={{ color: '#667eea', fontWeight: 'bold', marginTop: '10px' }}>מעלה קבצים...</p>}
             </>
           )}
-          {task.status === 'submitted' && (
-            <div style={{ padding: '10px', background: '#d4edda', borderRadius: '4px', color: '#155724' }}>
-              <strong>✓ המשימה הושלמה והוגשה</strong>
-            </div>
-          )}
+
         </div>
       )}
 
-      {/* Show submitted files */}
+      {/* Show submitted files + add more button */}
       {task.submissions && task.submissions.length > 0 && (
         <div style={{ marginTop: '15px', padding: '15px', background: '#e8f5e9', borderRadius: '4px' }}>
           <h4 style={{ margin: 0, marginBottom: '10px', color: '#2e7d32' }}>קבצים שהוגשו:</h4>
@@ -265,6 +269,39 @@ const TaskItem = ({
               </li>
             ))}
           </ul>
+          {!isAdmin && (
+            <div style={{ marginTop: '12px', borderTop: '1px solid #c8e6c9', paddingTop: '12px' }}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                onChange={async (e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    await handleFileUpload(Array.from(e.target.files), e.target);
+                    e.target.value = '';
+                  }
+                }}
+                disabled={fileUploading}
+                style={{ display: 'none' }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={fileUploading}
+                style={{
+                  background: '#f0f0f0',
+                  color: '#333',
+                  border: '1px solid #ccc',
+                  padding: '5px 12px',
+                  borderRadius: '4px',
+                  cursor: fileUploading ? 'not-allowed' : 'pointer',
+                  fontSize: '13px',
+                  opacity: fileUploading ? 0.6 : 1
+                }}
+              >
+                {fileUploading ? '⏳ מעלה...' : '📎 הוסף קבצים'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -3,7 +3,8 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { doc, getDoc, collection, addDoc, updateDoc, deleteDoc, query, where, getDocs, serverTimestamp, onSnapshot, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { db } from '../services/firebase';
+import { db, storage } from '../services/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { createNotification } from '../services/notifications';
 import ResearchInfoSection from '../components/research/ResearchInfoSection';
 import ResearchPeriodSection from '../components/research/ResearchPeriodSection';
@@ -354,6 +355,17 @@ const ResearchDetail = () => {
         }
       }
 
+      // Upload admin-attached files if any
+      const attachments = [];
+      if (formData.files && formData.files.length > 0) {
+        for (const file of formData.files) {
+          const fileRef = ref(storage, `researchProposals/${id}/tasks/attachments/${Date.now()}-${file.name}`);
+          await uploadBytes(fileRef, file);
+          const url = await getDownloadURL(fileRef);
+          attachments.push({ name: file.name, url, uploadedAt: new Date().toISOString() });
+        }
+      }
+
       // Prepare task data for subcollection
       const taskData = {
         title: formData.title,
@@ -363,7 +375,8 @@ const ResearchDetail = () => {
         createdBy: user?.name || 'Admin',
         researcherId,
         status: 'pending',
-        submissions: []
+        submissions: [],
+        attachments
       };
 
       // Save task in research proposal subcollection
@@ -450,10 +463,23 @@ const ResearchDetail = () => {
         }
       }
 
+      // Upload new files and merge with kept existing attachments
+      const keptAttachments = formData.existingAttachments || [];
+      const newAttachments = [];
+      if (formData.files && formData.files.length > 0) {
+        for (const file of formData.files) {
+          const fileRef = ref(storage, `researchProposals/${id}/tasks/attachments/${Date.now()}-${file.name}`);
+          await uploadBytes(fileRef, file);
+          const url = await getDownloadURL(fileRef);
+          newAttachments.push({ name: file.name, url, uploadedAt: new Date().toISOString() });
+        }
+      }
+
       await updateDoc(taskRef, {
         title: formData.title,
         description: formData.description || '',
         dueDate: dueDateTimestamp,
+        attachments: [...keptAttachments, ...newAttachments],
         updatedAt: serverTimestamp()
       });
 

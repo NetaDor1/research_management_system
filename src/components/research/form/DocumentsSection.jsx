@@ -29,7 +29,7 @@ const DocumentsSection = ({
 
       <div className="form-group">
         <label>{t('documentsChecklistLabel', "רשימת צ'קליסט של מסמכים להגשה מטעם המוסד")}</label>
-        <div style={{ display: 'grid', gap: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
           {requiredDocuments.map((docName) => {
             const filesForDoc = formData.requiredDocumentsFiles?.[docName] || [];
             return (
@@ -55,9 +55,6 @@ const DocumentsSection = ({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <input type="checkbox" checked={filesForDoc.length > 0} readOnly />
                     <strong>{docName}</strong>
-                    <span style={{ color: '#64748b', fontSize: '13px' }}>
-                      ({filesForDoc.length} {t('uploadedFilesCount', 'קבצים')})
-                    </span>
                   </div>
 
                   <label
@@ -103,32 +100,28 @@ const DocumentsSection = ({
                             padding: '8px 10px',
                           }}
                         >
-                          <span style={{ flex: 1, wordBreak: 'break-word' }}>{fileName}</span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            {fileUrl && (
-                              <>
-                                <a href={fileUrl} target="_blank" rel="noopener noreferrer">
-                                  {t('previewFile', 'תצוגה מקדימה')}
-                                </a>
-                                <a href={fileUrl} download={fileName}>
-                                  {t('downloadFile', 'הורדה')}
-                                </a>
-                              </>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveRequiredDocumentFile(docName, fileIndex)}
-                              style={{
-                                border: '1px solid #cbd5e1',
-                                background: 'white',
-                                borderRadius: '4px',
-                                padding: '4px 8px',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              {t('remove', 'הסר')}
-                            </button>
-                          </div>
+                          <a
+                            href={fileUrl || '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ flex: 1, wordBreak: 'break-word', color: '#667eea', textDecoration: 'none' }}
+                          >
+                            📄 {fileName}
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveRequiredDocumentFile(docName, fileIndex)}
+                            style={{
+                              border: '1px solid #cbd5e1',
+                              background: 'white',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              cursor: 'pointer',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {t('remove', 'הסר')}
+                          </button>
                         </div>
                       );
                     })}

@@ -1147,7 +1147,7 @@ const NewPatent = () => {
             <h2>מסמכים</h2>
             <div className="form-group">
               <label>צ'קליסט מסמכים להגשה</label>
-              <div style={{ display: 'grid', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
                 {requiredDocuments.map((docName) => {
                   const filesForDoc = formData.requiredDocumentsFiles?.[docName] || [];
                   return (
@@ -1173,9 +1173,6 @@ const NewPatent = () => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <input type="checkbox" checked={filesForDoc.length > 0} readOnly />
                           <strong>{docName}</strong>
-                          <span style={{ color: '#64748b', fontSize: '13px' }}>
-                            ({filesForDoc.length} קבצים)
-                          </span>
                         </div>
 
                         <label
@@ -1225,18 +1222,15 @@ const NewPatent = () => {
                                   padding: '8px 10px',
                                 }}
                               >
-                                <span style={{ flex: 1, wordBreak: 'break-word' }}>{fileName}</span>
+                                <a
+                                  href={fileUrl || '#'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ flex: 1, wordBreak: 'break-word', color: '#667eea', textDecoration: 'none' }}
+                                >
+                                  📄 {fileName}
+                                </a>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  {fileUrl && (
-                                    <>
-                                      <a href={fileUrl} target="_blank" rel="noopener noreferrer">
-                                        תצוגה מקדימה
-                                      </a>
-                                      <a href={fileUrl} download={fileName}>
-                                        הורדה
-                                      </a>
-                                    </>
-                                  )}
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveRequiredDocumentFile(docName, fileIndex)}

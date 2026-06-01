@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import TaskForm from '../components/research/TaskForm';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, collection, addDoc, updateDoc, deleteDoc, getDoc as getDocTask, serverTimestamp, onSnapshot, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -28,7 +29,7 @@ const PatentDetail = () => {
   const [newTask, setNewTask] = useState({ title: '', description: '', dueDate: '', files: [] });
   const [uploading, setUploading] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
-  const [editTask, setEditTask] = useState({ title: '', description: '', dueDate: '' });
+  const [editTask, setEditTask] = useState({ title: '', description: '', dueDate: '', files: [], existingAttachments: [] });
 
   useEffect(() => {
     const fetchPatent = async () => {
@@ -239,6 +240,18 @@ const PatentDetail = () => {
       }
 
       const researcherId = patentData?.researcherId || '';
+
+      // Upload admin-attached files if any
+      const attachments = [];
+      if (newTask.files && newTask.files.length > 0) {
+        for (const file of newTask.files) {
+          const fileRef = ref(storage, `patents/${id}/tasks/attachments/${Date.now()}-${file.name}`);
+          await uploadBytes(fileRef, file);
+          const url = await getDownloadURL(fileRef);
+          attachments.push({ name: file.name, url, uploadedAt: new Date().toISOString() });
+        }
+      }
+
       const taskData = {
         title: newTask.title,
         description: newTask.description || '',
@@ -247,7 +260,8 @@ const PatentDetail = () => {
         createdBy: user?.name || 'Admin',
         researcherId,
         status: 'pending',
-        submissions: []
+        submissions: [],
+        attachments
       };
 
       const tasksRef = collection(db, 'patents', id, 'tasks');
@@ -296,7 +310,7 @@ const PatentDetail = () => {
         uploadedFiles.push({
           name: file.name,
           url: url,
-          uploadedAt: serverTimestamp()
+          uploadedAt: new Date().toISOString()
         });
       }
 
@@ -339,26 +353,22 @@ const PatentDetail = () => {
     setEditTask({
       title: task.title,
       description: task.description || '',
-      dueDate: task.dueDate ? (task.dueDate.toDate ? task.dueDate.toDate().toISOString().split('T')[0] : '') : ''
+      dueDate: task.dueDate ? (task.dueDate.toDate ? task.dueDate.toDate().toISOString().split('T')[0] : '') : '',
+      files: [],
+      existingAttachments: task.attachments || []
     });
   };
 
   // Handle saving edited task (admin only)
-  const handleSaveEditTask = async () => {
+  const handleSaveEditTask = async (formData) => {
     if (!isAdmin() || !id || !db || !editingTaskId) return;
-
-    if (!editTask.title.trim()) {
-      alert('אנא הזן כותרת למשימה');
-      return;
-    }
 
     setUploading(true);
     try {
-      // Convert dueDate string to Timestamp if provided
       let dueDateTimestamp = null;
-      if (editTask.dueDate) {
+      if (formData.dueDate) {
         try {
-          dueDateTimestamp = Timestamp.fromDate(new Date(editTask.dueDate));
+          dueDateTimestamp = Timestamp.fromDate(new Date(formData.dueDate));
         } catch (e) {
           console.error('Error converting dueDate:', e);
         }
@@ -368,30 +378,43 @@ const PatentDetail = () => {
       const taskSnap = await getDoc(taskRef);
       const existingTask = taskSnap.exists() ? taskSnap.data() : null;
       const researcherId = existingTask?.researcherId || patentData?.researcherId || '';
+
+      const keptAttachments = formData.existingAttachments || [];
+      const newAttachments = [];
+      if (formData.files && formData.files.length > 0) {
+        for (const file of formData.files) {
+          const fileRef = ref(storage, `patents/${id}/tasks/attachments/${Date.now()}-${file.name}`);
+          await uploadBytes(fileRef, file);
+          const url = await getDownloadURL(fileRef);
+          newAttachments.push({ name: file.name, url, uploadedAt: new Date().toISOString() });
+        }
+      }
+
       await updateDoc(taskRef, {
-        title: editTask.title,
-        description: editTask.description || '',
+        title: formData.title,
+        description: formData.description || '',
         dueDate: dueDateTimestamp,
+        attachments: [...keptAttachments, ...newAttachments],
         updatedAt: serverTimestamp()
       });
 
-      const dueDateLabel = editTask.dueDate
-        ? new Date(editTask.dueDate).toLocaleDateString('he-IL')
+      const dueDateLabel = formData.dueDate
+        ? new Date(formData.dueDate).toLocaleDateString('he-IL')
         : '';
 
       await createTaskNotification({
         researcherId,
         title: 'עדכון משימה מהרשות',
         message: dueDateLabel
-          ? `תאריך הגשת "${editTask.title}" עודכן ל-"${dueDateLabel}".`
-          : `המשימה "${editTask.title}" עודכנה.`,
+          ? `תאריך הגשת "${formData.title}" עודכן ל-"${dueDateLabel}".`
+          : `המשימה "${formData.title}" עודכנה.`,
         taskId: editingTaskId,
         link: `/patents/${id}`,
         eventKey: `patent_task_updated:${editingTaskId}:${Date.now()}`
       });
 
       setEditingTaskId(null);
-      setEditTask({ title: '', description: '', dueDate: '' });
+      setEditTask({ title: '', description: '', dueDate: '', files: [], existingAttachments: [] });
       alert('המשימה עודכנה בהצלחה!');
     } catch (err) {
       console.error('Error updating task:', err);
@@ -1278,6 +1301,40 @@ const PatentDetail = () => {
                       }}
                     />
                   </div>
+                  <div style={{ marginBottom: '15px' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                      קבצים מצורפים:
+                    </label>
+                    <label style={{ background: '#f0f0f0', color: '#333', border: '1px solid #ccc', padding: '7px 14px', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', display: 'inline-block' }}>
+                      📎 הוסף קבצים
+                      <input
+                        type="file"
+                        multiple
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const selected = Array.from(e.target.files);
+                          setNewTask(prev => ({ ...prev, files: [...(prev.files || []), ...selected] }));
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                    {(newTask.files || []).length > 0 && (
+                      <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {(newTask.files || []).map((file, idx) => (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 10px' }}>
+                            <span style={{ fontSize: '13px', color: '#444' }}>📄 {file.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setNewTask(prev => ({ ...prev, files: prev.files.filter((_, i) => i !== idx) }))}
+                              style={{ border: '1px solid #cbd5e1', background: 'white', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer', fontSize: '12px' }}
+                            >
+                              הסר
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <button
                     onClick={handleAddTask}
                     disabled={uploading || !newTask.title.trim()}
@@ -1314,121 +1371,50 @@ const PatentDetail = () => {
                         border: '1px solid #ddd'
                       }}
                     >
+                      {editingTaskId === task.id ? (
+                        <TaskForm
+                          task={task}
+                          onSave={handleSaveEditTask}
+                          onCancel={() => {
+                            setEditingTaskId(null);
+                            setEditTask({ title: '', description: '', dueDate: '', files: [], existingAttachments: [] });
+                          }}
+                          loading={uploading}
+                        />
+                      ) : (
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '10px' }}>
                         <div style={{ flex: 1 }}>
-                          {editingTaskId === task.id ? (
-                            // Edit mode
-                            <div>
-                              <div style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                                  כותרת המשימה: *
-                                </label>
-                                <input
-                                  type="text"
-                                  value={editTask.title}
-                                  onChange={(e) => setEditTask({ ...editTask, title: e.target.value })}
-                                  style={{
-                                    width: '100%',
-                                    padding: '10px',
-                                    borderRadius: '4px',
-                                    border: '1px solid #ddd',
-                                    fontSize: '16px'
-                                  }}
-                                  placeholder="הזן כותרת למשימה"
-                                />
-                              </div>
-                              <div style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                                  תיאור:
-                                </label>
-                                <textarea
-                                  value={editTask.description}
-                                  onChange={(e) => setEditTask({ ...editTask, description: e.target.value })}
-                                  style={{
-                                    width: '100%',
-                                    padding: '10px',
-                                    borderRadius: '4px',
-                                    border: '1px solid #ddd',
-                                    fontSize: '16px',
-                                    minHeight: '100px',
-                                    resize: 'vertical'
-                                  }}
-                                  placeholder="הזן תיאור למשימה"
-                                />
-                              </div>
-                              <div style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                                  תאריך יעד:
-                                </label>
-                                <input
-                                  type="date"
-                                  value={editTask.dueDate}
-                                  onChange={(e) => setEditTask({ ...editTask, dueDate: e.target.value })}
-                                  style={{
-                                    width: '100%',
-                                    padding: '10px',
-                                    borderRadius: '4px',
-                                    border: '1px solid #ddd',
-                                    fontSize: '16px'
-                                  }}
-                                />
-                              </div>
-                              <div style={{ display: 'flex', gap: '10px' }}>
-                                <button
-                                  onClick={handleSaveEditTask}
-                                  disabled={uploading || !editTask.title.trim()}
-                                  style={{
-                                    padding: '10px 20px',
-                                    background: uploading ? '#ccc' : '#28a745',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    cursor: uploading ? 'not-allowed' : 'pointer',
-                                    fontSize: '14px',
-                                    fontWeight: 'bold'
-                                  }}
-                                >
-                                  {uploading ? 'שומר...' : 'שמור שינויים'}
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setEditingTaskId(null);
-                                    setEditTask({ title: '', description: '', dueDate: '' });
-                                  }}
-                                  disabled={uploading}
-                                  style={{
-                                    padding: '10px 20px',
-                                    background: '#6c757d',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    cursor: uploading ? 'not-allowed' : 'pointer',
-                                    fontSize: '14px',
-                                    fontWeight: 'bold'
-                                  }}
-                                >
-                                  ביטול
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            // View mode
-                            <>
-                              <h3 style={{ margin: 0, marginBottom: '5px', color: '#333' }}>{task.title}</h3>
-                              {task.description && (
-                                <p style={{ margin: '5px 0', color: '#666' }}>{task.description}</p>
+                          <>
+                            <h3 style={{ margin: 0, marginBottom: '5px', color: '#333' }}>{task.title}</h3>
+                            {task.description && (
+                              <p style={{ margin: '5px 0', color: '#666' }}>{task.description}</p>
+                            )}
+                            <div style={{ fontSize: '14px', color: '#888', marginTop: '10px' }}>
+                              <span>נוצרה: {formatDate(task.createdAt)}</span>
+                              {task.dueDate && (
+                                <span style={{ marginRight: '15px' }}> | תאריך יעד: {formatDate(task.dueDate)}</span>
                               )}
-                              <div style={{ fontSize: '14px', color: '#888', marginTop: '10px' }}>
-                                <span>נוצרה: {formatDate(task.createdAt)}</span>
-                                {task.dueDate && (
-                                  <span style={{ marginRight: '15px' }}> | תאריך יעד: {formatDate(task.dueDate)}</span>
-                                )}
-                                {task.status === 'submitted' && task.submittedAt && (
-                                  <span style={{ marginRight: '15px' }}> | הוגשה: {formatDate(task.submittedAt)}</span>
-                                )}
+                              {task.status === 'submitted' && task.submittedAt && (
+                                <span style={{ marginRight: '15px' }}> | הוגשה: {formatDate(task.submittedAt)}</span>
+                              )}
+                            </div>
+
+                            {task.attachments && task.attachments.length > 0 && (
+                              <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                {task.attachments.map((file, idx) => (
+                                  <a
+                                    key={idx}
+                                    href={file.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ fontSize: '13px', color: '#667eea', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                  >
+                                    📎 {file.name}
+                                  </a>
+                                ))}
                               </div>
-                            </>
-                          )}
+                            )}
+                          </>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'flex-end' }}>
                           <span
@@ -1442,7 +1428,7 @@ const PatentDetail = () => {
                           >
                             {task.status === 'submitted' ? 'הוגשה' : 'ממתינה'}
                           </span>
-                          {isAdmin() && editingTaskId !== task.id && (
+                          {isAdmin() && (
                             <div style={{ display: 'flex', gap: '3px', opacity: 0.5, transition: 'opacity 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.opacity = '1'} onMouseLeave={(e) => e.currentTarget.style.opacity = '0.5'}>
                               <button
                                 onClick={() => handleEditTask(task)}
@@ -1482,6 +1468,7 @@ const PatentDetail = () => {
                           )}
                         </div>
                       </div>
+                      )}
 
                       {/* File upload for researcher */}
                       {!isAdmin() && task.status === 'pending' && (
