@@ -227,6 +227,35 @@
   cursor: not-allowed;
 }
 
+@keyframes ai-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ai-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: ai-spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+.research-ai-chat-toolbar .ai-spinner {
+  border-color: rgba(67, 56, 202, 0.25);
+  border-top-color: #4338ca;
+  margin-left: 6px;
+  margin-right: 2px;
+}
+
+.research-ai-chat-server-hint {
+  align-self: center;
+  font-size: 0.78rem;
+  color: #b45309;
+  font-weight: 600;
+}
+
 @media (max-width: 480px) {
   .research-ai-chat-root {
     left: 12px;

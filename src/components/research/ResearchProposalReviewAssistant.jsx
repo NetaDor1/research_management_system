@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import {
   buildResearchReviewPayload,
+  checkReviewApiHealth,
   getResearchReviewValidationIssues,
   requestResearchAssistantChat,
   requestResearchProposalReview,
@@ -47,17 +48,17 @@ const ResearchProposalReviewAssistant = ({ formData }) => {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState(null); // 'send' | 'review' | null
   const [error, setError] = useState('');
+  const [serverOnline, setServerOnline] = useState(null);
   const listRef = useRef(null);
 
+  const loading = loadingAction !== null;
   const lang = language === 'en' ? 'en' : 'he';
 
   useEffect(() => {
     if (!open) return undefined;
-    const onKey = (e) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
@@ -66,6 +67,24 @@ const ResearchProposalReviewAssistant = ({ formData }) => {
     if (!open || !listRef.current) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages, loading, open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    let cancelled = false;
+    setServerOnline(null);
+    checkReviewApiHealth().then((ok) => {
+      if (cancelled) return;
+      setServerOnline(ok);
+      if (!ok) {
+        setError(
+          lang === 'en'
+            ? 'AI server is not running. In a terminal: cd client → npm run start:server (or npm run dev).'
+            : 'שרת ה-AI לא רץ. בטרמינל: cd client → npm run start:server (או npm run dev).'
+        );
+      }
+    });
+    return () => { cancelled = true; };
+  }, [open, lang]);
 
   const sendUserMessage = useCallback(async () => {
     const trimmed = input.trim();
@@ -76,7 +95,7 @@ const ResearchProposalReviewAssistant = ({ formData }) => {
     const userMsg = { role: 'user', content: trimmed };
     const next = [...messages, userMsg];
     setMessages(next);
-    setLoading(true);
+    setLoadingAction('send');
 
     try {
       const proposal = buildResearchReviewPayload(formData);
@@ -85,7 +104,7 @@ const ResearchProposalReviewAssistant = ({ formData }) => {
     } catch (e) {
       setError(e.message || (lang === 'en' ? 'Request failed' : 'הבקשה נכשלה'));
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   }, [input, loading, messages, formData, lang]);
 
@@ -98,14 +117,14 @@ const ResearchProposalReviewAssistant = ({ formData }) => {
         return L ? L[lang] : key;
       });
       setError(
-        lang === 'en' ?
-          `Complete before full review: ${parts.join(', ')}.`
-        : `לפני ביקורת מלאה יש למלא: ${parts.join(' · ')}.`
+        lang === 'en'
+          ? `Complete before full review: ${parts.join(', ')}.`
+          : `לפני ביקורת מלאה יש למלא: ${parts.join(' · ')}.`
       );
       return;
     }
 
-    setLoading(true);
+    setLoadingAction('review');
     try {
       const payload = buildResearchReviewPayload(formData);
       const data = await requestResearchProposalReview(payload);
@@ -114,7 +133,7 @@ const ResearchProposalReviewAssistant = ({ formData }) => {
     } catch (e) {
       setError(e.message || (lang === 'en' ? 'Request failed' : 'הבקשה נכשלה'));
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   }, [formData, lang, t]);
 
@@ -131,7 +150,7 @@ const ResearchProposalReviewAssistant = ({ formData }) => {
       dir={isRTL ? 'rtl' : 'ltr'}
       style={{ textAlign: isRTL ? 'right' : 'left' }}
     >
-      {open ?
+      {open ? (
         <div className="research-ai-chat-panel" role="dialog" aria-label={t('aiResearchChatTitle', 'עוזר הצעת מחקר')}>
           <div className="research-ai-chat-header">
             <h2>{t('aiResearchChatTitle', 'עוזר הצעת מחקר')}</h2>
@@ -146,9 +165,23 @@ const ResearchProposalReviewAssistant = ({ formData }) => {
           </div>
 
           <div className="research-ai-chat-toolbar">
-            <button type="button" onClick={runFullReview} disabled={loading}>
-              {t('aiResearchChatFullReview', 'ביקורת מלאה')}
+            <button
+              type="button"
+              onClick={runFullReview}
+              disabled={loading || serverOnline === false}
+              aria-busy={loadingAction === 'review'}
+            >
+              {loadingAction === 'review' ? (
+                <><span className="ai-spinner" aria-hidden="true" />{lang === 'en' ? 'Reviewing…' : 'מבצע ביקורת…'}</>
+              ) : (
+                t('aiResearchChatFullReview', 'ביקורת מלאה')
+              )}
             </button>
+            {serverOnline === false ? (
+              <span className="research-ai-chat-server-hint" role="status">
+                {lang === 'en' ? 'AI server offline' : 'שרת AI לא מחובר'}
+              </span>
+            ) : null}
           </div>
 
           <div className="research-ai-chat-messages" ref={listRef}>
@@ -163,18 +196,18 @@ const ResearchProposalReviewAssistant = ({ formData }) => {
                 <div className={`research-ai-chat-bubble ${m.role}`}>{m.content}</div>
               </div>
             ))}
-            {loading ?
+            {loading ? (
               <div className="research-ai-chat-typing">
                 {t('aiResearchChatThinking', 'כותב תשובה…')}
               </div>
-            : null}
+            ) : null}
           </div>
 
-          {error ?
+          {error ? (
             <div className="research-ai-chat-error" role="alert">
               {error}
             </div>
-          : null}
+          ) : null}
 
           <div className="research-ai-chat-input-row">
             <textarea
@@ -191,13 +224,18 @@ const ResearchProposalReviewAssistant = ({ formData }) => {
               type="button"
               className="research-ai-chat-send"
               onClick={sendUserMessage}
-              disabled={loading || !input.trim()}
+              disabled={loading || !input.trim() || serverOnline === false}
+              aria-busy={loadingAction === 'send'}
             >
-              {t('aiResearchChatSend', 'שליחה')}
+              {loadingAction === 'send' ? (
+                <span className="ai-spinner" aria-label={lang === 'en' ? 'Sending…' : 'שולח…'} />
+              ) : (
+                t('aiResearchChatSend', 'שליחה')
+              )}
             </button>
           </div>
         </div>
-      : null}
+      ) : null}
 
       <button
         type="button"

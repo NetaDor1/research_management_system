@@ -28,6 +28,8 @@
   "scripts": {
     "start": "react-scripts start",
     "start:server": "npm start --prefix server",
+    "setup:server": "node scripts/setup-server-env.js",
+    "dev": "concurrently -k -n api,web -c green,blue \"npm run start:server\" \"npm start\"",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
@@ -51,6 +53,7 @@
     ]
   },
   "devDependencies": {
+    "concurrently": "^9.1.2",
     "eslint-plugin-jest": "^25.7.0"
   }
 }
