@@ -11,9 +11,28 @@ const {
 } = require('@google/generative-ai');
 
 const PORT = Number(process.env.PORT) || 3001;
-const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
 const GEMINI_TIMEOUT_MS = Number(process.env.GEMINI_REQUEST_TIMEOUT_MS) || 120000;
 const GEMINI_REQUEST_OPTIONS = { timeout: GEMINI_TIMEOUT_MS };
+
+// Disable thinking to keep responses fast on flash models.
+const THINKING_OFF = { thinkingConfig: { thinkingBudget: 0 } };
+
+/** Retry once after `delayMs` on transient errors (5xx / timeout). */
+async function withRetry(fn, delayMs = 3000) {
+  try {
+    return await fn();
+  } catch (err) {
+    const status = err?.status ?? err?.statusCode;
+    const isTransient =
+      (typeof status === 'number' && status >= 500) ||
+      err?.name === 'AbortError' ||
+      /timeout|timed out|ETIMEDOUT/i.test(err?.message || '');
+    if (!isTransient) throw err;
+    await new Promise((r) => setTimeout(r, delayMs));
+    return fn(); // single retry
+  }
+}
 
 const INVALID_PLACEHOLDERS = new Set(['', 'your_api_key_here', 'test', 'undefined', 'null']);
 
@@ -219,7 +238,10 @@ app.post('/api/review-proposal', async (req, res, next) => {
 
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     const model = genAI.getGenerativeModel(
-      { model: GEMINI_MODEL, generationConfig: { temperature: 0.2, responseMimeType: 'application/json' } },
+      {
+        model: GEMINI_MODEL,
+        generationConfig: { temperature: 0.2, responseMimeType: 'application/json', ...THINKING_OFF },
+      },
       GEMINI_REQUEST_OPTIONS
     );
 
@@ -250,7 +272,7 @@ ${proposalJson}`;
 
     let text;
     try {
-      const result = await model.generateContent(prompt);
+      const result = await withRetry(() => model.generateContent(prompt));
       text = result.response.text();
     } catch (geminiErr) {
       throw mapGeminiError(geminiErr);
@@ -331,17 +353,38 @@ app.post('/api/research-assistant-chat', async (req, res, next) => {
     const systemInstruction = `You are an expert academic research-grant advisor and reviewer.
 The user is drafting a proposal submission. Answer their questions clearly and practically.
 Prefer Hebrew unless the user writes only in English.
-Use the draft context below when present. If the user asks you to draft or generate proposal text (title, abstract, objectives, methods, budget), provide a structured draft they can copy — even when the form is mostly empty. Mark placeholders clearly (e.g. [שם מוסד], [סכום משוער]) and do not present guesses as verified facts.
-If a section is empty and they only want feedback, say what is missing.
-Do not invent specific grant deadlines, committee names, or bibliographic references.
-Keep answers focused; prefer section-by-section outlines over one wall of text.
+
+The proposal has the following sections (use these exact names when referring to them):
+1. Abstract / תקציר
+2. Scientific background and state of the art / רקע מדעי ומצב טכנולוגי עדכני
+3. Research objectives and specific aims / מטרות מחקר ומטרות ספציפיות
+4. Detailed description of the proposed research / תיאור מפורט של המחקר המוצע
+5. Significance, innovation and potential benefits / משמעות, חדשנות ותועלת פוטנציאלית
+6. Applicability / ישימות
+
+FORMATTING RULES (strictly follow):
+- Use **bold** (double asterisks) for section titles and key terms only.
+- Use - for bullet points.
+- Do NOT use # or ## headers. Do NOT use --- separators. Do NOT use * for bullets (use -).
+- Do NOT write the word "טיוטה" or "draft" anywhere.
+- Keep answers clean and readable — avoid excessive symbols.
+
+CONTENT RULES:
+- When the user asks for a full draft or proposal, write ALL sections (Abstract, Scientific Background, Research Objectives, Detailed Description, Significance/Innovation, Applicability, Budget) with their full content — not just headings.
+- When the user asks for advice or feedback only, give guidance and bullet points — without writing paragraph drafts unless asked.
+- If a section is missing from the form, tell the user what to add — do not invent content.
+- Do not invent grant deadlines, committee names, or citations.
 
 Current draft context (may be partial):
 ${proposalBlock || '(No draft text in the form yet — use the user message as the topic if they describe one.)'}`;
 
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     const model = genAI.getGenerativeModel(
-      { model: GEMINI_MODEL, systemInstruction, generationConfig: { temperature: 0.35, maxOutputTokens: 4096 } },
+      {
+        model: GEMINI_MODEL,
+        systemInstruction,
+        generationConfig: { temperature: 0.35, maxOutputTokens: 4096, ...THINKING_OFF },
+      },
       GEMINI_REQUEST_OPTIONS
     );
 
@@ -352,7 +395,7 @@ ${proposalBlock || '(No draft text in the form yet — use the user message as t
     let replyText;
     try {
       const chat = model.startChat({ history });
-      const result = await chat.sendMessage(lastUser);
+      const result = await withRetry(() => chat.sendMessage(lastUser));
       replyText = result.response.text();
     } catch (geminiErr) {
       throw mapGeminiError(geminiErr);

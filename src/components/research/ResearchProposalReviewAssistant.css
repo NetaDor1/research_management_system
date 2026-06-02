@@ -1,16 +1,19 @@
-/* Floating chat: anchored to physical bottom-left of the viewport */
+/* Root is a zero-size anchor so the FAB stays exactly at bottom-left */
 .research-ai-chat-root {
   position: fixed;
   left: 16px;
   bottom: 16px;
-  right: auto;
+  width: 56px;
+  height: 56px;
   z-index: 10060;
   font-family: inherit;
-  direction: rtl;
-  text-align: right;
 }
 
+/* FAB is pinned inside the anchor — never moves */
 .research-ai-chat-fab {
+  position: absolute;
+  bottom: 0;
+  left: 0;
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -32,12 +35,18 @@
   box-shadow: 0 10px 32px rgba(102, 126, 234, 0.55);
 }
 
-.research-ai-chat-panel {
+/* Panel wrapper: resizable, anchored above FAB */
+.research-ai-chat-panel-wrapper {
   position: absolute;
   left: 0;
   bottom: 72px;
-  width: min(100vw - 32px, 380px);
-  max-height: min(72vh, 560px);
+  width: 380px;
+  height: 400px;
+}
+
+.research-ai-chat-panel {
+  width: 100%;
+  height: 100%;
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 12px 48px rgba(15, 23, 42, 0.2);
@@ -46,6 +55,38 @@
   overflow: hidden;
   border: 1px solid #e2e8f0;
 }
+
+/* Resize handles */
+.ai-resize-handle {
+  position: absolute;
+  z-index: 10;
+}
+
+.ai-resize-n {
+  top: -5px;
+  left: 12px;
+  right: 12px;
+  height: 10px;
+  cursor: n-resize;
+  z-index: 20;
+}
+
+.ai-resize-e {
+  top: 12px;
+  right: -5px;
+  bottom: 12px;
+  width: 10px;
+  cursor: e-resize;
+}
+
+.ai-resize-ne {
+  top: -5px;
+  right: -5px;
+  width: 16px;
+  height: 16px;
+  cursor: ne-resize;
+}
+
 
 .research-ai-chat-header {
   display: flex;
@@ -164,6 +205,22 @@
   border-bottom-right-radius: 4px;
 }
 
+.ai-md-header {
+  font-weight: 700;
+  margin-top: 10px;
+  margin-bottom: 2px;
+}
+
+.ai-md-bullet {
+  padding-right: 6px;
+  padding-left: 4px;
+  margin-bottom: 2px;
+}
+
+.ai-md-gap {
+  height: 6px;
+}
+
 .research-ai-chat-typing {
   font-size: 0.8rem;
   color: #64748b;
@@ -265,5 +322,10 @@
   .research-ai-chat-panel {
     bottom: 68px;
     width: calc(100vw - 24px);
+  }
+
+  .research-ai-chat-panel--expanded {
+    width: calc(100vw - 24px);
+    max-height: 90vh;
   }
 }
