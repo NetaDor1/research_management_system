@@ -20,6 +20,6 @@ fs.copyFileSync(examplePath, envPath);
 console.log(`[setup:server] Created ${envPath}`);
 console.log('');
 console.log('Next steps:');
-console.log('  1. Open https://aistudio.google.com/apikey — create a key starting with AIzaSy');
-console.log('  2. Edit server/.env — set GEMINI_API_KEY=AIzaSy... (no space after =, no quotes)');
+console.log('  1. Open https://aistudio.google.com/apikey — create a Gemini API key');
+console.log('  2. Edit server/.env — set GEMINI_API_KEY=<your_key> (no space after =, no quotes)');
 console.log('  3. Run: npm run dev');

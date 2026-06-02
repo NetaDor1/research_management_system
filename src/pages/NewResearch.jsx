@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -1268,6 +1268,19 @@ const NewResearch = () => {
     });
   };
 
+  const handleWorkPlanTasksChange = useCallback((tasks) => {
+    setFormData((prev) => {
+      const prevTasks = prev.workPlanTasks || [];
+      const nextTasks = tasks || [];
+      if (prevTasks === nextTasks) return prev;
+      if (JSON.stringify(prevTasks) === JSON.stringify(nextTasks)) return prev;
+      return {
+        ...prev,
+        workPlanTasks: nextTasks,
+      };
+    });
+  }, []);
+
   return (
     <div className="page-container">
       <div className="page-content">
@@ -1352,12 +1365,7 @@ const NewResearch = () => {
           ) : (
             <WorkPlanSection
               initialTasks={formData.workPlanTasks || []}
-              onTasksChange={(tasks) => {
-                setFormData(prev => ({
-                  ...prev,
-                  workPlanTasks: tasks
-                }));
-              }}
+              onTasksChange={handleWorkPlanTasksChange}
               readOnly={false}
               suppressParentSync={Boolean(editId && loadingExisting)}
             />

@@ -111,7 +111,25 @@ function parseJsonContent(text) {
 }
 
 function mapGeminiError(err) {
+  // Raw log so we can see exactly what Gemini returned
+  console.error('[Gemini raw error]', {
+    name: err?.name,
+    status: err?.status,
+    statusCode: err?.statusCode,
+    message: err?.message,
+    errorDetails: err?.errorDetails,
+    stack: err?.stack?.split('\n')[0],
+  });
+
   const message = err && typeof err.message === 'string' ? err.message : '';
+  const suggestedModel =
+    GEMINI_MODEL === 'gemini-1.5-flash' ? 'gemini-2.0-flash' : 'gemini-1.5-flash';
+  const status =
+    typeof err?.status === 'number'
+      ? err.status
+      : typeof err?.statusCode === 'number'
+        ? err.statusCode
+        : null;
 
   if (err?.name === 'AbortError' || /timeout|timed out|aborted|ETIMEDOUT/i.test(message)) {
     const out = new Error('תם הזמן לתשובה מ-Gemini. נסו שוב עם בקשה קצרה יותר.');
@@ -119,28 +137,36 @@ function mapGeminiError(err) {
     return out;
   }
 
-  if (err instanceof GoogleGenerativeAIFetchError && typeof err.status === 'number') {
-    if (err.status === 429) {
+  if ((err instanceof GoogleGenerativeAIFetchError && typeof err.status === 'number') || status) {
+    const httpStatus = typeof err?.status === 'number' ? err.status : status;
+    if (httpStatus === 429) {
       const isCredits = /prepayment|credits/i.test(message);
       const out = new Error(
         isCredits
-          ? 'הקרדיטים ב-Google AI Studio אזלו. צרו מפתח חדש בפרויקט חינמי חדש ב-https://aistudio.google.com/apikey — המפתח חייב להתחיל ב-AIzaSy.'
+          ? 'נראה שהקרדיטים/המכסה בחשבון Gemini אזלו. בדקו Usage/Billing ב-Google AI Studio ונסו שוב.'
           : 'מכסת הבקשות ל-Gemini מוצתה. נסו שוב עוד כ-60 שניות.'
       );
       out.statusCode = 429;
       return out;
     }
-    if (err.status >= 500) {
+    if (httpStatus >= 500) {
       const out = new Error('שגיאת שרת ב-Gemini. נסו שוב עוד רגע.');
       out.statusCode = 502;
       return out;
     }
+    if (httpStatus === 404 || /model.*not found|not supported|unknown model/i.test(message)) {
+      const out = new Error(
+        `המודל שהוגדר (${GEMINI_MODEL}) לא זמין עבור המפתח/האזור הזה. נסו לשנות ב-server/.env ל- GEMINI_MODEL=${suggestedModel} ולהפעיל מחדש שרת.`
+      );
+      out.statusCode = 502;
+      return out;
+    }
     if (
-      err.status === 400 || err.status === 401 || err.status === 403 ||
+      httpStatus === 400 || httpStatus === 401 || httpStatus === 403 ||
       /API key not valid|API_KEY_INVALID|PERMISSION_DENIED|does not have permission/i.test(message)
     ) {
       const out = new Error(
-        'מפתח GEMINI_API_KEY לא תקין. צרו מפתח ב-https://aistudio.google.com/apikey (חייב להתחיל ב-AIzaSy). שמרו ב-server/.env ללא רווחים או מרכאות.'
+        'מפתח GEMINI_API_KEY לא תקין או שאין הרשאה למודל. צרו/עדכנו מפתח ב-https://aistudio.google.com/apikey ושמרו ב-server/.env ללא רווחים או מרכאות.'
       );
       out.statusCode = 502;
       return out;
@@ -156,7 +182,17 @@ function mapGeminiError(err) {
     return out;
   }
 
-  const out = new Error(message || 'Gemini request failed');
+  if (/location is not supported|unsupported country|not available in your region/i.test(message)) {
+    const out = new Error('Gemini API לא זמין כרגע באזור/חשבון הזה. נסו מפתח אחר או חשבון עם אזור נתמך.');
+    out.statusCode = 502;
+    return out;
+  }
+
+  const out = new Error(
+    message
+      ? `בקשה ל-Gemini נכשלה: ${message}`
+      : 'בקשה ל-Gemini נכשלה מסיבה לא ידועה (502).'
+  );
   out.statusCode = 502;
   return out;
 }
@@ -355,9 +391,9 @@ if (!GEMINI_API_KEY) {
   console.error(`
 [review-server] GEMINI_API_KEY is missing or invalid.
 
-  1. Open https://aistudio.google.com/apikey — create a key starting with AIzaSy
+  1. Open https://aistudio.google.com/apikey — create a Gemini API key
   2. Create/edit: ${envPath}
-  3. Add: GEMINI_API_KEY=AIzaSy... (no space after =, no quotes)
+  3. Add: GEMINI_API_KEY=<your_key> (no space after =, no quotes)
   4. Run: npm run start:server
 `);
   process.exit(1);
