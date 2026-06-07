@@ -9,7 +9,7 @@ const ResearchDescriptionSection = ({ formData, handleChange }) => {
       
       <div className="form-group">
         <label htmlFor="abstract">
-          {t('abstractLabel', 'Abstract - תקציר')}
+          {t('abstractLabel', 'תקציר')}
         </label>
         <textarea
           id="abstract"
@@ -24,7 +24,7 @@ const ResearchDescriptionSection = ({ formData, handleChange }) => {
 
       <div className="form-group">
         <label htmlFor="scientificBackground">
-          {t('scientificBackgroundLabel', 'Scientific background and state of the art - רקע מדעי ומצב טכנולוגי חדש')}
+          {t('scientificBackgroundLabel', 'רקע מדעי ומצב טכנולוגי חדש')}
         </label>
         <textarea
           id="scientificBackground"
@@ -39,7 +39,7 @@ const ResearchDescriptionSection = ({ formData, handleChange }) => {
 
       <div className="form-group">
         <label htmlFor="researchObjectives">
-          {t('researchObjectivesLabel', 'מטרות מחקר ומטרות ספציפיות - Research objectives and specific aims')}
+          {t('researchObjectivesLabel', 'מטרות מחקר ומטרות ספציפיות')}
         </label>
         <textarea
           id="researchObjectives"
@@ -54,7 +54,7 @@ const ResearchDescriptionSection = ({ formData, handleChange }) => {
 
       <div className="form-group">
         <label htmlFor="detailedDescription">
-          {t('detailedDescriptionLabel', 'Detailed description of the proposed research - תיאור מפורט של המחקר המוצע')}
+          {t('detailedDescriptionLabel', 'תיאור מפורט של המחקר המוצע')}
         </label>
         <textarea
           id="detailedDescription"
@@ -69,7 +69,7 @@ const ResearchDescriptionSection = ({ formData, handleChange }) => {
 
       <div className="form-group">
         <label htmlFor="significanceInnovation">
-          {t('significanceLabel', 'Significance, innovation and potential benefits of the proposed research - משמעות, חדשנות ותועלת פוטנציאלית של המחקר המוצע')}
+          {t('significanceLabel', 'משמעות, חדשנות ותועלת פוטנציאלית של המחקר המוצע')}
         </label>
         <textarea
           id="significanceInnovation"
@@ -84,7 +84,7 @@ const ResearchDescriptionSection = ({ formData, handleChange }) => {
 
       <div className="form-group">
         <label htmlFor="applicability">
-          {t('applicabilityLabel', 'Applicability - ישימות')}
+          {t('applicabilityLabel', 'ישימות')}
         </label>
         <textarea
           id="applicability"

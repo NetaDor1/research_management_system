@@ -81,7 +81,6 @@
   display: flex;
   min-width: 0;
   position: relative;
-  direction: rtl; /* RTL to match page direction */
 }
 
 .gantt-month-cell {

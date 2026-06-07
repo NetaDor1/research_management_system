@@ -672,17 +672,19 @@ const ResearchDetail = () => {
           <thead>
             <tr>
               <th>${escapeHtml(t('task', 'משימה'))}</th>
-              <th>${escapeHtml(t('status', 'סטטוס'))}</th>
-              <th>${escapeHtml(t('dueDate', 'תאריך יעד'))}</th>
+              <th>${escapeHtml(language === 'en' ? 'Start month' : 'חודש התחלה')}</th>
+              <th>${escapeHtml(language === 'en' ? 'End month' : 'חודש סיום')}</th>
             </tr>
           </thead>
           <tbody>
             ${workPlanTasks
               .map((task) => {
-                const title = task.title || task.name || t('notSpecified', 'לא צוין');
-                const status = task.status || '';
-                const due = formatDateForLocale(task.dueDate || task.targetDate || task.date);
-                return `<tr><td>${escapeHtml(title)}</td><td>${escapeHtml(status)}</td><td>${escapeHtml(due)}</td></tr>`;
+                const title = task.title || task.name || task.taskTitle || task.taskName || t('notSpecified', 'לא צוין');
+                const startMonth = task.startMonth ?? task.start_month ?? '';
+                const endMonth = task.endMonth ?? task.end_month ?? '';
+                const startLabel = startMonth !== '' ? String(startMonth) : t('notSpecified', 'לא צוין');
+                const endLabel = endMonth !== '' ? String(endMonth) : t('notSpecified', 'לא צוין');
+                return `<tr><td>${escapeHtml(title)}</td><td>${escapeHtml(startLabel)}</td><td>${escapeHtml(endLabel)}</td></tr>`;
               })
               .join('')}
           </tbody>
@@ -690,13 +692,15 @@ const ResearchDetail = () => {
       `
       : '';
 
+    const isEn = language === 'en';
+
     const headerHtml = buildResearchProposalHeader({
-      titleHe: language === 'en' ? 'Research Program – Full Proposal' : 'תכנית מחקר - הצעה מלאה',
-      titleEn: 'RESEARCH PROPOSAL',
+      titleHe: isEn ? 'Research Program – Full Proposal' : 'תכנית מחקר - הצעה מלאה',
+      titleEn: isEn ? '' : 'RESEARCH PROPOSAL',
       metaLines: [
-        { label: language === 'en' ? 'Title' : 'כותרת', value: titleValue },
+        { label: isEn ? 'Title' : 'כותרת', value: titleValue },
         {
-          label: language === 'en' ? 'Project coordinator' : 'רכז הפרויקט',
+          label: isEn ? 'Project coordinator' : 'רכז הפרויקט',
           value: val(researchData.researcherName),
         },
       ],
@@ -739,12 +743,12 @@ const ResearchDetail = () => {
       </div>
 
       ${buildFormFieldsSection(t('researchDescriptionTitle', 'תיאור המחקר'), [
-        [t('abstractLabel', 'Abstract'), val(researchData.abstract)],
-        [t('scientificBackgroundLabel', 'Scientific background and state of the art'), val(researchData.scientificBackground)],
-        [t('researchObjectivesLabel', 'Research objectives and specific aims'), val(researchData.researchObjectives)],
-        [t('detailedDescriptionLabel', 'Detailed description of the proposed research'), val(researchData.detailedDescription)],
-        [t('significanceLabel', 'Significance, innovation and potential benefits of the proposed research'), val(researchData.significanceInnovation)],
-        [t('applicabilityLabel', 'Applicability'), val(researchData.applicability)],
+        [t('abstractLabel', 'תקציר'), val(researchData.abstract)],
+        [t('scientificBackgroundLabel', 'רקע מדעי ומצב טכנולוגי חדש'), val(researchData.scientificBackground)],
+        [t('researchObjectivesLabel', 'מטרות מחקר ומטרות ספציפיות'), val(researchData.researchObjectives)],
+        [t('detailedDescriptionLabel', 'תיאור מפורט של המחקר המוצע'), val(researchData.detailedDescription)],
+        [t('significanceLabel', 'משמעות, חדשנות ותועלת פוטנציאלית'), val(researchData.significanceInnovation)],
+        [t('applicabilityLabel', 'ישימות'), val(researchData.applicability)],
       ])}
 
       ${buildFormFieldsSection(t('additionalInfoTitle', 'מידע נוסף'), [
@@ -814,7 +818,7 @@ const ResearchDetail = () => {
         )}
 
         {!loading && !error && researchData && (
-          <div style={{ direction: 'rtl', textAlign: 'right' }}>
+          <div style={{ textAlign: language === 'en' ? 'left' : 'right' }}>
             {/*
               Edit permissions:
               - Admin can always edit.

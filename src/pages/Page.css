@@ -1,7 +1,6 @@
 .page-container {
   min-height: 100vh;
   padding: 80px 20px 20px;
-  direction: rtl;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
@@ -190,7 +189,6 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  direction: rtl;
 }
 
 .role-switcher span {
@@ -389,7 +387,6 @@
   border: 2px solid #e9ecef;
   border-radius: 8px;
   font-size: 16px;
-  direction: rtl;
   font-family: inherit;
   transition: all 0.3s ease;
   box-sizing: border-box;
@@ -843,6 +840,27 @@
 .signature-info p {
   margin: 5px 0;
   font-weight: 500;
+}
+
+/* Direction-aware form alignment */
+html[dir="ltr"] .form-section h2,
+html[dir="ltr"] .form-section h3,
+html[dir="ltr"] .form-group label,
+html[dir="ltr"] .form-group p,
+html[dir="ltr"] .form-subtitle,
+html[dir="ltr"] .page-content h1,
+html[dir="ltr"] .page-content p {
+  text-align: left;
+}
+
+html[dir="rtl"] .form-section h2,
+html[dir="rtl"] .form-section h3,
+html[dir="rtl"] .form-group label,
+html[dir="rtl"] .form-group p,
+html[dir="rtl"] .form-subtitle,
+html[dir="rtl"] .page-content h1,
+html[dir="rtl"] .page-content p {
+  text-align: right;
 }
 
 /* Responsive Design for Form */

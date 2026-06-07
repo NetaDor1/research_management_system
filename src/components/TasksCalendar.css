@@ -9,9 +9,8 @@
 }
 
 /* FullCalendar base styles - required for calendar to display */
-/* FullCalendar v6 includes its own CSS automatically, but we add RTL and custom styling */
+/* FullCalendar v6 includes its own CSS automatically, but we add custom styling */
 .tasks-calendar-container .fc {
-  direction: rtl;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   font-size: 1em;
   display: block;
@@ -43,7 +42,6 @@
 }
 
 .tasks-calendar-container .fc-header-toolbar {
-  direction: rtl;
 }
 
 .tasks-calendar-container .fc-toolbar-title {

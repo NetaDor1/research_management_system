@@ -257,7 +257,6 @@
   padding: 10px 12px;
   font-size: 0.9rem;
   font-family: inherit;
-  direction: rtl;
 }
 
 .research-ai-chat-input-row textarea:focus {

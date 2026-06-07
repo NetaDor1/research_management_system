@@ -1,55 +1,45 @@
 import React from 'react';
+import { useLanguage } from '../../context/LanguageContext';
 import './TasksTable.css';
 
-/**
- * TasksTable Component
- * 
- * Editable table for managing research tasks.
- * 
- * Props:
- * @param {Array} tasks - Array of task objects
- * @param {Function} onAddTask - Callback to add a new task
- * @param {Function} onRemoveTask - Callback to remove a task
- * @param {Function} onTaskChange - Callback when a task field changes
- */
 const TasksTable = ({ tasks, onAddTask, onRemoveTask, onTaskChange }) => {
-  // Generate month options (1-36)
+  const { t } = useLanguage();
   const monthOptions = Array.from({ length: 36 }, (_, i) => i + 1);
 
   return (
     <div className="tasks-table-container">
       <div className="tasks-table-header">
-        <h3>רשימת משימות</h3>
+        <h3>{t('tasksList', 'רשימת משימות')}</h3>
         <button
           type="button"
           className="btn-add-task"
           onClick={onAddTask}
         >
-          + הוסף משימה
+          + {t('addTask', 'הוסף משימה')}
         </button>
       </div>
 
       {tasks.length === 0 ? (
         <div className="tasks-empty-state">
-          <p>אין משימות. לחץ על "הוסף משימה" כדי להתחיל.</p>
+          <p>{t('noTasks', 'אין משימות. לחץ על "הוסף משימה" כדי להתחיל.')}</p>
         </div>
       ) : (
         <div className="tasks-table-wrapper">
           <table className="tasks-table">
             <thead>
               <tr>
-                <th>כותרת המשימה</th>
-                <th>חודש התחלה</th>
-                <th>חודש סיום</th>
-                <th>משך (חודשים)</th>
-                <th>פעולות</th>
+                <th>{t('taskTitle', 'כותרת המשימה')}</th>
+                <th>{t('startMonth', 'חודש התחלה')}</th>
+                <th>{t('endMonth', 'חודש סיום')}</th>
+                <th>{t('duration', 'משך (חודשים)')}</th>
+                <th>{t('actions', 'פעולות')}</th>
               </tr>
             </thead>
             <tbody>
-              {tasks.map((task, index) => {
+              {tasks.map((task) => {
                 const duration = task.endMonth - task.startMonth + 1;
                 const hasError = task.endMonth < task.startMonth;
-                
+
                 return (
                   <tr key={task.id} className={hasError ? 'task-row-error' : ''}>
                     <td>
@@ -57,9 +47,8 @@ const TasksTable = ({ tasks, onAddTask, onRemoveTask, onTaskChange }) => {
                         type="text"
                         value={task.title || ''}
                         onChange={(e) => onTaskChange(task.id, 'title', e.target.value)}
-                        placeholder="הכנס כותרת משימה"
+                        placeholder={t('taskTitlePlaceholder', 'הכנס כותרת משימה')}
                         className="task-title-input"
-                        dir="rtl"
                       />
                     </td>
                     <td>
@@ -69,9 +58,7 @@ const TasksTable = ({ tasks, onAddTask, onRemoveTask, onTaskChange }) => {
                         className="task-month-select"
                       >
                         {monthOptions.map(month => (
-                          <option key={month} value={month}>
-                            {month}
-                          </option>
+                          <option key={month} value={month}>{month}</option>
                         ))}
                       </select>
                     </td>
@@ -85,15 +72,13 @@ const TasksTable = ({ tasks, onAddTask, onRemoveTask, onTaskChange }) => {
                         {monthOptions
                           .filter(month => month >= (task.startMonth || 1))
                           .map(month => (
-                            <option key={month} value={month}>
-                              {month}
-                            </option>
+                            <option key={month} value={month}>{month}</option>
                           ))}
                       </select>
                     </td>
                     <td>
                       <span className="task-duration">
-                        {duration} {duration === 1 ? 'חודש' : 'חודשים'}
+                        {duration} {duration === 1 ? t('month', 'חודש') : t('months', 'חודשים')}
                       </span>
                     </td>
                     <td>
@@ -101,7 +86,7 @@ const TasksTable = ({ tasks, onAddTask, onRemoveTask, onTaskChange }) => {
                         type="button"
                         className="btn-remove-task"
                         onClick={() => onRemoveTask(task.id)}
-                        aria-label="הסר משימה"
+                        aria-label={t('removeTask', 'הסר משימה')}
                       >
                         ×
                       </button>

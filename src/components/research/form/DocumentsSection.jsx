@@ -49,12 +49,11 @@ const DocumentsSection = ({
                     alignItems: 'center',
                     gap: '10px',
                     marginBottom: filesForDoc.length > 0 ? '10px' : 0,
-                    flexWrap: 'wrap',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <input type="checkbox" checked={filesForDoc.length > 0} readOnly />
-                    <strong>{docName}</strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                    <input type="checkbox" checked={filesForDoc.length > 0} readOnly style={{ flexShrink: 0 }} />
+                    <strong style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block', minWidth: 0 }}>{docName}</strong>
                   </div>
 
                   <label

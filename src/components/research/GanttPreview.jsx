@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useLanguage } from '../../context/LanguageContext';
 import './GanttPreview.css';
 
 /**
@@ -10,6 +11,7 @@ import './GanttPreview.css';
  * @param {Array} tasks - Array of task objects with { id, title, startMonth, endMonth }
  */
 const GanttPreview = ({ tasks = [] }) => {
+  const { t, isRTL } = useLanguage();
   const maxMonth = useMemo(() => {
     if (tasks.length === 0) return 36;
     const months = tasks
@@ -67,9 +69,10 @@ const GanttPreview = ({ tasks = [] }) => {
     const endPercent = ((clampedEndBin + Math.max(0, Math.min(1, endProgress))) / totalBins) * 100;
     const widthPercent = Math.max(1, endPercent - startPercent);
 
+    const side = isRTL ? 'right' : 'left';
     return {
-      right: `${Math.max(0, startPercent)}%`,
-      width: `${Math.min(100, widthPercent)}%` // Minimum width of 1%
+      [side]: `${Math.max(0, startPercent)}%`,
+      width: `${Math.min(100, widthPercent)}%`,
     };
   };
 
@@ -77,10 +80,10 @@ const GanttPreview = ({ tasks = [] }) => {
     return (
       <div className="gantt-preview-container">
         <div className="gantt-preview-header">
-          <h3>תצוגה מקדימה - Gantt Chart</h3>
+          <h3>{t('ganttPreviewTitle', 'תצוגה מקדימה - Gantt Chart')}</h3>
         </div>
         <div className="gantt-empty-state">
-          <p>אין משימות להצגה. הוסף משימות בטבלה כדי לראות את תוכנית העבודה.</p>
+          <p>{t('ganttNoTasks', 'אין משימות להצגה. הוסף משימות בטבלה כדי לראות את תוכנית העבודה.')}</p>
         </div>
       </div>
     );
@@ -89,9 +92,9 @@ const GanttPreview = ({ tasks = [] }) => {
   return (
     <div className="gantt-preview-container">
       <div className="gantt-preview-header">
-        <h3>תצוגה מקדימה - Gantt Chart</h3>
+        <h3>{t('ganttPreviewTitle', 'תצוגה מקדימה - Gantt Chart')}</h3>
         <span className="gantt-subtitle">
-          {tasks.length} {tasks.length === 1 ? 'משימה' : 'משימות'} • {maxMonth} חודשים
+          {tasks.length} {tasks.length === 1 ? t('task', 'משימה') : t('tasks', 'משימות')} • {maxMonth} {t('ganttMonths', 'חודשים')}
         </span>
       </div>
 
@@ -99,7 +102,7 @@ const GanttPreview = ({ tasks = [] }) => {
         {/* Month header */}
         <div className="gantt-month-header">
           <div className="gantt-task-label-column">
-            <span className="gantt-label-header">משימה</span>
+            <span className="gantt-label-header">{t('task', 'משימה')}</span>
           </div>
           <div className="gantt-timeline">
             {monthLabels.map(month => (
@@ -120,7 +123,7 @@ const GanttPreview = ({ tasks = [] }) => {
             const startMonth = Math.max(1, Math.min(totalMonths, normalizedStartMonth));
             const endMonth = Math.max(startMonth, Math.min(totalMonths, normalizedEndMonth));
             const duration = endMonth - startMonth + 1;
-            
+
             return (
               <div key={task.id || index} className="gantt-task-row">
                 <div className="gantt-task-label-column">
@@ -132,11 +135,10 @@ const GanttPreview = ({ tasks = [] }) => {
                   {monthLabels.map(month => (
                     <div key={month} className="gantt-month-cell" />
                   ))}
-                  {/* Task bar overlay */}
                   <div
                     className="gantt-task-bar"
                     style={barStyle}
-                    title={`${task.title}: חודשים ${startMonth}-${endMonth} (${duration} חודשים)`}
+                    title={`${task.title}: ${startMonth}-${endMonth} (${duration} ${t('ganttMonths', 'חודשים')})`}
                   >
                     <span className="gantt-task-bar-label">
                       {task.title}
@@ -153,7 +155,7 @@ const GanttPreview = ({ tasks = [] }) => {
       <div className="gantt-legend">
         <div className="gantt-legend-item">
           <div className="gantt-legend-color"></div>
-          <span>משימה פעילה</span>
+          <span>{t('ganttActiveTask', 'משימה פעילה')}</span>
         </div>
       </div>
     </div>

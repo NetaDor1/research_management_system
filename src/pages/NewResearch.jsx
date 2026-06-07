@@ -21,6 +21,7 @@ import { getHebrewAcademicYearFromDate, normalizeAcademicYear } from '../utils/a
 import { navigateBackOrFallback } from '../utils/navigation';
 import {
   exportPrintableHtmlToPdf,
+  escapeHtml,
   buildResearchProposalHeader,
   buildMetaSection,
   buildMetaTable,
@@ -35,7 +36,7 @@ const NewResearch = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, userRole } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const editId = searchParams.get('edit');
   
   // Options for dropdowns
@@ -112,25 +113,25 @@ const NewResearch = () => {
   ];
 
   const budgetComponents = [
-    'כוח אדם',
-    'ציוד קבוע',
-    'חומרים וציוד מתכלה',
-    'מחשבים',
-    'נסיעות לחו"ל',
-    'כנסים',
-    'פטנטים',
-    'שונות',
-    'תקורה'
+    t('budgetPersonnel', 'כוח אדם'),
+    t('budgetEquipment', 'ציוד קבוע'),
+    t('budgetConsumables', 'חומרים וציוד מתכלה'),
+    t('budgetComputers', 'מחשבים'),
+    t('budgetTravel', 'נסיעות לחו"ל'),
+    t('budgetConferences', 'כנסים'),
+    t('budgetPatents', 'פטנטים'),
+    t('budgetMisc', 'שונות'),
+    t('budgetOverhead', 'תקורה'),
   ];
 
   const requiredDocuments = [
-    'קורות חיים',
-    'תקציר המחקר',
-    'מכתב המלצה',
-    'אישור אתיקה',
-    'תקציב מפורט',
-    'מסמכי שותפים',
-    'אישור מוסדי'
+    t('docCV', 'קורות חיים'),
+    t('docAbstract', 'תקציר המחקר'),
+    t('docRecommendationLetter', 'מכתב המלצה'),
+    t('docEthicsApproval', 'אישור אתיקה'),
+    t('docDetailedBudget', 'תקציב מפורט'),
+    t('docPartnerDocs', 'מסמכי שותפים'),
+    t('docInstitutionalApproval', 'אישור מוסדי'),
   ];
 
   const [formData, setFormData] = useState({
@@ -1175,36 +1176,41 @@ const NewResearch = () => {
       : '';
     const convertedDisplay = formData.convertedBudget ? `${formData.convertedBudget} ₪` : '';
 
+    const isEn = language === 'en';
+    const ns = (he, en) => isEn ? en : he;
+
     const htmlBody = `
       ${buildResearchProposalHeader({
+        titleHe: isEn ? '' : 'תכנית מחקר - הצעה מלאה',
+        titleEn: isEn ? 'Research Program – Full Proposal' : 'RESEARCH PROPOSAL',
         metaLines: [
-          { label: 'כותרת', value: formData.projectTitle || '' },
-          { label: 'רכז הפרויקט', value: user?.displayName || user?.email || '' },
+          { label: ns('כותרת', 'Title'), value: formData.projectTitle || '' },
+          { label: ns('רכז הפרויקט', 'Project coordinator'), value: user?.displayName || user?.email || '' },
         ],
       })}
 
-      ${buildMetaSection('פרטים כלליים', [
-        ['כותרת הפרוייקט', formData.projectTitle],
-        ['שם הקרן', formData.fundName],
-        ['סוג הקרן', formData.fundType],
-        ['מסלול ההגשה', formData.submissionPath],
-        ['תפקיד החוקר', formData.researcherRole],
-        ['שלב ההצעה', formData.proposalStage],
-        ['סוג הגשה', formData.submissionType],
-      ].map(([label, value]) => [label, value || 'לא צוין']))}
+      ${buildMetaSection(t('generalDetails', 'פרטים כלליים'), [
+        [t('projectTitleLabel', 'כותרת הפרוייקט שהוגש לקרן חיצונית'), formData.projectTitle],
+        [t('fundNameLabel', 'שם הקרן אליה הוגשה הבקשה'), formData.fundName],
+        [t('fundTypeLabel', 'סוג הקרן'), formData.fundType],
+        [t('submissionPathLabel', 'מסלול ההגשה לקרן'), formData.submissionPath],
+        [t('researcherRoleLabel', 'תפקיד החוקר בהצעת המחקר'), formData.researcherRole],
+        [t('proposalStageLabel', 'שלב ההצעה'), formData.proposalStage],
+        [t('submissionTypeLabel', 'סוג הגשה'), formData.submissionType],
+      ].map(([label, value]) => [label, value || t('notSpecified', 'לא צוין')]))}
 
-      ${buildMetaSection('תקופת המחקר', [
-        ['תאריך תחילת המחקר', formatDate(formData.researchStartDate) || 'לא צוין'],
-        ['תאריך סיום המחקר', formatDate(formData.researchEndDate) || 'לא צוין'],
-        ['משך המחקר בשנים', formData.researchDurationYears || 'לא חושב'],
-        ['שנה אקדמית', formData.academicYear || 'לא חושב'],
+      ${buildMetaSection(t('researchPeriod', 'תקופת המחקר'), [
+        [t('startDateLabel', 'תאריך תחילת המחקר'), formatDate(formData.researchStartDate) || t('notSpecified', 'לא צוין')],
+        [t('endDateLabel', 'תאריך סיום המחקר'), formatDate(formData.researchEndDate) || t('notSpecified', 'לא צוין')],
+        [t('totalResearchYears', 'סה"כ תקופת המחקר בשנים'), formData.researchDurationYears || t('notSpecified', 'לא צוין')],
+        [t('academicYearLabel', 'שנה אקדמית'), formData.academicYear || t('notSpecified', 'לא צוין')],
       ])}
 
       <div class="section">
-        ${buildSectionHeading('תקציב')}
+        ${buildSectionHeading(t('budgetTitle', 'תקציב'))}
         ${buildMetaTable([
-          ['סה"כ התקציב המבוקש', budgetTotalDisplay || 'לא צוין'],
-          ['התקציב המתורגם לשקלים', convertedDisplay || 'לא חושב'],
+          [t('totalBudgetRequested', 'סה"כ התקציב המבוקש'), budgetTotalDisplay || t('notSpecified', 'לא צוין')],
+          [t('budgetConvertedIls', 'התקציב המתורגם לשקלים'), convertedDisplay || t('notSpecified', 'לא צוין')],
         ])}
         ${
           budgetComponentsHTML
@@ -1212,8 +1218,8 @@ const NewResearch = () => {
           <table>
             <thead>
               <tr>
-                <th>רכיב תקציב</th>
-                <th>סכום</th>
+                <th>${ns('רכיב תקציב', 'Budget component')}</th>
+                <th>${ns('סכום', 'Amount')}</th>
               </tr>
             </thead>
             <tbody>${budgetComponentsHTML}</tbody>
@@ -1226,7 +1232,7 @@ const NewResearch = () => {
         partnersHTML
           ? `
         <div class="section">
-          ${buildSectionHeading('שותפים לפרוייקט')}
+          ${buildSectionHeading(t('partnersProjectTitle', 'שותפים לפרוייקט'))}
           ${partnersHTML}
         </div>`
           : ''
@@ -1236,9 +1242,9 @@ const NewResearch = () => {
         documentsHTML
           ? `
         <div class="section">
-          ${buildSectionHeading('מסמכים')}
+          ${buildSectionHeading(ns('מסמכים', 'Documents'))}
           <div class="form-field-block">
-            <div class="form-field-label">מסמכים שהוגשו</div>
+            <div class="form-field-label">${ns('מסמכים שהוגשו', 'Submitted documents')}</div>
             <div class="form-field-value"><ul style="margin:0;padding-inline-start:20pt">${documentsHTML}</ul></div>
           </div>
         </div>`
@@ -1247,24 +1253,53 @@ const NewResearch = () => {
 
       ${
         formData.digitalSignature.signed
-          ? buildMetaSection('חתימה דיגיטלית', [
-              ['חתום על ידי', formData.digitalSignature.signer],
-              ['תאריך חתימה', formatDate(formData.digitalSignature.date)],
+          ? buildMetaSection(t('digitalSignatureTitle', 'חתימה דיגיטלית'), [
+              [t('signedBy', 'חתום על ידי'), formData.digitalSignature.signer],
+              [t('signatureDate', 'תאריך חתימה'), formatDate(formData.digitalSignature.date)],
             ])
           : ''
       }
 
-      ${formData.expectedResponseDate ? buildFormFieldBlock('תאריך משוער לתשובה', formatDate(formData.expectedResponseDate)) : ''}
-      ${formData.notes ? buildFormFieldBlock('הערות', formData.notes) : ''}
+      ${formData.expectedResponseDate ? buildFormFieldBlock(t('expectedResponseDateLabel', 'תאריך משוער'), formatDate(formData.expectedResponseDate)) : ''}
+      ${formData.notes ? buildFormFieldBlock(t('notesFreeText', 'הערות'), formData.notes) : ''}
 
-      ${buildDocFooter(`נוצר ב-${new Date().toLocaleDateString('he-IL')} ${new Date().toLocaleTimeString('he-IL')}`)}
+      ${(() => {
+        const tasks = Array.isArray(formData.workPlanTasks) ? formData.workPlanTasks.filter(task => task.title || task.name) : [];
+        if (!tasks.length) return '';
+        const rows = tasks.map((task) => {
+          const title = task.title || task.name || task.taskTitle || task.taskName || '';
+          const start = task.startMonth ?? task.start_month ?? '';
+          const end = task.endMonth ?? task.end_month ?? '';
+          return `<tr><td>${escapeHtml(title)}</td><td>${escapeHtml(String(start))}</td><td>${escapeHtml(String(end))}</td></tr>`;
+        }).join('');
+        return `
+          <div class="section">
+            ${buildSectionHeading(t('workPlan', 'תוכנית עבודה'))}
+            <table>
+              <thead><tr>
+                <th>${ns('משימה', 'Task')}</th>
+                <th>${ns('חודש התחלה', 'Start month')}</th>
+                <th>${ns('חודש סיום', 'End month')}</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+      })()}
+
+      ${buildDocFooter(
+        isEn
+          ? `Generated on ${new Date().toLocaleString('en-US')}`
+          : `נוצר ב-${new Date().toLocaleDateString('he-IL')} ${new Date().toLocaleTimeString('he-IL')}`
+      )}
     `;
 
     exportPrintableHtmlToPdf({
-      title: `הגשה לקרנות מחקר - ${formData.projectTitle || 'טופס'}`,
+      title: isEn
+        ? `Research Proposal – ${formData.projectTitle || 'Form'}`
+        : `הגשה לקרנות מחקר - ${formData.projectTitle || 'טופס'}`,
       htmlBody,
-      dir: 'rtl',
-      lang: 'he',
+      dir: isEn ? 'ltr' : 'rtl',
+      lang: isEn ? 'en' : 'he',
     });
   };
 

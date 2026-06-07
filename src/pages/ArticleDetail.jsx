@@ -275,7 +275,7 @@ const ArticleDetail = () => {
         )}
 
         {!loading && !error && articleData && (
-          <div style={{ direction: 'rtl', textAlign: 'right' }}>
+          <div style={{ textAlign: language === 'en' ? 'left' : 'right' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
               <h1 style={{ margin: 0, color: '#333' }}>פרטי מאמר</h1>
               <button

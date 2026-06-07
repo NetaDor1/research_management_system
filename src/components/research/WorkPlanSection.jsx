@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import TasksTable from './TasksTable';
 import GanttPreview from './GanttPreview';
+import { useLanguage } from '../../context/LanguageContext';
 import './WorkPlanSection.css';
 
 /**
@@ -15,6 +16,7 @@ import './WorkPlanSection.css';
  * @param {Boolean} suppressParentSync - If true, do not push tasks to parent (used while loading edit data)
  */
 const WorkPlanSection = ({ initialTasks = [], onTasksChange, readOnly = false, suppressParentSync = false }) => {
+  const { t } = useLanguage();
   const [tasks, setTasks] = useState(initialTasks);
 
   // Update tasks when initialTasks changes (e.g., when loading existing research)
@@ -82,10 +84,10 @@ const WorkPlanSection = ({ initialTasks = [], onTasksChange, readOnly = false, s
   return (
     <div className="work-plan-section">
       <div className="work-plan-header">
-        <h2>תוכנית עבודה / Gantt</h2>
+        <h2>{t('workPlan', 'תוכנית עבודה')}</h2>
         {!readOnly && (
           <p className="section-description">
-            הוסף משימות מחקר עם חודשי התחלה וסיום. התצוגה המקדימה תתעדכן אוטומטית.
+            {t('workPlanDescription', 'הוסף משימות מחקר עם חודשי התחלה וסיום. התצוגה המקדימה תתעדכן אוטומטית.')}
           </p>
         )}
       </div>

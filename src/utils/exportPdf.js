@@ -249,7 +249,7 @@ const buildPrintStyles = () => `
   }
 `;
 
-/** Bilingual header matching the reference research-proposal form. */
+/** Document header — shows only the titles that are non-empty strings. */
 export const buildResearchProposalHeader = ({
   titleHe = 'תכנית מחקר - הצעה מלאה',
   titleEn = 'RESEARCH PROPOSAL',
@@ -265,10 +265,13 @@ export const buildResearchProposalHeader = ({
     )
     .join('');
 
+  const titleHeHtml = titleHe ? `<p class="doc-title-he">${escapeHtml(titleHe)}</p>` : '';
+  const titleEnHtml = titleEn ? `<p class="doc-title-en">${escapeHtml(titleEn)}</p>` : '';
+
   return `
     <header class="doc-header">
-      <p class="doc-title-he">${escapeHtml(titleHe)}</p>
-      <p class="doc-title-en">${escapeHtml(titleEn)}</p>
+      ${titleHeHtml}
+      ${titleEnHtml}
       ${metaHtml}
     </header>
   `;

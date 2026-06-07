@@ -1,7 +1,6 @@
 .research-page {
   min-height: 100vh;
   padding: 100px 20px 40px;
-  direction: rtl;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   width: 100%;
   box-sizing: border-box;
@@ -44,7 +43,6 @@
   border: 2px solid #e9ecef;
   border-radius: 10px;
   font-size: 16px;
-  direction: rtl;
   transition: all 0.3s ease;
 }
 
@@ -81,7 +79,6 @@
   border: 2px solid #e9ecef;
   border-radius: 8px;
   font-size: 14px;
-  direction: rtl;
   background: white;
   color: #495057;
   cursor: pointer;
@@ -267,3 +264,15 @@
   }
 }
 
+/* Direction-aware alignment */
+html[dir="ltr"] .research-header h1,
+html[dir="ltr"] .filter-group label,
+html[dir="ltr"] .sort-group label {
+  text-align: left;
+}
+
+html[dir="rtl"] .research-header h1,
+html[dir="rtl"] .filter-group label,
+html[dir="rtl"] .sort-group label {
+  text-align: right;
+}
