@@ -1360,6 +1360,7 @@ const NewResearch = () => {
           <ResearchDescriptionSection
             formData={formData}
             handleChange={handleChange}
+            onPolish={(improved) => setFormData((prev) => ({ ...prev, ...improved }))}
           />
 
           <PartnersSection
@@ -1412,6 +1413,7 @@ const NewResearch = () => {
             handleBibliographyEducationChange={handleBibliographyEducationChange}
             addBibliographyEducationRow={addBibliographyEducationRow}
             removeBibliographyEducationRow={removeBibliographyEducationRow}
+            onPolish={(improved) => setFormData((prev) => ({ ...prev, ...improved }))}
           />
 
           {/* Form Actions */}
@@ -1435,7 +1437,10 @@ const NewResearch = () => {
           </div>
         </form>
 
-        <ResearchProposalReviewAssistant formData={formData} />
+        <ResearchProposalReviewAssistant
+          formData={formData}
+          onFillForm={(fields) => setFormData((prev) => ({ ...prev, ...fields }))}
+        />
       </div>
     </div>
   );

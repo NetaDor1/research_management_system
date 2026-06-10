@@ -1,11 +1,52 @@
 import React from 'react';
 import { useLanguage } from '../../../context/LanguageContext';
+import AIPolishButton from '../AIPolishButton';
 
-const ResearchDescriptionSection = ({ formData, handleChange }) => {
-  const { t } = useLanguage();
+const FIELD_LABELS_HE = {
+  abstract: 'תקציר',
+  scientificBackground: 'רקע מדעי ומצב טכנולוגי',
+  researchObjectives: 'מטרות המחקר',
+  detailedDescription: 'תיאור מפורט',
+  significanceInnovation: 'משמעות וחדשנות',
+  applicability: 'ישימות',
+};
+
+const FIELD_LABELS_EN = {
+  abstract: 'Abstract',
+  scientificBackground: 'Scientific Background',
+  researchObjectives: 'Research Objectives',
+  detailedDescription: 'Detailed Description',
+  significanceInnovation: 'Significance & Innovation',
+  applicability: 'Applicability',
+};
+
+const ResearchDescriptionSection = ({ formData, handleChange, onPolish }) => {
+  const { t, language } = useLanguage();
+  const lang = language === 'en' ? 'en' : 'he';
+  const fieldLabels = lang === 'en' ? FIELD_LABELS_EN : FIELD_LABELS_HE;
+
+  const polishFields = {
+    abstract: formData.abstract,
+    scientificBackground: formData.scientificBackground,
+    researchObjectives: formData.researchObjectives,
+    detailedDescription: formData.detailedDescription,
+    significanceInnovation: formData.significanceInnovation,
+    applicability: formData.applicability,
+  };
+
   return (
     <div className="form-section">
-      <h2>{t('researchDescriptionTitle', 'תיאור המחקר')}</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '12px', flexWrap: 'wrap' }}>
+        <h2 style={{ margin: 0 }}>{t('researchDescriptionTitle', 'תיאור המחקר')}</h2>
+        {onPolish && (
+          <AIPolishButton
+            fields={polishFields}
+            fieldLabels={fieldLabels}
+            onApply={onPolish}
+            lang={lang}
+          />
+        )}
+      </div>
       
       <div className="form-group">
         <label htmlFor="abstract">

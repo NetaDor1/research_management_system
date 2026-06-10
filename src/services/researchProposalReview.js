@@ -7,6 +7,7 @@
 const REVIEW_PATH = '/api/review-proposal';
 const CHAT_PATH = '/api/research-assistant-chat';
 const HEALTH_PATH = '/api/health';
+const POLISH_PATH = '/api/polish-text';
 
 function apiBase() {
   return (process.env.REACT_APP_REVIEW_API_BASE || '').trim().replace(/\/$/, '');
@@ -152,6 +153,25 @@ export async function requestResearchProposalReview(payload) {
   let data = {};
   try { data = await res.json(); } catch { data = {}; }
 
+  if (!res.ok) throw apiErrorFromResponse(res, data);
+  return data;
+}
+
+/**
+ * action: 'improve' | 'translate' | 'fix'
+ * fields: { fieldName: textContent, ... }
+ * Returns: { improved: { fieldName: improvedText, ... } }
+ */
+export async function requestPolishText({ action, fields }) {
+  const base = apiBase();
+  const url = base ? `${base}${POLISH_PATH}` : POLISH_PATH;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, fields }),
+  });
+  let data = {};
+  try { data = await res.json(); } catch { data = {}; }
   if (!res.ok) throw apiErrorFromResponse(res, data);
   return data;
 }

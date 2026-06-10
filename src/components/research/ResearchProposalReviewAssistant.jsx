@@ -4,9 +4,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import {
   buildResearchReviewPayload,
   checkReviewApiHealth,
-  getResearchReviewValidationIssues,
   requestResearchAssistantChat,
-  requestResearchProposalReview,
 } from '../../services/researchProposalReview';
 import './ResearchProposalReviewAssistant.css';
 
@@ -42,48 +40,72 @@ function MarkdownMessage({ text }) {
   );
 }
 
-const FIELD_LABELS = {
-  title: { he: 'כותרת הפרויקט', en: 'Project title' },
-  abstract: { he: 'תקציר (Abstract)', en: 'Abstract' },
-  methodology: {
-    he: 'תיאור המחקר (מטרות, תיאור מפורט, רקע, וכו׳)',
-    en: 'Research description (objectives, methods, background, …)',
-  },
-  budget: { he: 'תקציב (סה״כ או פירוט שורות)', en: 'Budget (total or line items)' },
-};
+// ── Full-proposal detection & section parsing ───────────────────────────────
 
-function formatReviewForChat(result, t) {
-  const lines = [
-    `${t('aiResearchReviewScoreLabel')}: ${result.overallScore ?? '—'}`,
-    '',
-    `${t('aiResearchReviewSummary')}:`,
-    result.summary || '—',
-  ];
+const SECTION_DEFS = [
+  { field: 'abstract',             pattern: /תקציר|abstract/i },
+  { field: 'scientificBackground', pattern: /רקע מדעי|scientific background/i },
+  { field: 'researchObjectives',   pattern: /מטרות מחקר|research objectives/i },
+  { field: 'detailedDescription',  pattern: /תיאור מפורט|detailed description/i },
+  { field: 'significanceInnovation', pattern: /משמעות|חדשנות|significance|innovation/i },
+  { field: 'applicability',        pattern: /ישימות|applicability/i },
+];
 
-  const pushList = (titleKey, items) => {
-    const arr = Array.isArray(items) ? items.filter(Boolean) : [];
-    if (!arr.length) return;
-    lines.push('', `${t(titleKey)}:`);
-    arr.forEach((item) => lines.push(`• ${item}`));
-  };
-
-  pushList('aiResearchReviewGrammar', result.grammarIssues);
-  pushList('aiResearchReviewMissing', result.missingSections);
-  pushList('aiResearchReviewScience', result.scientificConcerns);
-  pushList('aiResearchReviewBudget', result.budgetSuggestions);
-
-  return lines.join('\n');
+function isFullProposal(text) {
+  return SECTION_DEFS.filter(({ pattern }) => pattern.test(text)).length >= 3;
 }
 
-const ResearchProposalReviewAssistant = ({ formData }) => {
+function stripMarkdown(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')  // **bold** → plain
+    .replace(/\*(.+?)\*/g, '$1')       // *italic* → plain
+    .replace(/^#{1,6}\s+/gm, '')       // # headers → plain
+    .replace(/^[-*]\s+/gm, '- ')       // normalize bullets
+    .trim();
+}
+
+function parseProposalSections(text) {
+  const lines = text.split('\n');
+  const result = {};
+  let currentField = null;
+  let buffer = [];
+
+  const flush = () => {
+    if (currentField) {
+      const content = stripMarkdown(buffer.join('\n').trim());
+      if (content) result[currentField] = content;
+    }
+    buffer = [];
+  };
+
+  for (const line of lines) {
+    // Match lines like **Title** or **1. Title**
+    const bold = line.match(/^\*\*(?:\d+[\.\)]\s*)?(.+?)\*\*\s*$/);
+    if (bold) {
+      const headerText = bold[1].trim();
+      const matched = SECTION_DEFS.find(({ pattern }) => pattern.test(headerText));
+      if (matched) {
+        flush();
+        currentField = matched.field;
+        continue;
+      }
+    }
+    if (currentField !== null) buffer.push(line);
+  }
+  flush();
+  return result;
+}
+
+const ResearchProposalReviewAssistant = ({ formData, onFillForm }) => {
   const { t, language, isRTL } = useLanguage();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const [loadingAction, setLoadingAction] = useState(null); // 'send' | 'review' | null
+  const [loadingAction, setLoadingAction] = useState(null); // 'send' | null
   const [error, setError] = useState('');
   const [serverOnline, setServerOnline] = useState(null);
-  const [expanded, setExpanded] = useState(false);
+  // track which message indices have been imported into the form
+  const [filledIndices, setFilledIndices] = useState(new Set());
   const wrapperRef = useRef(null);
   const listRef = useRef(null);
 
@@ -162,7 +184,7 @@ const ResearchProposalReviewAssistant = ({ formData }) => {
     try {
       const proposal = buildResearchReviewPayload(formData);
       const { reply } = await requestResearchAssistantChat({ messages: next, proposal });
-      setMessages((prev) => [...prev, { role: 'model', content: reply }]);
+      setMessages((prev) => [...prev, { role: 'model', content: reply, canFillForm: isFullProposal(reply) }]);
     } catch (e) {
       setError(e.message || (lang === 'en' ? 'Request failed' : 'הבקשה נכשלה'));
     } finally {
@@ -170,34 +192,17 @@ const ResearchProposalReviewAssistant = ({ formData }) => {
     }
   }, [input, loading, messages, formData, lang]);
 
-  const runFullReview = useCallback(async () => {
-    setError('');
-    const issues = getResearchReviewValidationIssues(formData);
-    if (issues.length > 0) {
-      const parts = issues.map(({ key }) => {
-        const L = FIELD_LABELS[key];
-        return L ? L[lang] : key;
-      });
-      setError(
-        lang === 'en'
-          ? `Complete before full review: ${parts.join(', ')}.`
-          : `לפני ביקורת מלאה יש למלא: ${parts.join(' · ')}.`
-      );
-      return;
-    }
-
-    setLoadingAction('review');
-    try {
-      const payload = buildResearchReviewPayload(formData);
-      const data = await requestResearchProposalReview(payload);
-      const text = `${t('aiResearchChatFullReviewTitle', 'ביקורת מלאה (מובנה)')}\n\n${formatReviewForChat(data, t)}`;
-      setMessages((prev) => [...prev, { role: 'model', content: text }]);
-    } catch (e) {
-      setError(e.message || (lang === 'en' ? 'Request failed' : 'הבקשה נכשלה'));
-    } finally {
-      setLoadingAction(null);
-    }
-  }, [formData, lang, t]);
+  const handleFillForm = useCallback((msgIdx, content) => {
+    const sections = parseProposalSections(content);
+    const count = Object.keys(sections).length;
+    if (count === 0) return;
+    if (onFillForm) onFillForm(sections);
+    setFilledIndices((prev) => new Set([...prev, msgIdx]));
+    const note = lang === 'he'
+      ? `✓ ${count} שדות הוזנו לטופס.`
+      : `✓ ${count} fields filled in the form.`;
+    setMessages((prev) => [...prev, { role: 'model', content: note }]);
+  }, [onFillForm, lang]);
 
   const onKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -243,25 +248,11 @@ const ResearchProposalReviewAssistant = ({ formData }) => {
             </button>
           </div>
 
-          <div className="research-ai-chat-toolbar">
-            <button
-              type="button"
-              onClick={runFullReview}
-              disabled={loading || serverOnline === false}
-              aria-busy={loadingAction === 'review'}
-            >
-              {loadingAction === 'review' ? (
-                <><span className="ai-spinner" aria-hidden="true" />{lang === 'en' ? 'Reviewing…' : 'מבצע ביקורת…'}</>
-              ) : (
-                t('aiResearchChatFullReview', 'ביקורת מלאה')
-              )}
-            </button>
-            {serverOnline === false ? (
-              <span className="research-ai-chat-server-hint" role="status">
-                {lang === 'en' ? 'AI server offline' : 'שרת AI לא מחובר'}
-              </span>
-            ) : null}
-          </div>
+          {serverOnline === false ? (
+            <div className="research-ai-chat-server-hint" role="status">
+              {lang === 'en' ? 'AI server offline' : 'שרת AI לא מחובר'}
+            </div>
+          ) : null}
 
           <div className="research-ai-chat-messages" ref={listRef}>
             <p className="research-ai-chat-intro">
@@ -276,6 +267,21 @@ const ResearchProposalReviewAssistant = ({ formData }) => {
                   {m.role === 'model'
                     ? <MarkdownMessage text={m.content} />
                     : m.content}
+                  {m.role === 'model' && m.canFillForm && onFillForm ? (
+                    filledIndices.has(idx) ? (
+                      <div className="ai-fill-form-done">
+                        {lang === 'he' ? '✓ הוזן לטופס' : '✓ Filled in form'}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="ai-fill-form-btn"
+                        onClick={() => handleFillForm(idx, m.content)}
+                      >
+                        {lang === 'he' ? 'הזן לטופס' : 'Fill form'}
+                      </button>
+                    )
+                  ) : null}
                 </div>
               </div>
             ))}

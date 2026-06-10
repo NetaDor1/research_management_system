@@ -1,5 +1,20 @@
 import React from 'react';
 import { useLanguage } from '../../../context/LanguageContext';
+import AIPolishButton from '../AIPolishButton';
+
+const BIBLIO_LABELS_HE = {
+  bibliographyPersonalStatement: 'הצהרה אישית',
+  bibliographyPositionsAndHonors: 'תפקידים והוקרות',
+  bibliographySelectedPublications: 'פרסומים נבחרים',
+  bibliographyResearchSupport: 'תמיכת מחקר',
+};
+
+const BIBLIO_LABELS_EN = {
+  bibliographyPersonalStatement: 'Personal Statement',
+  bibliographyPositionsAndHonors: 'Positions and Honors',
+  bibliographySelectedPublications: 'Selected Publications',
+  bibliographyResearchSupport: 'Research Support',
+};
 
 const BibliographySection = ({
   formData,
@@ -7,14 +22,34 @@ const BibliographySection = ({
   handleBibliographyEducationChange,
   addBibliographyEducationRow,
   removeBibliographyEducationRow,
+  onPolish,
 }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const lang = language === 'en' ? 'en' : 'he';
+  const fieldLabels = lang === 'en' ? BIBLIO_LABELS_EN : BIBLIO_LABELS_HE;
 
   const educationRows = formData?.bibliographyEducationTraining || [];
 
+  const polishFields = {
+    bibliographyPersonalStatement: formData.bibliographyPersonalStatement,
+    bibliographyPositionsAndHonors: formData.bibliographyPositionsAndHonors,
+    bibliographySelectedPublications: formData.bibliographySelectedPublications,
+    bibliographyResearchSupport: formData.bibliographyResearchSupport,
+  };
+
   return (
     <div className="form-section">
-      <h2>{t('bibliographyTitle', 'ביבליוגרפיה')}</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '12px', flexWrap: 'wrap' }}>
+        <h2 style={{ margin: 0 }}>{t('bibliographyTitle', 'ביבליוגרפיה')}</h2>
+        {onPolish && (
+          <AIPolishButton
+            fields={polishFields}
+            fieldLabels={fieldLabels}
+            onApply={onPolish}
+            lang={lang}
+          />
+        )}
+      </div>
 
       <div className="form-group">
         <label htmlFor="principalInvestigatorName">

@@ -11,7 +11,7 @@ const {
 } = require('@google/generative-ai');
 
 const PORT = Number(process.env.PORT) || 3001;
-const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash-lite';
 const GEMINI_TIMEOUT_MS = Number(process.env.GEMINI_REQUEST_TIMEOUT_MS) || 120000;
 const GEMINI_REQUEST_OPTIONS = { timeout: GEMINI_TIMEOUT_MS };
 
@@ -19,19 +19,25 @@ const GEMINI_REQUEST_OPTIONS = { timeout: GEMINI_TIMEOUT_MS };
 const THINKING_OFF = { thinkingConfig: { thinkingBudget: 0 } };
 
 /** Retry once after `delayMs` on transient errors (5xx / timeout). */
-async function withRetry(fn, delayMs = 3000) {
-  try {
-    return await fn();
-  } catch (err) {
-    const status = err?.status ?? err?.statusCode;
-    const isTransient =
-      (typeof status === 'number' && status >= 500) ||
-      err?.name === 'AbortError' ||
-      /timeout|timed out|ETIMEDOUT/i.test(err?.message || '');
-    if (!isTransient) throw err;
-    await new Promise((r) => setTimeout(r, delayMs));
-    return fn(); // single retry
+async function withRetry(fn, { retries = 2, baseDelayMs = 2000 } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const status = err?.status ?? err?.statusCode;
+      const isTransient =
+        (typeof status === 'number' && status >= 500) ||
+        err?.name === 'AbortError' ||
+        /timeout|timed out|ETIMEDOUT/i.test(err?.message || '');
+      if (!isTransient || attempt === retries) throw err;
+      const delay = baseDelayMs * Math.pow(2, attempt); // 2s, 4s
+      console.warn(`[retry] attempt ${attempt + 1} failed (${status ?? err?.name}), retrying in ${delay}ms…`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
   }
+  throw lastErr;
 }
 
 const INVALID_PLACEHOLDERS = new Set(['', 'your_api_key_here', 'test', 'undefined', 'null']);
@@ -408,6 +414,82 @@ ${proposalBlock || '(No draft text in the form yet — use the user message as t
     }
 
     res.status(200).json({ reply: replyText.trim() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const MAX_POLISH_FIELD = 4000;
+const VALID_POLISH_ACTIONS = new Set(['improve', 'translate']);
+
+app.post('/api/polish-text', async (req, res, next) => {
+  try {
+    if (!GEMINI_API_KEY) {
+      const err = new Error('Server is not configured: GEMINI_API_KEY is missing');
+      err.statusCode = 503;
+      throw err;
+    }
+
+    const { action, fields } = req.body || {};
+
+    if (!VALID_POLISH_ACTIONS.has(action)) {
+      return res.status(400).json({ error: 'Invalid action. Use: improve | translate | fix' });
+    }
+    if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
+      return res.status(400).json({ error: 'fields must be a non-empty object' });
+    }
+
+    const cleanFields = {};
+    for (const [key, val] of Object.entries(fields)) {
+      if (typeof val === 'string' && val.trim()) {
+        const s = val.trim();
+        cleanFields[key] = s.length <= MAX_POLISH_FIELD ? s : s.slice(0, MAX_POLISH_FIELD) + '\n…[truncated]';
+      }
+    }
+    if (Object.keys(cleanFields).length === 0) {
+      return res.status(400).json({ error: 'No non-empty fields provided' });
+    }
+
+    const actionInstructions = {
+      improve: 'Improve the academic phrasing, clarity, and flow AND fix all spelling, grammar, and punctuation errors. Use precise, professional academic language. Keep the same language as the input. Do not change meaning or add new information.',
+      translate: 'Translate every field to professional academic English. Use formal, precise academic tone suitable for grant submissions. Do not change meaning or add new information.',
+    };
+
+    const prompt = `You are an expert academic editor and translator.
+
+Task: ${actionInstructions[action]}
+
+Return ONLY a valid JSON object with exactly the same keys as the input, and the processed text as values.
+Do NOT add markdown, code fences, explanation, or extra keys.
+
+Input fields:
+${JSON.stringify(cleanFields, null, 2)}`;
+
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel(
+      {
+        model: GEMINI_MODEL,
+        generationConfig: { temperature: 0.25, responseMimeType: 'application/json', ...THINKING_OFF },
+      },
+      GEMINI_REQUEST_OPTIONS
+    );
+
+    let text;
+    try {
+      const result = await withRetry(() => model.generateContent(prompt));
+      text = result.response.text();
+    } catch (geminiErr) {
+      throw mapGeminiError(geminiErr);
+    }
+
+    const parsed = parseJsonContent(text);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      const err = new Error('Model returned invalid JSON');
+      err.statusCode = 502;
+      throw err;
+    }
+
+    res.status(200).json({ improved: parsed });
   } catch (err) {
     next(err);
   }

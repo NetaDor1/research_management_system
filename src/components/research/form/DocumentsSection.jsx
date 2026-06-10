@@ -29,42 +29,41 @@ const DocumentsSection = ({
 
       <div className="form-group">
         <label>{t('documentsChecklistLabel', "רשימת צ'קליסט של מסמכים להגשה מטעם המוסד")}</label>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {requiredDocuments.map((docName) => {
             const filesForDoc = formData.requiredDocumentsFiles?.[docName] || [];
+            const hasFiles = filesForDoc.length > 0;
             return (
               <div
                 key={docName}
                 style={{
-                  border: '1px solid #dbe2ea',
+                  border: `1px solid ${hasFiles ? '#a7f3d0' : '#dbe2ea'}`,
                   borderRadius: '8px',
-                  background: '#fff',
-                  padding: '12px',
+                  background: hasFiles ? '#f0fdf4' : '#fff',
+                  padding: '12px 16px',
                 }}
               >
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: '10px',
-                    marginBottom: filesForDoc.length > 0 ? '10px' : 0,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                    <input type="checkbox" checked={filesForDoc.length > 0} readOnly style={{ flexShrink: 0 }} />
-                    <strong style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block', minWidth: 0 }}>{docName}</strong>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input
+                      type="checkbox"
+                      checked={hasFiles}
+                      readOnly
+                      style={{ width: '16px', height: '16px', flexShrink: 0, accentColor: '#667eea' }}
+                    />
+                    <span style={{ fontWeight: 600, fontSize: '14px', color: '#1e293b' }}>{docName}</span>
                   </div>
-
                   <label
                     style={{
                       cursor: 'pointer',
                       background: '#667eea',
                       color: 'white',
                       borderRadius: '6px',
-                      padding: '8px 12px',
-                      fontSize: '14px',
-                      fontWeight: 'bold',
+                      padding: '6px 14px',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
                     }}
                   >
                     {t('uploadFiles', 'העלאת קבצים')}
@@ -80,8 +79,8 @@ const DocumentsSection = ({
                   </label>
                 </div>
 
-                {filesForDoc.length > 0 && (
-                  <div style={{ display: 'grid', gap: '8px' }}>
+                {hasFiles && (
+                  <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {filesForDoc.map((fileItem, fileIndex) => {
                       const fileName = getFileName(fileItem);
                       const fileUrl = getFileUrl(fileItem);
@@ -90,20 +89,20 @@ const DocumentsSection = ({
                           key={`${docName}-${fileIndex}-${fileName}`}
                           style={{
                             display: 'flex',
-                            justifyContent: 'space-between',
                             alignItems: 'center',
+                            justifyContent: 'space-between',
                             gap: '10px',
-                            background: '#f8fafc',
-                            border: '1px solid #e2e8f0',
+                            background: '#fff',
+                            border: '1px solid #d1fae5',
                             borderRadius: '6px',
-                            padding: '8px 10px',
+                            padding: '6px 10px',
                           }}
                         >
                           <a
                             href={fileUrl || '#'}
                             target="_blank"
                             rel="noopener noreferrer"
-                            style={{ flex: 1, wordBreak: 'break-word', color: '#667eea', textDecoration: 'none' }}
+                            style={{ flex: 1, wordBreak: 'break-word', color: '#667eea', textDecoration: 'none', fontSize: '13px' }}
                           >
                             📄 {fileName}
                           </a>
@@ -114,8 +113,9 @@ const DocumentsSection = ({
                               border: '1px solid #cbd5e1',
                               background: 'white',
                               borderRadius: '4px',
-                              padding: '4px 8px',
+                              padding: '3px 8px',
                               cursor: 'pointer',
+                              fontSize: '12px',
                               flexShrink: 0,
                             }}
                           >
