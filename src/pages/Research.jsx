@@ -4,8 +4,8 @@ import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
-import DetailModal from '../components/DetailModal';
 import { shouldShowNewBadge } from '../utils/newBadge';
+import { isSubmitted } from '../utils/submissionStatus';
 import './Research.css';
 
 const Research = () => {
@@ -19,8 +19,8 @@ const Research = () => {
   const [researchData, setResearchData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedResearchId, setSelectedResearchId] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const getDisplayStatus = (item) =>
+    item.submissionStatus === 'draft' ? 'draft' : item.status;
 
   // Fetch research data from Firestore
   const fetchResearch = React.useCallback(async () => {
@@ -72,9 +72,13 @@ const Research = () => {
         }
       }
 
-      console.log(`Found ${querySnapshot.docs.length} documents`);
+      const visibleDocs = userRole === 'ADMIN'
+        ? querySnapshot.docs.filter((docItem) => isSubmitted(docItem.data()))
+        : querySnapshot.docs;
 
-      const researchList = querySnapshot.docs.map((doc) => {
+      console.log(`Found ${visibleDocs.length} documents`);
+
+      const researchList = visibleDocs.map((doc) => {
         const data = doc.data();
         
         // Convert Firestore Timestamp to date string
@@ -94,6 +98,7 @@ const Research = () => {
           title: data.projectTitle || data.title || 'ללא כותרת',
           researcher: data.researcherName || data.researcher || 'חוקר',
           status: data.status || 'pending',
+          submissionStatus: data.submissionStatus || 'submitted',
           hasPatent: data.hasPatent || false,
           submissionDate: toDateString(data.submissionDate || data.createdAt),
           isNew: data.isNew || false,
@@ -188,7 +193,7 @@ const Research = () => {
 
     // Status filter
     if (filterStatus !== 'all') {
-      filtered = filtered.filter(item => item.status === filterStatus);
+      filtered = filtered.filter((item) => getDisplayStatus(item) === filterStatus);
     }
 
     // Patents filter
@@ -208,20 +213,16 @@ const Research = () => {
     return filtered;
   }, [filteredByRole, searchTerm, filterStatus, filterPatents, sortBy]);
 
-  const handleResearchClick = (researchId) => {
+  const handleResearchClick = (research) => {
     if (isAdmin()) {
-      // Admin navigates to detail page
-      navigate(`/research/${researchId}`);
-    } else {
-      // Researcher uses modal
-      setSelectedResearchId(researchId);
-      setIsModalOpen(true);
+      navigate(`/research/${research.id}`);
+      return;
     }
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedResearchId(null);
+    if (research.submissionStatus === 'draft') {
+      navigate(`/research/new?edit=${research.id}`);
+      return;
+    }
+    navigate(`/research/${research.id}`);
   };
 
   const handleAddResearch = () => {
@@ -230,6 +231,8 @@ const Research = () => {
 
   const getStatusLabel = (status) => {
     switch (status) {
+      case 'draft':
+        return t('draft', 'טיוטה');
       case 'awarded':
         return t('awarded', 'זכייה');
       case 'pending':
@@ -243,6 +246,8 @@ const Research = () => {
 
   const getStatusClass = (status) => {
     switch (status) {
+      case 'draft':
+        return 'status-draft';
       case 'awarded':
         return 'status-awarded';
       case 'pending':
@@ -277,6 +282,7 @@ const Research = () => {
               className="filter-select"
             >
               <option value="all">{t('status', 'סטטוס')}</option>
+              <option value="draft">{t('draft', 'טיוטה')}</option>
               <option value="awarded">{t('awarded', 'זכייה')}</option>
               <option value="pending">{t('pending', 'המתנה')}</option>
               <option value="rejected">{t('rejected', 'לא אושר')}</option>
@@ -286,9 +292,9 @@ const Research = () => {
               onChange={(e) => setFilterPatents(e.target.value)}
               className="filter-select"
             >
-              <option value="all">{t('researchCollection', 'אוסף מחקרים')} + פטנטים</option>
+              <option value="all">{t('filterResearchAndPatents', 'אוסף מחקרים + פטנטים')}</option>
               <option value="with">{t('patents', 'פטנטים')}</option>
-              <option value="without">{t('research', 'מחקרים')} בלבד</option>
+              <option value="without">{t('filterResearchOnly', 'מחקרים בלבד')}</option>
             </select>
           </div>
           <div className="sort-group">
@@ -299,7 +305,7 @@ const Research = () => {
               className="filter-select"
             >
               <option value="alphabetical">{t('alphabetical', 'אלף בית')}</option>
-              <option value="date">{t('date', 'תאריך')} הגשה</option>
+              <option value="date">{t('sortBySubmissionDate', 'תאריך הגשה')}</option>
             </select>
           </div>
         </div>
@@ -327,38 +333,30 @@ const Research = () => {
           </button>
         )}
 
+        {!loading && !error && filteredAndSorted.length === 0 && (
+          <div className="no-results-grid-item">
+            <p>{t('noResearchFound', 'לא נמצאו מחקרים')}</p>
+          </div>
+        )}
+
         {!loading && !error && filteredAndSorted.map((research) => (
           <button
             key={research.id}
             className="research-card"
-            onClick={() => handleResearchClick(research.id)}
+            onClick={() => handleResearchClick(research)}
           >
             {shouldShowNewBadge(research.isNew, research.submissionDate) && (
               <span className="new-badge">{t('newBadge', 'חדש!')}</span>
             )}
             <h3 className="research-title">{research.title}</h3>
             <p className="research-researcher">{research.researcher}</p>
-            <button className={`status-button ${getStatusClass(research.status)}`}>
-              {getStatusLabel(research.status)}
+            <button className={`status-button ${getStatusClass(getDisplayStatus(research))}`}>
+              {getStatusLabel(getDisplayStatus(research))}
             </button>
           </button>
         ))}
       </div>
 
-      {!loading && !error && filteredAndSorted.length === 0 && (
-        <div className="no-results">
-          <p>{t('noResearchFound', 'לא נמצאו מחקרים')}</p>
-        </div>
-      )}
-
-        {!isAdmin() && (
-          <DetailModal
-            isOpen={isModalOpen}
-            onClose={handleCloseModal}
-            itemId={selectedResearchId}
-            type="research"
-          />
-        )}
       </div>
     </div>
   );

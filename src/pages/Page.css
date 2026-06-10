@@ -233,6 +233,14 @@
   padding-bottom: 10px;
 }
 
+html[dir="ltr"] .statistics-section h2 {
+  text-align: left;
+}
+
+html[dir="rtl"] .statistics-section h2 {
+  text-align: right;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -420,15 +428,26 @@
 
 .form-actions {
   display: flex;
-  justify-content: flex-start;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 15px;
   margin-top: 40px;
   padding-top: 30px;
   border-top: 2px solid #e9ecef;
 }
 
+.form-actions-start,
+.form-actions-end {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
 .btn-cancel,
-.btn-submit {
+.btn-submit,
+.btn-draft {
   padding: 14px 32px;
   border: none;
   border-radius: 8px;
@@ -436,6 +455,18 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+}
+
+.btn-draft {
+  background: #e2e8f0;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+
+.btn-draft:hover {
+  background: #cbd5e1;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(100, 116, 139, 0.25);
 }
 
 .btn-cancel {
@@ -461,8 +492,35 @@
 
 .btn-submit:active,
 .btn-cancel:active,
+.btn-draft:active,
+.btn-delete:active,
 .btn-export-pdf:active {
   transform: translateY(0);
+}
+
+.btn-delete {
+  padding: 14px 32px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #dc3545;
+  color: white;
+}
+
+.btn-delete:hover {
+  background: #c82333;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.35);
+}
+
+.btn-delete:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-export-pdf {
@@ -870,11 +928,26 @@ html[dir="rtl"] .page-content p {
   }
 
   .form-actions {
-    flex-direction: column-reverse;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .form-actions-start,
+  .form-actions-end {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .form-actions-end {
+    order: -1;
   }
 
   .btn-cancel,
-  .btn-submit {
+  .btn-submit,
+  .btn-draft,
+  .btn-delete,
+  .btn-export-pdf,
+  .cancel-btn {
     width: 100%;
   }
 

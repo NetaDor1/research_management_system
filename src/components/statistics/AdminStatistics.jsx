@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useLanguage } from '../../context/LanguageContext';
 import ResearcherSelector from './ResearcherSelector';
 import YearFilter from './YearFilter';
 import AdminStatsBoxes from './AdminStatsBoxes';
@@ -10,26 +11,24 @@ const AdminStatistics = ({
   uniqueResearchers, 
   filteredResearch 
 }) => {
+  const { t } = useLanguage();
   const [selectedResearcherForStats, setSelectedResearcherForStats] = useState('all');
   const [researcherStatsSearchTerm, setResearcherStatsSearchTerm] = useState('');
   const [yearFilterType, setYearFilterType] = useState('all');
   const [researcherYearRange, setResearcherYearRange] = useState({ start: '', end: '' });
 
-  // Filter researchers based on search term
   const filteredResearchersForStats = useMemo(() => {
     return uniqueResearchers.filter(researcher =>
       researcher.toLowerCase().includes(researcherStatsSearchTerm.toLowerCase())
     );
   }, [uniqueResearchers, researcherStatsSearchTerm]);
 
-  // Get base researcher data
   const baseResearcherStat = useMemo(() => {
     return selectedResearcherForStats !== 'all' 
       ? adminStats.byResearcher.find(r => r.researcherName === selectedResearcherForStats)
       : null;
   }, [selectedResearcherForStats, adminStats.byResearcher]);
 
-  // Filter by year range if selected
   const selectedResearcherStat = useMemo(() => {
     if (!baseResearcherStat) return null;
 
@@ -39,7 +38,6 @@ const AdminStatistics = ({
       const startYear = parseInt(researcherYearRange.start);
       const endYear = parseInt(researcherYearRange.end);
       
-      // Filter research data for this researcher by year range
       const researcherResearch = filteredResearch.filter(r => 
         r.researcherName === selectedResearcherForStats &&
         getYear(r.submissionDate) >= startYear &&
@@ -63,7 +61,6 @@ const AdminStatistics = ({
     }
   }, [baseResearcherStat, yearFilterType, researcherYearRange, filteredResearch, selectedResearcherForStats]);
 
-  // Get filtered research data for details
   const filteredResearchData = useMemo(() => {
     let data = filteredResearch.filter(r => 
       r.researcherName === selectedResearcherForStats
@@ -81,11 +78,31 @@ const AdminStatistics = ({
     return data;
   }, [filteredResearch, selectedResearcherForStats, yearFilterType, researcherYearRange]);
 
+  const tableColumns = {
+    department: [
+      { header: t('statsDepartment', 'מחלקה'), accessor: (row) => row.department },
+      { header: t('statsTotalSubmissions', 'סה"כ הגשות'), accessor: (row) => row.totalSubmissions },
+      { header: t('statsTotalAwards', 'סה"כ זכיות'), accessor: (row) => row.totalAwards },
+      { header: t('statsTotalRejections', 'סה"כ דחיות'), accessor: (row) => row.totalRejections },
+    ],
+    fund: [
+      { header: t('statsFund', 'קרן'), accessor: (row) => row.fundName },
+      { header: t('statsTotalSubmissions', 'סה"כ הגשות'), accessor: (row) => row.totalSubmissions },
+      { header: t('statsTotalAwards', 'סה"כ זכיות'), accessor: (row) => row.totalAwards },
+      { header: t('statsTotalRejections', 'סה"כ דחיות'), accessor: (row) => row.totalRejections },
+    ],
+    year: [
+      { header: t('statsYear', 'שנה'), accessor: (row) => row.year },
+      { header: t('statsTotalSubmissions', 'סה"כ הגשות'), accessor: (row) => row.totalSubmissions },
+      { header: t('statsTotalAwards', 'סה"כ זכיות'), accessor: (row) => row.totalAwards },
+      { header: t('statsTotalRejections', 'סה"כ דחיות'), accessor: (row) => row.totalRejections },
+    ],
+  };
+
   return (
     <>
-      {/* Statistics by Researcher */}
       <div className="statistics-section">
-        <h2>סטטיסטיקות לפי חוקר</h2>
+        <h2>{t('statsByResearcher', 'סטטיסטיקות לפי חוקר')}</h2>
         
         <ResearcherSelector
           uniqueResearchers={filteredResearchersForStats}
@@ -102,7 +119,6 @@ const AdminStatistics = ({
           }}
         />
         
-        {/* Year Filter */}
         {selectedResearcherForStats !== 'all' && baseResearcherStat && (
           <YearFilter
             yearFilterType={yearFilterType}
@@ -112,7 +128,6 @@ const AdminStatistics = ({
           />
         )}
         
-        {/* Display selected researcher statistics */}
         {selectedResearcherStat ? (
           <AdminStatsBoxes
             selectedResearcherStat={selectedResearcherStat}
@@ -127,57 +142,39 @@ const AdminStatistics = ({
             background: '#f9f9f9',
             borderRadius: '8px'
           }}>
-            אנא בחר חוקר מהתפריט כדי לראות את הנתונים
+            {t('statsSelectResearcherPrompt', 'אנא בחר חוקר מהתפריט כדי לראות את הנתונים')}
           </div>
         )}
       </div>
 
-      {/* Statistics by Department */}
       {adminStats.byDepartment.length > 0 && (
         <StatisticsTable
-          title="סטטיסטיקות לפי מחלקה"
+          title={t('statsByDepartment', 'סטטיסטיקות לפי מחלקה')}
           data={adminStats.byDepartment}
-          columns={[
-            { header: 'מחלקה', accessor: (row) => row.department },
-            { header: 'סה"כ הגשות', accessor: (row) => row.totalSubmissions },
-            { header: 'סה"כ זכיות', accessor: (row) => row.totalAwards },
-            { header: 'סה"כ דחיות', accessor: (row) => row.totalRejections }
-          ]}
+          columns={tableColumns.department}
         />
       )}
 
-      {/* Statistics by Fund */}
       <StatisticsTable
-        title="סטטיסטיקות לפי קרן"
+        title={t('statsByFund', 'סטטיסטיקות לפי קרן')}
         data={adminStats.byFund}
-        columns={[
-          { header: 'קרן', accessor: (row) => row.fundName },
-          { header: 'סה"כ הגשות', accessor: (row) => row.totalSubmissions },
-          { header: 'סה"כ זכיות', accessor: (row) => row.totalAwards },
-          { header: 'סה"כ דחיות', accessor: (row) => row.totalRejections }
-        ]}
+        columns={tableColumns.fund}
       />
 
-      {/* Total Statistics per Year */}
       <div className="statistics-section">
-        <h2>סה"כ הגשות/זכיות/דחיות בשנה</h2>
+        <h2>{t('statsByYear', 'סה"כ הגשות/זכיות/דחיות בשנה')}</h2>
         <StatisticsTable
           title=""
           data={adminStats.byYear}
-          columns={[
-            { header: 'שנה', accessor: (row) => row.year },
-            { header: 'סה"כ הגשות', accessor: (row) => row.totalSubmissions },
-            { header: 'סה"כ זכיות', accessor: (row) => row.totalAwards },
-            { header: 'סה"כ דחיות', accessor: (row) => row.totalRejections }
-          ]}
+          columns={tableColumns.year}
         />
         
         <div style={{ marginTop: '20px', padding: '15px', background: '#e8f4f8', borderRadius: '8px' }}>
-          <h3>ממוצעים:</h3>
-          <p><strong>מספר שנים:</strong> {adminStats.totalYears}</p>
-          <p><strong>ממוצע הגשות לשנה:</strong> {adminStats.avgSubmissionsPerYear}</p>
-          <p><strong>ממוצע זכיות לשנה:</strong> {adminStats.avgAwardsPerYear}</p>
-          <p><strong>ממוצע דחיות לשנה:</strong> {adminStats.avgRejectionsPerYear}</p>
+          <h3>{t('statsAverages', 'ממוצעים')}:</h3>
+          <p><strong>{t('statsNumberOfYears', 'מספר שנים')}:</strong> {adminStats.totalYears}</p>
+          <p><strong>{t('statsAvgSubmissionsPerYear', 'ממוצע הגשות לשנה')}:</strong> {adminStats.avgSubmissionsPerYear}</p>
+          <p><strong>{t('statsAvgAwardsPerYear', 'ממוצע זכיות לשנה')}:</strong> {adminStats.avgAwardsPerYear}</p>
+          <p><strong>{t('statsAvgRejectionsPerYear', 'ממוצע דחיות לשנה')}:</strong> {adminStats.avgRejectionsPerYear}</p>
         </div>
       </div>
     </>

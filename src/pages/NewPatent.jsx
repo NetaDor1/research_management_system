@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp, Timestamp, query, where, getDocs, arrayUnion } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, getDocs, updateDoc, writeBatch, serverTimestamp, Timestamp, query, where, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db, storage } from '../services/firebase';
 import { createNotification } from '../services/notifications';
 import { navigateBackOrFallback } from '../utils/navigation';
+import DocumentChecklistCard from '../components/research/form/DocumentChecklistCard';
+import { canDeletePatent, getSubmissionStatus } from '../utils/submissionStatus';
+import FormEditToolbar from '../components/FormEditToolbar';
+import '../components/research/form/DocumentChecklistCard.css';
 import './Page.css';
 import './Research.css';
 
@@ -124,6 +128,7 @@ const NewPatent = () => {
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [hasPartners, setHasPartners] = useState(false);
   const [researchOptions, setResearchOptions] = useState([]);
   const [researchLoading, setResearchLoading] = useState(true);
@@ -131,6 +136,7 @@ const NewPatent = () => {
   const [existingResearcherId, setExistingResearcherId] = useState('');
   const isEdit = Boolean(editId);
   const datePickerRefs = useRef({});
+  const previousPatentRef = useRef(null);
 
   const convertDateToISO = (dateValue) => {
     if (!dateValue || typeof dateValue !== 'string') return '';
@@ -238,6 +244,7 @@ const NewPatent = () => {
         }
 
         const data = snap.data();
+        previousPatentRef.current = data;
         setExistingResearcherId(data.researcherId || '');
 
         // Convert dates (Firestore Timestamp or string) to dd/mm/yyyy
@@ -480,10 +487,22 @@ const NewPatent = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
+  const validateDraftForm = () => {
+    if (!formData.projectTitle.trim()) {
+      setErrors({ projectTitle: t('draftTitleRequired', 'יש להזין לפחות כותרת לשמירת טיוטה') });
+      return false;
+    }
+    setErrors({});
+    return true;
+  };
+
+  const savePatent = async (asDraft = false) => {
+    if (asDraft) {
+      if (!validateDraftForm()) {
+        alert(t('draftTitleRequired', 'יש להזין לפחות כותרת לשמירת טיוטה'));
+        return;
+      }
+    } else if (!validateForm()) {
       alert('יש למלא את כל השדות החובה');
       return;
     }
@@ -491,6 +510,7 @@ const NewPatent = () => {
     setIsSubmitting(true);
 
     try {
+      const wasDraft = getSubmissionStatus(previousPatentRef.current) === 'draft';
       const researcherId = user?.id || 'temp-user-id';
       const researcherName = user?.name || 'חוקר';
 
@@ -573,9 +593,16 @@ const NewPatent = () => {
         researcherName: researcherName,
         
         // תאריכים מערכתיים
-        createdAt: serverTimestamp(),
+        submissionStatus: userRole === 'ADMIN' && isEdit
+          ? (previousPatentRef.current?.submissionStatus || 'submitted')
+          : (asDraft ? 'draft' : 'submitted'),
+        submittedAt: asDraft
+          ? (previousPatentRef.current?.submittedAt || null)
+          : serverTimestamp(),
+        draftUpdatedAt: asDraft ? serverTimestamp() : (previousPatentRef.current?.draftUpdatedAt || null),
+        createdAt: isEdit ? (previousPatentRef.current?.createdAt || serverTimestamp()) : serverTimestamp(),
         updatedAt: serverTimestamp(),
-        isNew: true
+        isNew: asDraft ? false : ((!isEdit || wasDraft) ? true : Boolean(previousPatentRef.current?.isNew))
       };
 
       console.log('Patent data prepared:', patentData);
@@ -651,7 +678,7 @@ const NewPatent = () => {
         }
       }
 
-      if (docId && formData.researchProposalId) {
+      if (!asDraft && docId && formData.researchProposalId) {
         try {
           await updateDoc(doc(db, 'researchProposals', formData.researchProposalId), {
             hasPatent: true,
@@ -663,20 +690,21 @@ const NewPatent = () => {
         }
       }
 
-      // ── Notify admin when RESEARCHER creates/edits patent ───────────────────────
-      if (userRole === 'RESEARCHER') {
+      // ── Notify admin when RESEARCHER submits patent (not draft) ───────────────────────
+      if (userRole === 'RESEARCHER' && !asDraft) {
+        const notifyAsNew = !isEdit || wasDraft;
         await createNotification({
           userId: 'ADMIN',
           targetRole: 'ADMIN',
-          title: isEdit ? 'חוקר עדכן פטנט' : 'חוקר הוסיף פטנט חדש',
-          message: isEdit
-            ? `${user?.name || 'חוקר'} עדכן/ה את הפטנט "${formData.projectTitle}".`
-            : `${user?.name || 'חוקר'} הוסיף/ה פטנט חדש: "${formData.projectTitle}".`,
-          type: isEdit ? 'researcher_edit_patent' : 'researcher_new_patent',
+          title: notifyAsNew ? 'חוקר הוסיף פטנט חדש' : 'חוקר עדכן פטנט',
+          message: notifyAsNew
+            ? `${user?.name || 'חוקר'} הוסיף/ה פטנט חדש: "${formData.projectTitle}".`
+            : `${user?.name || 'חוקר'} עדכן/ה את הפטנט "${formData.projectTitle}".`,
+          type: notifyAsNew ? 'researcher_new_patent' : 'researcher_edit_patent',
           entityType: 'patent',
           entityId: docId,
           link: `/patents/${docId}`,
-          eventKey: `${isEdit ? 'researcher_edit_patent' : 'researcher_new_patent'}:${docId}:${Date.now()}`
+          eventKey: `${notifyAsNew ? 'researcher_new_patent' : 'researcher_edit_patent'}:${docId}:${Date.now()}`
         });
       }
 
@@ -704,6 +732,13 @@ const NewPatent = () => {
       }
 
       console.log('Patent saved successfully!');
+      if (asDraft) {
+        alert(t('draftSavedSuccess', 'הטיוטה נשמרה בהצלחה'));
+        if (!isEdit) {
+          navigate(`/patents/new?edit=${docId}`, { replace: true });
+        }
+        return;
+      }
       alert('הפטנט נשמר בהצלחה!');
       navigate(userRole === 'RESEARCHER' ? '/' : '/patents');
     } catch (error) {
@@ -714,10 +749,100 @@ const NewPatent = () => {
     }
   };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await savePatent(false);
+  };
+
+  const handleSaveDraft = async (e) => {
+    e.preventDefault();
+    await savePatent(true);
+  };
+
+  const handleDeletePatent = async () => {
+    if (!editId || !db || deleting) return;
+
+    const existing = previousPatentRef.current;
+    if (!canDeletePatent(existing)) {
+      alert(t('deletePatentNotAllowed', 'ניתן למחוק רק פטנט בטיוטה או בסטטוס בהליך'));
+      return;
+    }
+
+    if (userRole === 'RESEARCHER' && existing?.researcherId !== user?.id) {
+      alert(t('noPermissionAction', 'אין הרשאה לבצע פעולה זו'));
+      return;
+    }
+
+    if (!window.confirm(t('confirmDeletePatent', 'האם את/ה בטוח/ה שברצונך למחוק את הפטנט? פעולה זו אינה ניתנת לביטול.'))) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const researchProposalId = existing?.researchProposalId;
+      if (researchProposalId) {
+        const researchRef = doc(db, 'researchProposals', researchProposalId);
+        const researchSnap = await getDoc(researchRef);
+        if (researchSnap.exists()) {
+          const linkedIds = (researchSnap.data().linkedPatentIds || []).filter((id) => id !== editId);
+          await updateDoc(researchRef, {
+            linkedPatentIds: arrayRemove(editId),
+            hasPatent: linkedIds.length > 0,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+
+      const tasksSnap = await getDocs(collection(db, 'patents', editId, 'tasks'));
+      const batch = writeBatch(db);
+      tasksSnap.docs.forEach((taskDoc) => batch.delete(taskDoc.ref));
+      batch.delete(doc(db, 'patents', editId));
+      await batch.commit();
+
+      alert(t('deletePatentSuccess', 'הפטנט נמחק בהצלחה'));
+      navigate(userRole === 'RESEARCHER' ? '/' : '/patents');
+    } catch (error) {
+      console.error('Error deleting patent:', error);
+      alert(t('deletePatentError', 'שגיאה במחיקת הפטנט'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const isCurrentDraft = !editId || getSubmissionStatus(previousPatentRef.current) === 'draft';
+  const showDraftButton = userRole === 'RESEARCHER' && isCurrentDraft;
+  const showDeleteButton =
+    Boolean(editId) &&
+    canDeletePatent(previousPatentRef.current) &&
+    (userRole === 'ADMIN' || previousPatentRef.current?.researcherId === user?.id);
+
+  const getCancelTarget = () =>
+    editId ? `/patents/${editId}` : (userRole === 'RESEARCHER' ? '/' : '/patents');
+
+  const handleCancel = () => {
+    if (editId && !window.confirm(t('confirmCancelEdit', 'השינויים שביצעת לא יישמרו. האם לבטל את העריכה?'))) {
+      return;
+    }
+    navigateBackOrFallback(navigate, getCancelTarget());
+  };
+
+  const isBusy = isSubmitting || deleting;
+
   return (
     <div className="page-container">
       <div className="page-content" style={{ maxWidth: '1200px' }}>
-        <h1>{t('newPatentTitle', 'הוספת פטנט חדש')}</h1>
+        <div className="form-page-header">
+          <h1>{t('newPatentTitle', 'הוספת פטנט חדש')}</h1>
+          <FormEditToolbar
+            visible={Boolean(editId)}
+            onCancelEdit={handleCancel}
+            onDelete={handleDeletePatent}
+            showDelete={showDeleteButton}
+            deleting={deleting}
+            deleteLabel={t('deletePatent', 'מחק פטנט')}
+            t={t}
+          />
+        </div>
         <p className="form-subtitle">{t('newPatentSubtitle', 'בקשה לקניין רוחני (כמערכת גמול הצטיינות)')}</p>
 
         <form onSubmit={handleSubmit} className="research-form">
@@ -1147,112 +1272,16 @@ const NewPatent = () => {
             <h2>מסמכים</h2>
             <div className="form-group">
               <label>צ'קליסט מסמכים להגשה</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                {requiredDocuments.map((docName) => {
-                  const filesForDoc = formData.requiredDocumentsFiles?.[docName] || [];
-                  return (
-                    <div
-                      key={docName}
-                      style={{
-                        border: '1px solid #dbe2ea',
-                        borderRadius: '8px',
-                        background: '#fff',
-                        padding: '12px',
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          gap: '10px',
-                          marginBottom: filesForDoc.length > 0 ? '10px' : 0,
-                          flexWrap: 'wrap',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <input type="checkbox" checked={filesForDoc.length > 0} readOnly />
-                          <strong>{docName}</strong>
-                        </div>
-
-                        <label
-                          style={{
-                            cursor: 'pointer',
-                            background: '#667eea',
-                            color: 'white',
-                            borderRadius: '6px',
-                            padding: '8px 12px',
-                            fontSize: '14px',
-                            fontWeight: 'bold',
-                          }}
-                        >
-                          העלאת קבצים
-                          <input
-                            type="file"
-                            multiple
-                            style={{ display: 'none' }}
-                            onChange={(e) => {
-                              handleRequiredDocumentUpload(docName, e.target.files);
-                              e.target.value = '';
-                            }}
-                          />
-                        </label>
-                      </div>
-
-                      {filesForDoc.length > 0 && (
-                        <div style={{ display: 'grid', gap: '8px' }}>
-                          {filesForDoc.map((fileItem, fileIndex) => {
-                            const fileName = typeof fileItem === 'string'
-                              ? fileItem
-                              : fileItem?.name || `file-${fileIndex + 1}`;
-                            const fileUrl = typeof fileItem === 'string'
-                              ? fileItem
-                              : fileItem?.url || (fileItem instanceof File ? URL.createObjectURL(fileItem) : '');
-                            return (
-                              <div
-                                key={`${docName}-${fileIndex}-${fileName}`}
-                                style={{
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center',
-                                  gap: '10px',
-                                  background: '#f8fafc',
-                                  border: '1px solid #e2e8f0',
-                                  borderRadius: '6px',
-                                  padding: '8px 10px',
-                                }}
-                              >
-                                <a
-                                  href={fileUrl || '#'}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{ flex: 1, wordBreak: 'break-word', color: '#667eea', textDecoration: 'none' }}
-                                >
-                                  📄 {fileName}
-                                </a>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveRequiredDocumentFile(docName, fileIndex)}
-                                    style={{
-                                      border: '1px solid #cbd5e1',
-                                      background: 'white',
-                                      borderRadius: '4px',
-                                      padding: '4px 8px',
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    הסר
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+              <div className="documents-checklist-grid">
+                {requiredDocuments.map((docName) => (
+                  <DocumentChecklistCard
+                    key={docName}
+                    docName={docName}
+                    files={formData.requiredDocumentsFiles?.[docName] || []}
+                    onUpload={(files) => handleRequiredDocumentUpload(docName, files)}
+                    onRemove={(fileIndex) => handleRemoveRequiredDocumentFile(docName, fileIndex)}
+                  />
+                ))}
               </div>
             </div>
 
@@ -1297,23 +1326,28 @@ const NewPatent = () => {
 
           {/* כפתורי שליחה */}
           <div className="form-actions">
-            <button 
-              type="button" 
-              onClick={() => {
-                // If editing, go back to the patent detail page
-                if (editId) {
-                  navigateBackOrFallback(navigate, `/patents/${editId}`);
-                } else {
-                  navigateBackOrFallback(navigate, userRole === 'RESEARCHER' ? '/' : '/patents');
-                }
-              }} 
-              className="cancel-btn"
-            >
-              {t('cancel', 'ביטול')}
-            </button>
-            <button type="submit" className="submit-btn" disabled={isSubmitting}>
-              {isSubmitting ? t('saving', 'שומר...') : t('savePatent', 'שמור פטנט')}
-            </button>
+            <div className="form-actions-start">
+              <button type="button" onClick={handleCancel} className="cancel-btn" disabled={isBusy}>
+                {t('cancel', 'ביטול')}
+              </button>
+              {showDeleteButton && (
+                <button type="button" className="btn-delete" onClick={handleDeletePatent} disabled={isBusy}>
+                  {deleting ? t('deleting', 'מוחק...') : t('deletePatent', 'מחק פטנט')}
+                </button>
+              )}
+              {showDraftButton && (
+                <button type="button" className="btn-draft" onClick={handleSaveDraft} disabled={isBusy}>
+                  {t('saveDraft', 'שמור כטיוטה')}
+                </button>
+              )}
+            </div>
+            <div className="form-actions-end">
+              <button type="submit" className="submit-btn" disabled={isBusy}>
+                {isSubmitting
+                  ? t('saving', 'שומר...')
+                  : (userRole === 'RESEARCHER' ? t('submitPatent', 'הגש פטנט') : t('savePatent', 'שמור פטנט'))}
+              </button>
+            </div>
           </div>
         </form>
       </div>

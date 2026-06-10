@@ -3,7 +3,14 @@ import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
+import { useLanguage } from '../../context/LanguageContext';
 import ResearcherSelector from './ResearcherSelector';
+
+const CHART_DATA_KEYS = {
+  submissions: 'submissions',
+  awards: 'awards',
+  rejections: 'rejections',
+};
 
 const AdminCharts = ({ 
   adminStats, 
@@ -13,11 +20,21 @@ const AdminCharts = ({
   onResearcherSearchChange,
   onResearcherSelectChange
 }) => {
+  const { t, isRTL } = useLanguage();
+  const textAlign = isRTL ? 'right' : 'left';
+  const direction = isRTL ? 'rtl' : 'ltr';
+  const chartHeadingStyle = { marginBottom: '20px', textAlign };
+
+  const labels = {
+    submissions: t('statsSubmissions', 'הגשות'),
+    awards: t('statsAwards', 'זכיות'),
+    rejections: t('statsRejections', 'דחיות'),
+  };
+
   return (
     <div className="statistics-section" style={{ marginTop: '40px' }}>
-      <h2>גרפים</h2>
+      <h2>{t('statsCharts', 'גרפים')}</h2>
       
-      {/* Pie Chart - Total Submissions/Awards/Rejections */}
       {adminStats.byYear.length > 0 && (() => {
         const totalSubmissions = adminStats.byYear.reduce((sum, y) => sum + y.totalSubmissions, 0);
         const totalAwards = adminStats.byYear.reduce((sum, y) => sum + y.totalAwards, 0);
@@ -25,14 +42,14 @@ const AdminCharts = ({
         
         return (
           <div style={{ marginBottom: '40px', padding: '20px', background: '#fff', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-            <h3 style={{ marginBottom: '20px', textAlign: 'right' }}>חלוקה כוללת: הגשות/זכיות/דחיות</h3>
+            <h3 style={chartHeadingStyle}>{t('statsOverallDistribution', 'חלוקה כוללת: הגשות/זכיות/דחיות')}</h3>
             <ResponsiveContainer width="100%" height={400}>
               <PieChart>
                 <Pie
                   data={[
-                    { name: 'הגשות', value: totalSubmissions },
-                    { name: 'זכיות', value: totalAwards },
-                    { name: 'דחיות', value: totalRejections }
+                    { name: labels.submissions, value: totalSubmissions },
+                    { name: labels.awards, value: totalAwards },
+                    { name: labels.rejections, value: totalRejections }
                   ].filter(item => item.value > 0)}
                   cx="50%"
                   cy="50%"
@@ -54,10 +71,9 @@ const AdminCharts = ({
         );
       })()}
 
-      {/* Bar Chart - Funds Distribution */}
       {adminStats.byFund.length > 0 && (
         <div style={{ marginBottom: '40px', padding: '20px', background: '#fff', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-          <h3 style={{ marginBottom: '20px', textAlign: 'right' }}>חלוקת הגשות לפי קרן</h3>
+          <h3 style={chartHeadingStyle}>{t('statsSubmissionsByFund', 'חלוקת הגשות לפי קרן')}</h3>
           <ResponsiveContainer width="100%" height={400}>
             <BarChart 
               data={adminStats.byFund
@@ -65,7 +81,7 @@ const AdminCharts = ({
                 .slice(0, 15)
                 .map(f => ({
                   name: f.fundName.length > 20 ? f.fundName.substring(0, 20) + '...' : f.fundName,
-                  הגשות: f.totalSubmissions
+                  [CHART_DATA_KEYS.submissions]: f.totalSubmissions
                 }))}
             >
               <CartesianGrid strokeDasharray="3 3" />
@@ -77,18 +93,17 @@ const AdminCharts = ({
                 interval={0}
               />
               <Tooltip formatter={(value) => Math.round(value)} />
-              <Bar dataKey="הגשות" fill="#8884d8" />
+              <Bar dataKey={CHART_DATA_KEYS.submissions} name={labels.submissions} fill="#8884d8" />
             </BarChart>
           </ResponsiveContainer>
         </div>
       )}
 
-      {/* Researcher Statistics Chart with Dropdown and Search */}
       {adminStats.byResearcher.length > 0 && (
         <div style={{ marginBottom: '40px', padding: '20px', background: '#fff', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
           <div style={{ marginBottom: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', direction: 'rtl', marginBottom: '15px' }}>
-              <h3 style={{ margin: 0, textAlign: 'right' }}>הגשות וזכיות לפי חוקר</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', direction, marginBottom: '15px' }}>
+              <h3 style={{ margin: 0, textAlign }}>{t('statsByResearcherChart', 'הגשות וזכיות לפי חוקר')}</h3>
             </div>
             
             <ResearcherSelector
@@ -111,8 +126,8 @@ const AdminCharts = ({
                     data={[
                       { 
                         name: selectedResearcherForChart,
-                        הגשות: selectedResearcherData.totalSubmissions,
-                        זכיות: selectedResearcherData.totalAwards
+                        [CHART_DATA_KEYS.submissions]: selectedResearcherData.totalSubmissions,
+                        [CHART_DATA_KEYS.awards]: selectedResearcherData.totalAwards
                       }
                     ]}
                   >
@@ -125,8 +140,8 @@ const AdminCharts = ({
                     />
                     <Tooltip formatter={(value) => Math.round(value)} />
                     <Legend />
-                    <Bar dataKey="הגשות" fill="#8884d8" />
-                    <Bar dataKey="זכיות" fill="#82ca9d" />
+                    <Bar dataKey={CHART_DATA_KEYS.submissions} name={labels.submissions} fill="#8884d8" />
+                    <Bar dataKey={CHART_DATA_KEYS.awards} name={labels.awards} fill="#82ca9d" />
                   </BarChart>
                 </ResponsiveContainer>
               );
@@ -140,23 +155,22 @@ const AdminCharts = ({
               background: '#f9f9f9',
               borderRadius: '8px'
             }}>
-              אנא בחר חוקר מהתפריט כדי לראות את הגרף
+              {t('statsSelectResearcherForChart', 'אנא בחר חוקר מהתפריט כדי לראות את הגרף')}
             </div>
           )}
         </div>
       )}
 
-      {/* Bar Chart - Department Statistics */}
       {adminStats.byDepartment.length > 0 && (
         <div style={{ marginBottom: '40px', padding: '20px', background: '#fff', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-          <h3 style={{ marginBottom: '20px', textAlign: 'right' }}>סטטיסטיקות לפי מחלקה</h3>
+          <h3 style={chartHeadingStyle}>{t('statsDepartmentChart', 'סטטיסטיקות לפי מחלקה')}</h3>
           <ResponsiveContainer width="100%" height={400}>
             <BarChart 
               data={adminStats.byDepartment.map(d => ({
                 name: d.department,
-                הגשות: d.totalSubmissions,
-                זכיות: d.totalAwards,
-                דחיות: d.totalRejections
+                [CHART_DATA_KEYS.submissions]: d.totalSubmissions,
+                [CHART_DATA_KEYS.awards]: d.totalAwards,
+                [CHART_DATA_KEYS.rejections]: d.totalRejections
               }))}
             >
               <CartesianGrid strokeDasharray="3 3" />
@@ -169,9 +183,9 @@ const AdminCharts = ({
               />
               <Tooltip formatter={(value) => Math.round(value)} />
               <Legend />
-              <Bar dataKey="הגשות" fill="#8884d8" />
-              <Bar dataKey="זכיות" fill="#82ca9d" />
-              <Bar dataKey="דחיות" fill="#ffc658" />
+              <Bar dataKey={CHART_DATA_KEYS.submissions} name={labels.submissions} fill="#8884d8" />
+              <Bar dataKey={CHART_DATA_KEYS.awards} name={labels.awards} fill="#82ca9d" />
+              <Bar dataKey={CHART_DATA_KEYS.rejections} name={labels.rejections} fill="#ffc658" />
             </BarChart>
           </ResponsiveContainer>
         </div>

@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 import TasksCalendar from './TasksCalendar';
 
 /**
@@ -18,7 +19,17 @@ import TasksCalendar from './TasksCalendar';
  * @param {Function} onEventClick - Callback when an event is clicked
  */
 const TasksCalendarContainer = ({ allTasks = [], userRole, userId, onEventClick }) => {
-  // Role-based filtering logic
+  const { t, isRTL } = useLanguage();
+  const textAlign = isRTL ? 'right' : 'left';
+  const sectionTitleStyle = {
+    marginBottom: '20px',
+    textAlign,
+    borderBottom: '3px solid rgb(188, 192, 203)',
+    paddingBottom: '10px',
+    fontWeight: 'bold',
+    color: '#2d3748',
+  };
+
   const filteredTasks = useMemo(() => {
     console.log('TasksCalendarContainer - Filtering tasks:', {
       allTasksCount: allTasks?.length || 0,
@@ -31,37 +42,36 @@ const TasksCalendarContainer = ({ allTasks = [], userRole, userId, onEventClick 
       return [];
     }
 
-    // Research Authority (ADMIN) sees all tasks
     if (userRole === 'ADMIN') {
       console.log('Admin view - showing all tasks:', allTasks.length);
       return allTasks;
     }
 
-    // Researcher sees only their own tasks
     if (userRole === 'RESEARCHER' && userId) {
       const filtered = allTasks.filter(task => task.researcherId === userId);
       console.log('Researcher view - filtered tasks:', filtered.length, 'out of', allTasks.length);
       return filtered;
     }
 
-    // Default: no tasks if role/userId not recognized
     console.log('No matching role/userId - returning empty array');
     return [];
   }, [allTasks, userRole, userId]);
   
   console.log('TasksCalendarContainer - Filtered tasks count:', filteredTasks.length);
 
+  const tasksFoundLabel = t('calendarTasksFoundCount', 'נמצאו {count} משימות להצגה').replace(
+    '{count}',
+    String(filteredTasks.length)
+  );
+  const tasksFilteredHint = t(
+    'calendarTasksFilteredHint',
+    'נמצאו {count} משימות בסך הכל, אך הן לא תואמות את התנאים להצגה'
+  ).replace('{count}', String(allTasks.length));
+
   return (
     <div className="tasks-calendar-wrapper">
-      <h2 style={{ 
-        marginBottom: '20px', 
-        textAlign: 'right',
-        borderBottom: '3px solid rgb(188, 192, 203)',
-        paddingBottom: '10px',
-        fontWeight: 'bold',
-        color: '#2d3748'
-      }}>
-        לוח שנה - משימות
+      <h2 style={sectionTitleStyle}>
+        {t('tasksCalendarTitle', 'לוח שנה - משימות')}
       </h2>
       
       {filteredTasks.length === 0 ? (
@@ -74,14 +84,13 @@ const TasksCalendarContainer = ({ allTasks = [], userRole, userId, onEventClick 
             borderRadius: '8px',
             marginBottom: '20px'
           }}>
-            <p>אין משימות להצגה</p>
+            <p>{t('calendarNoTasksToShow', 'אין משימות להצגה')}</p>
             {allTasks.length > 0 && (
               <p style={{ fontSize: '14px', marginTop: '10px', color: '#999' }}>
-                (נמצאו {allTasks.length} משימות בסך הכל, אך הן לא תואמות את התנאים להצגה)
+                ({tasksFilteredHint})
               </p>
             )}
           </div>
-          {/* Show empty calendar even when no tasks */}
           <TasksCalendar 
             tasks={[]} 
             onEventClick={onEventClick}
@@ -91,11 +100,11 @@ const TasksCalendarContainer = ({ allTasks = [], userRole, userId, onEventClick 
         <>
           <div style={{ 
             marginBottom: '15px', 
-            textAlign: 'right', 
+            textAlign, 
             fontSize: '14px', 
             color: '#666' 
           }}>
-            נמצאו {filteredTasks.length} משימות להצגה
+            {tasksFoundLabel}
           </div>
           <TasksCalendar 
             tasks={filteredTasks} 

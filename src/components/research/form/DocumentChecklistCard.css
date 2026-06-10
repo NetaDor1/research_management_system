@@ -1,0 +1,150 @@
+.documents-checklist-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  width: 100%;
+}
+
+.documents-checklist-grid > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 720px) {
+  .documents-checklist-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.document-checklist-card__inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.document-checklist-card__title {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.document-checklist-card__checkbox {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #667eea;
+  pointer-events: none;
+}
+
+.document-checklist-card__name {
+  min-width: 0;
+  max-width: 100%;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.4;
+  color: #1e293b;
+  text-align: start;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.document-checklist-card__drop-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 72px;
+  padding: 14px 12px;
+  border: 1px dashed #c7d2fe;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.85);
+  text-align: center;
+  pointer-events: none;
+}
+
+.file-drop-zone--document.file-drop-zone--has-files .document-checklist-card__drop-hint {
+  min-height: 48px;
+  padding: 10px 12px;
+}
+
+.file-drop-zone--document.file-drop-zone--dragging .document-checklist-card__drop-hint {
+  border-color: #667eea;
+  background: #eef2ff;
+}
+
+.document-checklist-card__drop-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.document-checklist-card__drop-text {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #64748b;
+  max-width: 100%;
+}
+
+.document-checklist-card__drop-text--drag {
+  display: none;
+  color: #667eea;
+  font-weight: 600;
+}
+
+.file-drop-zone--document.file-drop-zone--dragging .document-checklist-card__drop-text--idle {
+  display: none;
+}
+
+.file-drop-zone--document.file-drop-zone--dragging .document-checklist-card__drop-text--drag {
+  display: block;
+}
+
+.document-checklist-card__files {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.document-checklist-card__file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #d1fae5;
+  border-radius: 6px;
+  padding: 8px 10px;
+  min-width: 0;
+}
+
+.document-checklist-card__file-link {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #667eea;
+  text-decoration: none;
+  font-size: 13px;
+  text-align: start;
+}
+
+.document-checklist-card__remove {
+  border: 1px solid #cbd5e1;
+  background: white;
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.document-checklist-card__remove:hover {
+  background: #f8fafc;
+}

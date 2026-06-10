@@ -36,30 +36,39 @@ const StatBox = ({
   );
 };
 
-export const renderSubmissionsList = (submissions, getYear) => {
+const getStatusLabel = (status, t) => {
+  if (status === 'awarded') return t('awarded', 'זכייה');
+  if (status === 'rejected') return t('statsRejection', 'דחייה');
+  return t('statsPending', 'בהמתנה');
+};
+
+export const renderSubmissionsList = (submissions, getYearFn, { t, isRTL }) => {
+  const textAlign = isRTL ? 'right' : 'left';
+  const direction = isRTL ? 'rtl' : 'ltr';
+
   if (submissions.length === 0) {
     return (
       <>
-        <h4 style={{ marginBottom: '10px', textAlign: 'right', fontSize: '14px', fontWeight: 'bold' }}>
-          רשימת הגשות:
+        <h4 style={{ marginBottom: '10px', textAlign, fontSize: '14px', fontWeight: 'bold' }}>
+          {t('statsSubmissionsList', 'רשימת הגשות')}:
         </h4>
-        <p style={{ textAlign: 'right', color: '#666' }}>אין הגשות</p>
+        <p style={{ textAlign, color: '#666' }}>{t('statsNoSubmissions', 'אין הגשות')}</p>
       </>
     );
   }
 
   return (
     <>
-      <h4 style={{ marginBottom: '10px', textAlign: 'right', fontSize: '14px', fontWeight: 'bold' }}>
-        רשימת הגשות:
+      <h4 style={{ marginBottom: '10px', textAlign, fontSize: '14px', fontWeight: 'bold' }}>
+        {t('statsSubmissionsList', 'רשימת הגשות')}:
       </h4>
-      <ul style={{ listStyle: 'none', padding: 0, direction: 'rtl', textAlign: 'right' }}>
+      <ul style={{ listStyle: 'none', padding: 0, direction, textAlign }}>
         {submissions.map((r, idx) => (
           <li key={idx} style={{ marginBottom: '8px', padding: '8px', background: '#f5f5f5', borderRadius: '4px' }}>
-            <strong>{r.title || r.projectTitle || 'ללא כותרת'}</strong> - {r.fundName || 'ללא קרן'} ({getYear(r.submissionDate) || 'ללא תאריך'})
+            <strong>{r.title || r.projectTitle || t('noTitle', 'ללא כותרת')}</strong> - {r.fundName || t('statsNoFund', 'ללא קרן')} ({getYearFn(r.submissionDate) || t('statsNoDate', 'ללא תאריך')})
             <br />
             <small style={{ color: '#666' }}>
-              סטטוס: {r.status === 'awarded' ? 'זכייה' : r.status === 'rejected' ? 'דחייה' : 'בהמתנה'}
+              {t('statsStatusLabel', 'סטטוס')}: {getStatusLabel(r.status, t)}
             </small>
           </li>
         ))}
@@ -68,27 +77,30 @@ export const renderSubmissionsList = (submissions, getYear) => {
   );
 };
 
-export const renderAwardsList = (awards, getYear) => {
+export const renderAwardsList = (awards, getYearFn, { t, isRTL }) => {
+  const textAlign = isRTL ? 'right' : 'left';
+  const direction = isRTL ? 'rtl' : 'ltr';
+
   if (awards.length === 0) {
     return (
       <>
-        <h4 style={{ marginBottom: '10px', textAlign: 'right', fontSize: '14px', fontWeight: 'bold' }}>
-          רשימת זכיות:
+        <h4 style={{ marginBottom: '10px', textAlign, fontSize: '14px', fontWeight: 'bold' }}>
+          {t('statsAwardsList', 'רשימת זכיות')}:
         </h4>
-        <p style={{ textAlign: 'right', color: '#666' }}>אין זכיות</p>
+        <p style={{ textAlign, color: '#666' }}>{t('statsNoAwards', 'אין זכיות')}</p>
       </>
     );
   }
 
   return (
     <>
-      <h4 style={{ marginBottom: '10px', textAlign: 'right', fontSize: '14px', fontWeight: 'bold' }}>
-        רשימת זכיות:
+      <h4 style={{ marginBottom: '10px', textAlign, fontSize: '14px', fontWeight: 'bold' }}>
+        {t('statsAwardsList', 'רשימת זכיות')}:
       </h4>
-      <ul style={{ listStyle: 'none', padding: 0, direction: 'rtl', textAlign: 'right' }}>
+      <ul style={{ listStyle: 'none', padding: 0, direction, textAlign }}>
         {awards.map((r, idx) => (
           <li key={idx} style={{ marginBottom: '8px', padding: '8px', background: '#d4edda', borderRadius: '4px' }}>
-            <strong>{r.title || r.projectTitle || 'ללא כותרת'}</strong> - {r.fundName || 'ללא קרן'} ({getYear(r.submissionDate) || 'ללא תאריך'})
+            <strong>{r.title || r.projectTitle || t('noTitle', 'ללא כותרת')}</strong> - {r.fundName || t('statsNoFund', 'ללא קרן')} ({getYearFn(r.submissionDate) || t('statsNoDate', 'ללא תאריך')})
           </li>
         ))}
       </ul>
@@ -96,20 +108,26 @@ export const renderAwardsList = (awards, getYear) => {
   );
 };
 
-export const renderFundsList = (researchData, isIsraeli) => {
+export const renderFundsList = (researchData, isIsraeli, { t, isRTL }) => {
+  const textAlign = isRTL ? 'right' : 'left';
+  const direction = isRTL ? 'rtl' : 'ltr';
   const filtered = researchData.filter(r => 
     isIsraeli ? isIsraeliFund(r.fundName) : isInternationalFund(r.fundName)
   );
+  const fundsTitle = isIsraeli
+    ? t('statsIsraeliFunds', 'קרנות בארץ')
+    : t('statsInternationalFunds', 'קרנות בחו"ל');
+  const noFundsMessage = isIsraeli
+    ? t('statsNoIsraeliFunds', 'אין קרנות בארץ')
+    : t('statsNoInternationalFunds', 'אין קרנות בחו"ל');
   
   if (filtered.length === 0) {
     return (
       <>
-        <h4 style={{ marginBottom: '10px', textAlign: 'right', fontSize: '14px', fontWeight: 'bold' }}>
-          {isIsraeli ? 'קרנות בארץ:' : 'קרנות בחו"ל:'}
+        <h4 style={{ marginBottom: '10px', textAlign, fontSize: '14px', fontWeight: 'bold' }}>
+          {fundsTitle}:
         </h4>
-        <p style={{ textAlign: 'right', color: '#666' }}>
-          {isIsraeli ? 'אין קרנות בארץ' : 'אין קרנות בחו"ל'}
-        </p>
+        <p style={{ textAlign, color: '#666' }}>{noFundsMessage}</p>
       </>
     );
   }
@@ -122,13 +140,13 @@ export const renderFundsList = (researchData, isIsraeli) => {
 
   return (
     <>
-      <h4 style={{ marginBottom: '10px', textAlign: 'right', fontSize: '14px', fontWeight: 'bold' }}>
-        {isIsraeli ? 'קרנות בארץ:' : 'קרנות בחו"ל:'}
+      <h4 style={{ marginBottom: '10px', textAlign, fontSize: '14px', fontWeight: 'bold' }}>
+        {fundsTitle}:
       </h4>
-      <ul style={{ listStyle: 'none', padding: 0, direction: 'rtl', textAlign: 'right' }}>
+      <ul style={{ listStyle: 'none', padding: 0, direction, textAlign }}>
         {Object.entries(fundGroups).map(([fundName, researchList]) => (
           <li key={fundName} style={{ marginBottom: '8px', padding: '8px', background: '#f5f5f5', borderRadius: '4px' }}>
-            <strong>{fundName}</strong> ({researchList.length} מחקרים)
+            <strong>{fundName}</strong> ({researchList.length} {t('statsResearchCount', 'מחקרים')})
           </li>
         ))}
       </ul>

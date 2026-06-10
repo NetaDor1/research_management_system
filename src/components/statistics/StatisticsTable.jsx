@@ -1,17 +1,21 @@
 import React from 'react';
+import { useLanguage } from '../../context/LanguageContext';
 
 const StatisticsTable = ({ 
   title, 
   data, 
   columns 
 }) => {
+  const { isRTL } = useLanguage();
+  const textAlign = isRTL ? 'right' : 'left';
+
   if (!data || data.length === 0) {
     return null;
   }
 
   return (
     <div className="statistics-section">
-      <h2>{title}</h2>
+      {title ? <h2>{title}</h2> : null}
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '15px' }}>
           <thead>
@@ -19,7 +23,7 @@ const StatisticsTable = ({
               {columns.map((col, idx) => (
                 <th 
                   key={idx} 
-                  style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'right' }}
+                  style={{ padding: '12px', border: '1px solid #ddd', textAlign }}
                 >
                   {col.header}
                 </th>
@@ -32,7 +36,7 @@ const StatisticsTable = ({
                 {columns.map((col, colIdx) => (
                   <td 
                     key={colIdx} 
-                    style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'right' }}
+                    style={{ padding: '12px', border: '1px solid #ddd', textAlign }}
                   >
                     {col.accessor(row)}
                   </td>

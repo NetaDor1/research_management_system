@@ -1,12 +1,19 @@
 import React from 'react';
-
-const formatCurrency = (amount, currency = 'ILS') => {
-  if (!amount) return 'לא צוין';
-  const currencySymbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '₪';
-  return `${currencySymbol} ${Number(amount).toLocaleString('he-IL')}`;
-};
+import { useLanguage } from '../../context/LanguageContext';
+import { getBudgetComponentLabel } from '../../utils/budgetComponents';
 
 const BudgetSection = ({ researchData }) => {
+  const { t, language, isRTL } = useLanguage();
+  const textAlign = isRTL ? 'right' : 'left';
+  const locale = language === 'en' ? 'en-US' : 'he-IL';
+  const notSpecified = t('notSpecified', 'לא צוין');
+
+  const formatCurrency = (amount, currency = 'ILS') => {
+    if (!amount && amount !== 0) return notSpecified;
+    const currencySymbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '₪';
+    return `${currencySymbol} ${Number(amount).toLocaleString(locale)}`;
+  };
+
   if (!researchData) return null;
 
   return (
@@ -14,9 +21,12 @@ const BudgetSection = ({ researchData }) => {
       background: '#f9f9f9', 
       padding: '30px', 
       borderRadius: '8px',
-      marginBottom: '20px'
+      marginBottom: '20px',
+      textAlign,
     }}>
-      <h2 style={{ marginBottom: '20px', color: '#667eea' }}>תקציב</h2>
+      <h2 style={{ marginBottom: '20px', color: '#667eea' }}>
+        {t('budgetTitle', 'תקציב')}
+      </h2>
       
       <div style={{ 
         display: 'grid', 
@@ -31,7 +41,7 @@ const BudgetSection = ({ researchData }) => {
             marginBottom: '5px',
             color: '#666'
           }}>
-            תקציב כולל:
+            {t('totalBudget', 'תקציב כולל')}:
           </label>
           <span style={{ fontSize: '16px' }}>
             {formatCurrency(researchData.totalBudget, researchData.currency)}
@@ -45,7 +55,7 @@ const BudgetSection = ({ researchData }) => {
             marginBottom: '5px',
             color: '#666'
           }}>
-            מטבע:
+            {t('currency', 'מטבע')}:
           </label>
           <span style={{ fontSize: '16px' }}>{researchData.currency || 'ILS'}</span>
         </div>
@@ -57,7 +67,7 @@ const BudgetSection = ({ researchData }) => {
             marginBottom: '5px',
             color: '#666'
           }}>
-            תקציב מומר:
+            {t('convertedBudget', 'תקציב מומר')}:
           </label>
           <span style={{ fontSize: '16px' }}>
             {formatCurrency(researchData.convertedBudget, 'ILS')}
@@ -71,26 +81,34 @@ const BudgetSection = ({ researchData }) => {
             marginBottom: '5px',
             color: '#666'
           }}>
-            תקציב שאושר:
+            {t('approvedBudget', 'תקציב שאושר')}:
           </label>
           <span style={{ fontSize: '16px' }}>
             {researchData.approvedBudget !== undefined && researchData.approvedBudget !== null
               ? formatCurrency(researchData.approvedBudget, 'ILS')
-              : 'לא צוין'}
+              : notSpecified}
           </span>
         </div>
       </div>
 
       {researchData.budgetComponents && Object.keys(researchData.budgetComponents).length > 0 && (
         <div style={{ marginTop: '20px' }}>
-          <h3 style={{ marginBottom: '15px', color: '#666' }}>רכיבי תקציב (מבוקש / התקבל):</h3>
+          <h3 style={{ marginBottom: '15px', color: '#666' }}>
+            {t('budgetComponentsRequestedReceived', 'רכיבי תקציב (מבוקש / התקבל)')}:
+          </h3>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'right', padding: '10px', borderBottom: '1px solid #ddd' }}>רכיב</th>
-                  <th style={{ textAlign: 'right', padding: '10px', borderBottom: '1px solid #ddd' }}>מבוקש</th>
-                  <th style={{ textAlign: 'right', padding: '10px', borderBottom: '1px solid #ddd' }}>התקבל</th>
+                  <th style={{ textAlign, padding: '10px', borderBottom: '1px solid #ddd' }}>
+                    {t('component', 'רכיב')}
+                  </th>
+                  <th style={{ textAlign, padding: '10px', borderBottom: '1px solid #ddd' }}>
+                    {t('requested', 'מבוקש')}
+                  </th>
+                  <th style={{ textAlign, padding: '10px', borderBottom: '1px solid #ddd' }}>
+                    {t('received', 'התקבל')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -99,7 +117,7 @@ const BudgetSection = ({ researchData }) => {
                   return (
                     <tr key={key}>
                       <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9', fontWeight: 'bold', color: '#475569' }}>
-                        {key}
+                        {getBudgetComponentLabel(key, t)}
                       </td>
                       <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9' }}>
                         {formatCurrency(value, researchData.currency)}
@@ -107,7 +125,7 @@ const BudgetSection = ({ researchData }) => {
                       <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9' }}>
                         {approvedValue !== undefined && approvedValue !== null
                           ? formatCurrency(approvedValue, researchData.currency)
-                          : 'לא צוין'}
+                          : notSpecified}
                       </td>
                     </tr>
                   );

@@ -13,6 +13,7 @@ import PartnersSection from '../components/research/PartnersSection';
 import ResearchDescriptionSection from '../components/research/ResearchDescriptionSection';
 import AdditionalInfoSection from '../components/research/AdditionalInfoSection';
 import TasksSection from '../components/research/TasksSection';
+import { canResearcherEditResearch, isDraft } from '../utils/submissionStatus';
 import WorkPlanSection from '../components/research/WorkPlanSection';
 import './Page.css';
 import './Research.css';
@@ -29,13 +30,16 @@ import {
 } from '../utils/exportPdf';
 import { normalizeAcademicYear } from '../utils/academicYear';
 import { navigateBackOrFallback } from '../utils/navigation';
+import { getBudgetComponentLabel } from '../utils/budgetComponents';
 
 const ResearchDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { isAdmin, userRole, user } = useAuth();
-  const { t, language } = useLanguage();
+  const { t, language, isRTL } = useLanguage();
+  const textAlign = isRTL ? 'right' : 'left';
+  const locale = language === 'en' ? 'en-US' : 'he-IL';
   const [researchData, setResearchData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -57,7 +61,7 @@ const ResearchDetail = () => {
   useEffect(() => {
     const fetchResearch = async () => {
       if (!db) {
-        setError('מסד הנתונים לא מאותחל');
+        setError(t('dbNotInitialized', 'מסד הנתונים לא מאותחל'));
         setLoading(false);
         return;
       }
@@ -73,18 +77,24 @@ const ResearchDetail = () => {
           const data = docSnap.data();
           
           if (userRole === 'RESEARCHER' && data.researcherId !== user?.id) {
-            setError('אין הרשאה לצפות במחקר זה');
+            setError(t('noPermissionViewResearch', 'אין הרשאה לצפות במחקר זה'));
+            setLoading(false);
+            return;
+          }
+
+          if (userRole === 'ADMIN' && isDraft(data)) {
+            setError(t('draftNotVisibleToAdmin', 'טיוטה זו אינה זמינה לרשות המחקר עד להגשה'));
             setLoading(false);
             return;
           }
 
           setResearchData(data);
         } else {
-          setError('המחקר לא נמצא');
+          setError(t('researchNotFound', 'המחקר לא נמצא'));
         }
       } catch (err) {
         console.error('Error fetching research:', err);
-        setError('שגיאה בטעינת פרטי המחקר');
+        setError(t('loadResearchError', 'שגיאה בטעינת פרטי המחקר'));
       } finally {
         setLoading(false);
       }
@@ -93,7 +103,7 @@ const ResearchDetail = () => {
     if (id) {
       fetchResearch();
     }
-  }, [id, userRole, user?.id]);
+  }, [id, userRole, user?.id, t]);
 
   // Fetch tasks
   useEffect(() => {
@@ -175,14 +185,14 @@ const ResearchDetail = () => {
       },
       (error) => {
         console.error('Error fetching linked articles:', error);
-        setLinkedArticlesError('שגיאה בטעינת מאמרים מקושרים');
+        setLinkedArticlesError(t('loadingLinkedArticlesError', 'שגיאה בטעינת מאמרים מקושרים'));
         setLinkedArticles([]);
         setLinkedArticlesLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
     if (!id || !db) return;
@@ -207,14 +217,14 @@ const ResearchDetail = () => {
       },
       (error) => {
         console.error('Error fetching linked patents:', error);
-        setLinkedPatentsError('שגיאה בטעינת פטנטים מקושרים');
+        setLinkedPatentsError(t('loadingLinkedPatentsError', 'שגיאה בטעינת פטנטים מקושרים'));
         setLinkedPatents([]);
         setLinkedPatentsLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [id]);
+  }, [id, t]);
 
   const getBackPath = () => (userRole === 'RESEARCHER' ? '/' : '/research');
 
@@ -623,7 +633,7 @@ const ResearchDetail = () => {
 
     const budgetRowsHtml = Object.entries(budgetComponents)
       .map(([k, v]) => {
-        return `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`;
+        return `<tr><td>${escapeHtml(getBudgetComponentLabel(k, t))}</td><td>${escapeHtml(v)}</td></tr>`;
       })
       .join('');
 
@@ -807,7 +817,7 @@ const ResearchDetail = () => {
 
         {loading && (
           <div className="no-results">
-            <p>טוען פרטי מחקר...</p>
+            <p>{t('loadingResearchDetails', 'טוען פרטי מחקר...')}</p>
           </div>
         )}
 
@@ -818,7 +828,7 @@ const ResearchDetail = () => {
         )}
 
         {!loading && !error && researchData && (
-          <div style={{ textAlign: language === 'en' ? 'left' : 'right' }}>
+          <div style={{ textAlign }}>
             {/*
               Edit permissions:
               - Admin can always edit.
@@ -826,10 +836,10 @@ const ResearchDetail = () => {
             */}
             {(() => {
               const canEditResearch =
-                isAdmin() || (userRole === 'RESEARCHER' && researchData.status !== 'awarded');
+                isAdmin() || (userRole === 'RESEARCHER' && canResearcherEditResearch(researchData));
               return (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-              <h1 style={{ margin: 0, color: '#333' }}>פרטי מחקר</h1>
+              <h1 style={{ margin: 0, color: '#333' }}>{t('researchDetailsTitle', 'פרטי מחקר')}</h1>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                 <button
                   type="button"
@@ -861,7 +871,7 @@ const ResearchDetail = () => {
                       fontWeight: 'bold'
                     }}
                   >
-                    ✏️ ערוך מחקר
+                    ✏️ {t('editResearch', 'ערוך מחקר')}
                   </button>
                 )}
               </div>
@@ -870,7 +880,7 @@ const ResearchDetail = () => {
             })()}
 
             <ResearchInfoSection researchData={researchData} />
-            {isAdmin() && (
+            {isAdmin() && !isDraft(researchData) && (
               <div
                 style={{
                   background: '#f9f9f9',
@@ -881,7 +891,7 @@ const ResearchDetail = () => {
                 }}
               >
                 <h2 style={{ marginTop: 0, marginBottom: '16px', color: '#667eea' }}>
-                  אישור הצעת מחקר ומימון
+                  {t('proposalApprovalTitle', 'אישור הצעת מחקר ומימון')}
                 </h2>
                 <div
                   style={{
@@ -893,22 +903,22 @@ const ResearchDetail = () => {
                 >
                   <div>
                     <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '6px', color: '#666' }}>
-                      סטטוס הצעה
+                      {t('proposalStatusLabel', 'סטטוס הצעה')}
                     </label>
                     <select
                       value={proposalStatus}
                       onChange={(e) => setProposalStatus(e.target.value)}
                       style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
                     >
-                      <option value="pending">בהמתנה</option>
-                      <option value="awarded">מאושר</option>
-                      <option value="rejected">נדחה</option>
+                      <option value="pending">{t('proposalStatusPending', 'בהמתנה')}</option>
+                      <option value="awarded">{t('proposalStatusApproved', 'מאושר')}</option>
+                      <option value="rejected">{t('proposalStatusRejected', 'נדחה')}</option>
                     </select>
                   </div>
 
                   <div>
                     <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '6px', color: '#666' }}>
-                      תקציב שהתקבל (₪)
+                      {t('approvedBudgetLabel', 'תקציב שהתקבל (₪)')}
                     </label>
                     <input
                       type="number"
@@ -917,7 +927,7 @@ const ResearchDetail = () => {
                       value={approvedBudgetInput}
                       readOnly
                       disabled
-                      placeholder="מחושב אוטומטית מסכומי הרכיבים"
+                      placeholder={t('autoCalculatedFromComponents', 'מחושב אוטומטית מסכומי הרכיבים')}
                       style={{
                         width: '100%',
                         padding: '10px',
@@ -944,24 +954,23 @@ const ResearchDetail = () => {
                         fontWeight: 'bold',
                       }}
                     >
-                      {savingProposalDecision ? 'שומר...' : 'שמור החלטה'}
+                      {savingProposalDecision ? t('saving', 'שומר...') : t('saveDecision', 'שמור החלטה')}
                     </button>
                   </div>
                 </div>
                 {Object.keys(researchData.budgetComponents || {}).length > 0 && (
                   <div style={{ marginTop: '18px' }}>
                     <h3 style={{ marginTop: 0, marginBottom: '6px', fontSize: '16px' }}>
-                      רכיבי תקציב: מבוקש מול התקבל
+                      {t('budgetComponentsRequestedVsApproved', 'רכיבי תקציב: מבוקש מול התקבל')}
                     </h3>
                     {isAdmin() && (
                       <p style={{
                         margin: '0 0 12px',
                         fontSize: '13px',
-                      
                         borderRadius: '6px',
                         padding: '7px 12px'
                       }}>
-                        עריכת רכיבי תקציב זמינה רק לאחר שינוי סטטוס ההצעה ל"הצעה מאושרת"
+                        {t('budgetEditAfterApproval', 'עריכת רכיבי תקציב זמינה רק לאחר שינוי סטטוס ההצעה ל"הצעה מאושרת"')}
                       </p>
                     )}
                     <div style={{ display: 'grid', gap: '10px' }}>
@@ -979,9 +988,11 @@ const ResearchDetail = () => {
                             padding: '10px',
                           }}
                         >
-                          <div style={{ fontWeight: 'bold', color: '#334155' }}>{componentKey}</div>
+                          <div style={{ fontWeight: 'bold', color: '#334155' }}>
+                            {getBudgetComponentLabel(componentKey, t)}
+                          </div>
                           <div style={{ color: '#334155' }}>
-                            מבוקש: {Number(requestedValue || 0).toLocaleString('he-IL')}
+                            {t('requested', 'מבוקש')}: {Number(requestedValue || 0).toLocaleString(locale)}
                           </div>
                           <input
                             type="number"
@@ -994,7 +1005,7 @@ const ResearchDetail = () => {
                                 [componentKey]: e.target.value,
                               }))
                             }
-                            placeholder="התקבל"
+                            placeholder={t('received', 'התקבל')}
                             style={{
                               width: '100%',
                               padding: '8px',
@@ -1031,7 +1042,7 @@ const ResearchDetail = () => {
                 borderRadius: '8px',
                 marginBottom: '20px'
               }}>
-                <h2 style={{ marginBottom: '20px', color: '#667eea' }}>פטנטים מקושרים</h2>
+                <h2 style={{ marginBottom: '20px', color: '#667eea' }}>{t('linkedPatents', 'פטנטים מקושרים')}</h2>
                 <div className="research-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '14px' }}>
                   {linkedPatents.map((patent) => (
                     <button
@@ -1048,10 +1059,10 @@ const ResearchDetail = () => {
                       onClick={() => navigate(`/patents/${patent.id}`)}
                     >
                       <h3 className="research-title" style={{ textAlign: 'center' }}>
-                        {patent.title || patent.projectTitle || 'ללא כותרת'}
+                        {patent.title || patent.projectTitle || t('noTitle', 'ללא כותרת')}
                       </h3>
                       <p className="research-researcher" style={{ textAlign: 'center' }}>
-                        {patent.researcherName || patent.researcher || 'חוקר'}
+                        {patent.researcherName || patent.researcher || t('researcher', 'חוקר')}
                       </p>
                     </button>
                   ))}
@@ -1065,7 +1076,7 @@ const ResearchDetail = () => {
                 borderRadius: '8px',
                 marginBottom: '20px'
               }}>
-                <h2 style={{ marginBottom: '20px', color: '#667eea' }}>מאמרים מקושרים</h2>
+                <h2 style={{ marginBottom: '20px', color: '#667eea' }}>{t('linkedArticles', 'מאמרים מקושרים')}</h2>
                 <div className="research-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '14px' }}>
                   {linkedArticles.map((article) => (
                     <button
@@ -1082,10 +1093,10 @@ const ResearchDetail = () => {
                       onClick={() => navigate(`/articles/${article.id}`)}
                     >
                       <h3 className="research-title" style={{ textAlign: 'center' }}>
-                        {article.title || 'ללא כותרת'}
+                        {article.title || t('noTitle', 'ללא כותרת')}
                       </h3>
                       <p className="research-researcher" style={{ textAlign: 'center' }}>
-                        {article.journalName || article.researcherName || 'מאמר'}
+                        {article.journalName || article.researcherName || t('articleLabel', 'מאמר')}
                       </p>
                     </button>
                   ))}
@@ -1115,9 +1126,11 @@ const ResearchDetail = () => {
                   border: '1px solid #e2e8f0',
                 }}
               >
-                <h2 style={{ marginTop: 0, marginBottom: '12px', color: '#667eea' }}>משימות והגשות</h2>
+                <h2 style={{ marginTop: 0, marginBottom: '12px', color: '#667eea' }}>
+                  {t('tasksAndSubmissions', 'משימות והגשות')}
+                </h2>
                 <p style={{ margin: 0, color: '#555', lineHeight: 1.6 }}>
-                  ניתן לחלק משימות ולהגיש מסמכים רק לאחר שהמחקר מאושר (זכה).
+                  {t('tasksOnlyAfterAward', 'ניתן לחלק משימות ולהגיש מסמכים רק לאחר שהמחקר מאושר (זכה).')}
                 </p>
               </div>
             )}

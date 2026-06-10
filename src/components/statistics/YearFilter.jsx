@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLanguage } from '../../context/LanguageContext';
 
 const YearFilter = ({ 
   yearFilterType, 
@@ -6,22 +7,25 @@ const YearFilter = ({
   onFilterTypeChange, 
   onYearRangeChange 
 }) => {
+  const { t, isRTL } = useLanguage();
+  const direction = isRTL ? 'rtl' : 'ltr';
+
   return (
     <div style={{ 
       marginBottom: '20px', 
       padding: '15px', 
       background: '#f5f5f5', 
       borderRadius: '8px',
-      direction: 'rtl'
+      direction
     }}>
       <label style={{ 
-        marginLeft: '10px', 
+        marginInlineEnd: '10px', 
         fontSize: '14px', 
         fontWeight: 'bold',
         marginBottom: '10px',
         display: 'block'
       }}>
-        חיתוך לפי שנים:
+        {t('statsYearFilter', 'חיתוך לפי שנים')}:
       </label>
       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
         <button
@@ -40,12 +44,12 @@ const YearFilter = ({
             fontWeight: yearFilterType === 'all' ? 'bold' : 'normal'
           }}
         >
-          כל השנים
+          {t('statsAllYearsBtn', 'כל השנים')}
         </button>
-        <span style={{ color: '#666' }}>או</span>
+        <span style={{ color: '#666' }}>{t('statsOr', 'או')}</span>
         <input
           type="number"
-          placeholder="משנה"
+          placeholder={t('statsFromYear', 'משנה')}
           value={yearRange.start}
           onChange={(e) => {
             onYearRangeChange({ ...yearRange, start: e.target.value });
@@ -59,13 +63,13 @@ const YearFilter = ({
             border: '1px solid #ddd',
             fontSize: '14px',
             width: '100px',
-            direction: 'rtl'
+            direction
           }}
         />
-        <span style={{ color: '#666' }}>עד</span>
+        <span style={{ color: '#666' }}>{t('statsToYear', 'עד שנה')}</span>
         <input
           type="number"
-          placeholder="עד שנה"
+          placeholder={t('statsToYear', 'עד שנה')}
           value={yearRange.end}
           onChange={(e) => {
             onYearRangeChange({ ...yearRange, end: e.target.value });
@@ -79,7 +83,7 @@ const YearFilter = ({
             border: '1px solid #ddd',
             fontSize: '14px',
             width: '100px',
-            direction: 'rtl'
+            direction
           }}
         />
       </div>

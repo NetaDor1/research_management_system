@@ -13,7 +13,15 @@ import './Research.css';
 
 const Home = () => {
   const { isAdmin, user, userRole } = useAuth();
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
+  const sectionTitleStyle = {
+    marginBottom: '20px',
+    textAlign: isRTL ? 'right' : 'left',
+    borderBottom: '3px solid rgb(188, 192, 203)',
+    paddingBottom: '10px',
+    fontWeight: 'bold',
+    color: '#2d3748',
+  };
   const navigate = useNavigate();
 
   // Research state
@@ -76,9 +84,10 @@ const Home = () => {
         const data = doc.data();
         return {
           id: doc.id,
-          title: data.projectTitle || data.title || 'ללא כותרת',
-          researcher: data.researcherName || data.researcher || 'חוקר',
+          title: data.projectTitle || data.title || t('noTitle', 'ללא כותרת'),
+          researcher: data.researcherName || data.researcher || t('researcher', 'חוקר'),
           status: data.status || 'pending',
+          submissionStatus: data.submissionStatus || 'submitted',
           hasPatent: data.hasPatent || false,
           submissionDate: toDateString(data.submissionDate || data.createdAt),
           isNew: data.isNew || false,
@@ -94,12 +103,12 @@ const Home = () => {
       setResearchData(researchList);
     } catch (err) {
       console.error('Error fetching research:', err);
-      setResearchError('שגיאה בטעינת מחקרים');
+      setResearchError(t('loadResearchListError', 'שגיאה בטעינת מחקרים'));
       setResearchData([]);
     } finally {
       setResearchLoading(false);
     }
-  }, [userRole, user?.id]);
+  }, [userRole, user?.id, t]);
 
   // Fetch patents data
   const fetchPatents = React.useCallback(async () => {
@@ -134,9 +143,10 @@ const Home = () => {
         const data = doc.data();
         return {
           id: doc.id,
-          title: data.title || data.projectTitle || 'ללא כותרת',
-          researcher: data.researcherName || data.researcher || 'חוקר',
+          title: data.title || data.projectTitle || t('noTitle', 'ללא כותרת'),
+          researcher: data.researcherName || data.researcher || t('researcher', 'חוקר'),
           status: data.status || 'in-process',
+          submissionStatus: data.submissionStatus || 'submitted',
           registrationDate: toDateString(data.registrationDate || data.submissionDate || data.createdAt),
           isNew: data.isNew || false,
         };
@@ -151,12 +161,12 @@ const Home = () => {
       setPatentsData(patentsList);
     } catch (err) {
       console.error('Error fetching patents:', err);
-      setPatentsError('שגיאה בטעינת פטנטים');
+      setPatentsError(t('loadPatentsListError', 'שגיאה בטעינת פטנטים'));
       setPatentsData([]);
     } finally {
       setPatentsLoading(false);
     }
-  }, [userRole, user?.id]);
+  }, [userRole, user?.id, t]);
 
   // Fetch articles data
   const fetchArticles = React.useCallback(async () => {
@@ -191,9 +201,10 @@ const Home = () => {
         const data = doc.data();
         return {
           id: doc.id,
-          title: data.title || 'ללא כותרת',
-          researcher: data.researcherName || data.researcher || 'חוקר',
+          title: data.title || t('noTitle', 'ללא כותרת'),
+          researcher: data.researcherName || data.researcher || t('researcher', 'חוקר'),
           status: data.status || 'in-review',
+          submissionStatus: data.submissionStatus || 'submitted',
           publicationDate: toDateString(data.publicationDate || data.createdAt),
           publicationType: data.publicationType || 'journal',
           isNew: data.isNew || false,
@@ -209,12 +220,12 @@ const Home = () => {
       setArticlesData(articlesList);
     } catch (err) {
       console.error('Error fetching articles:', err);
-      setArticlesError('שגיאה בטעינת מאמרים');
+      setArticlesError(t('loadArticlesListError', 'שגיאה בטעינת מאמרים'));
       setArticlesData([]);
     } finally {
       setArticlesLoading(false);
     }
-  }, [userRole, user?.id]);
+  }, [userRole, user?.id, t]);
 
   useEffect(() => {
     if (userRole === 'RESEARCHER' && user) {
@@ -240,16 +251,28 @@ const Home = () => {
     };
   }, [userRole, user, fetchResearch, fetchPatents, fetchArticles]);
 
-  const handleResearchClick = (researchId) => {
-    navigate(`/research/${researchId}`);
+  const handleResearchClick = (research) => {
+    if (research.submissionStatus === 'draft') {
+      navigate(`/research/new?edit=${research.id}`);
+      return;
+    }
+    navigate(`/research/${research.id}`);
   };
 
-  const handlePatentClick = (patentId) => {
-    navigate(`/patents/${patentId}`);
+  const handlePatentClick = (patent) => {
+    if (patent.submissionStatus === 'draft') {
+      navigate(`/patents/new?edit=${patent.id}`);
+      return;
+    }
+    navigate(`/patents/${patent.id}`);
   };
 
-  const handleArticleClick = (articleId) => {
-    navigate(`/articles/${articleId}`);
+  const handleArticleClick = (article) => {
+    if (article.submissionStatus === 'draft') {
+      navigate(`/articles/new?edit=${article.id}`);
+      return;
+    }
+    navigate(`/articles/${article.id}`);
   };
 
   const handleAddResearch = () => {
@@ -549,39 +572,45 @@ const Home = () => {
     console.log('Task has no research/patent link');
   };
 
+  const getDisplayStatus = (item) =>
+    item.submissionStatus === 'draft' ? 'draft' : item.status;
+
   const getStatusLabel = (status, type = 'research') => {
+    if (status === 'draft') {
+      return t('draft', 'טיוטה');
+    }
     if (type === 'research') {
       switch (status) {
         case 'awarded':
-          return 'זכייה';
+          return t('awarded', 'זכייה');
         case 'pending':
-          return 'המתנה';
+          return t('pending', 'המתנה');
         case 'rejected':
-          return 'לא אושר';
+          return t('rejected', 'לא אושר');
         default:
           return status;
       }
     } else if (type === 'patent') {
       switch (status) {
         case 'registered':
-          return 'רשום';
+          return t('registered', 'רשום');
         case 'approved':
-          return 'אושר';
+          return t('approved', 'אושר');
         case 'in-process':
-          return 'בהליך';
+          return t('inProcess', 'בהליך');
         case 'rejected':
-          return 'נדחה';
+          return t('rejected', 'נדחה');
         default:
           return status;
       }
     } else if (type === 'article') {
       switch (status) {
         case 'published':
-          return 'פורסם';
+          return t('published', 'פורסם');
         case 'in-review':
-          return 'בביקורת';
+          return t('inReview', 'בביקורת');
         case 'rejected':
-          return 'נדחה';
+          return t('rejected', 'נדחה');
         default:
           return status;
       }
@@ -593,6 +622,9 @@ const Home = () => {
     if (type === 'research' || type === 'patent' || type === 'article') {
       if (status === 'awarded' || status === 'registered' || status === 'approved' || status === 'published') {
         return 'status-awarded';
+      }
+      if (status === 'draft') {
+        return 'status-draft';
       }
       if (status === 'pending' || status === 'in-process' || status === 'in-review') {
         return 'status-pending';
@@ -624,7 +656,7 @@ const Home = () => {
                 background: '#f7fafc',
                 borderRadius: '8px'
               }}>
-                <p>טוען משימות...</p>
+                <p>{t('loadingTasks', 'טוען משימות...')}</p>
               </div>
             ) : (
               <TasksCalendarContainer
@@ -650,18 +682,11 @@ const Home = () => {
 
         {/* Research Section */}
         <div style={{ marginTop: '40px' }}>
-          <h2 style={{ 
-            marginBottom: '20px', 
-            textAlign: 'right',
-            borderBottom: '3px solid rgb(188, 192, 203)',
-            paddingBottom: '10px',
-            fontWeight: 'bold',
-            color: '#2d3748'
-          }}>אוסף מחקרים</h2>
+          <h2 style={sectionTitleStyle}>{t('researchCollection', 'אוסף מחקרים')}</h2>
           
           {researchLoading && (
             <div className="no-results">
-              <p>טוען מחקרים...</p>
+              <p>{t('loadingResearchList', 'טוען מחקרים...')}</p>
             </div>
           )}
 
@@ -676,46 +701,41 @@ const Home = () => {
               className="research-card add-research-card"
               onClick={handleAddResearch}
             >
-              <h3 className="add-research-title">הוספת מחקר חדש</h3>
+              <h3 className="add-research-title">{t('addNewResearch', 'הוספת מחקר חדש')}</h3>
             </button>
+
+            {!researchLoading && !researchError && researchData.length === 0 && (
+              <div className="no-results-grid-item">
+                <p>{t('noResearchFound', 'לא נמצאו מחקרים')}</p>
+              </div>
+            )}
 
             {!researchLoading && !researchError && researchData.map((research) => (
               <button
                 key={research.id}
                 className="research-card"
-                onClick={() => handleResearchClick(research.id)}
+                onClick={() => handleResearchClick(research)}
               >
-                {shouldShowNewBadge(research.isNew, research.submissionDate) && <span className="new-badge">חדש!</span>}
+                {shouldShowNewBadge(research.isNew, research.submissionDate) && (
+                  <span className="new-badge">{t('newBadge', 'חדש!')}</span>
+                )}
                 <h3 className="research-title">{research.title}</h3>
                 <p className="research-researcher">{research.researcher}</p>
-                <button className={`status-button ${getStatusClass(research.status, 'research')}`}>
-                  {getStatusLabel(research.status, 'research')}
+                <button className={`status-button ${getStatusClass(getDisplayStatus(research), 'research')}`}>
+                  {getStatusLabel(getDisplayStatus(research), 'research')}
                 </button>
               </button>
             ))}
           </div>
-
-          {!researchLoading && !researchError && researchData.length === 0 && (
-            <div className="no-results">
-              <p>לא נמצאו מחקרים</p>
-            </div>
-          )}
         </div>
 
         {/* Patents Section */}
         <div style={{ marginTop: '60px' }}>
-          <h2 style={{ 
-            marginBottom: '20px', 
-            textAlign: 'right',
-            borderBottom: '3px solid rgb(188, 192, 203)',
-            paddingBottom: '10px',
-            fontWeight: 'bold',
-            color: '#2d3748'
-          }}>פטנטים</h2>
+          <h2 style={sectionTitleStyle}>{t('patents', 'פטנטים')}</h2>
           
           {patentsLoading && (
             <div className="no-results">
-              <p>טוען פטנטים...</p>
+              <p>{t('loadingPatentsList', 'טוען פטנטים...')}</p>
             </div>
           )}
 
@@ -731,46 +751,41 @@ const Home = () => {
               onClick={handleAddPatent}
               type="button"
             >
-              <h3 className="add-research-title">הוספת פטנט חדש</h3>
+              <h3 className="add-research-title">{t('addNewPatent', 'הוספת פטנט חדש')}</h3>
             </button>
+
+            {!patentsLoading && !patentsError && patentsData.length === 0 && (
+              <div className="no-results-grid-item">
+                <p>{t('noPatentsFound', 'לא נמצאו פטנטים')}</p>
+              </div>
+            )}
 
             {!patentsLoading && !patentsError && patentsData.map((patent) => (
               <button
                 key={patent.id}
                 className="research-card"
-                onClick={() => handlePatentClick(patent.id)}
+                onClick={() => handlePatentClick(patent)}
               >
-                {shouldShowNewBadge(patent.isNew, patent.registrationDate) && <span className="new-badge">חדש!</span>}
+                {shouldShowNewBadge(patent.isNew, patent.registrationDate) && (
+                  <span className="new-badge">{t('newBadge', 'חדש!')}</span>
+                )}
                 <h3 className="research-title">{patent.title}</h3>
                 <p className="research-researcher">{patent.researcher}</p>
-                <button className={`status-button ${getStatusClass(patent.status, 'patent')}`}>
-                  {getStatusLabel(patent.status, 'patent')}
+                <button className={`status-button ${getStatusClass(getDisplayStatus(patent), 'patent')}`}>
+                  {getStatusLabel(getDisplayStatus(patent), 'patent')}
                 </button>
               </button>
             ))}
           </div>
-
-          {!patentsLoading && !patentsError && patentsData.length === 0 && (
-            <div className="no-results">
-              <p>לא נמצאו פטנטים</p>
-            </div>
-          )}
         </div>
 
         {/* Articles Section */}
         <div style={{ marginTop: '60px' }}>
-          <h2 style={{ 
-            marginBottom: '20px', 
-            textAlign: 'right',
-            borderBottom: '3px solid rgb(188, 192, 203)',
-            paddingBottom: '10px',
-            fontWeight: 'bold',
-            color: '#2d3748'
-          }}>מאמרים</h2>
+          <h2 style={sectionTitleStyle}>{t('articles', 'מאמרים')}</h2>
           
           {articlesLoading && (
             <div className="no-results">
-              <p>טוען מאמרים...</p>
+              <p>{t('loadingArticlesList', 'טוען מאמרים...')}</p>
             </div>
           )}
 
@@ -786,30 +801,32 @@ const Home = () => {
               onClick={handleAddArticle}
               type="button"
             >
-              <h3 className="add-research-title">הוספת מאמר חדש</h3>
+              <h3 className="add-research-title">{t('addNewArticle', 'הוספת מאמר חדש')}</h3>
             </button>
+
+            {!articlesLoading && !articlesError && articlesData.length === 0 && (
+              <div className="no-results-grid-item">
+                <p>{t('noArticlesFound', 'לא נמצאו מאמרים')}</p>
+              </div>
+            )}
 
             {!articlesLoading && !articlesError && articlesData.map((article) => (
               <button
                 key={article.id}
                 className="research-card"
-                onClick={() => handleArticleClick(article.id)}
+                onClick={() => handleArticleClick(article)}
               >
-                {shouldShowNewBadge(article.isNew, article.publicationDate) && <span className="new-badge">חדש!</span>}
+                {shouldShowNewBadge(article.isNew, article.publicationDate) && (
+                  <span className="new-badge">{t('newBadge', 'חדש!')}</span>
+                )}
                 <h3 className="research-title">{article.title}</h3>
                 <p className="research-researcher">{article.researcher}</p>
-                <button className={`status-button ${getStatusClass(article.status, 'article')}`}>
-                  {getStatusLabel(article.status, 'article')}
+                <button className={`status-button ${getStatusClass(getDisplayStatus(article), 'article')}`}>
+                  {getStatusLabel(getDisplayStatus(article), 'article')}
                 </button>
               </button>
             ))}
           </div>
-
-          {!articlesLoading && !articlesError && articlesData.length === 0 && (
-            <div className="no-results">
-              <p>לא נמצאו מאמרים</p>
-            </div>
-          )}
         </div>
 
         {/* Calendar Section */}
@@ -822,7 +839,7 @@ const Home = () => {
               background: '#f7fafc',
               borderRadius: '8px'
             }}>
-              <p>טוען משימות...</p>
+              <p>{t('loadingTasks', 'טוען משימות...')}</p>
             </div>
           ) : (
             <TasksCalendarContainer

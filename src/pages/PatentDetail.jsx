@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import TaskForm from '../components/research/TaskForm';
+import FileDropZone from '../components/FileDropZone';
+import { canResearcherEditPatent, isDraft } from '../utils/submissionStatus';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, collection, addDoc, updateDoc, deleteDoc, getDoc as getDocTask, serverTimestamp, onSnapshot, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -16,7 +18,10 @@ const PatentDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAdmin, userRole, user } = useAuth();
-  const { t, language } = useLanguage();
+  const { t, language, isRTL } = useLanguage();
+  const textAlign = isRTL ? 'right' : 'left';
+  const locale = language === 'en' ? 'en-US' : 'he-IL';
+  const notSpecified = t('notSpecified', 'לא צוין');
   const [patentData, setPatentData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -34,7 +39,7 @@ const PatentDetail = () => {
   useEffect(() => {
     const fetchPatent = async () => {
       if (!db) {
-        setError('מסד הנתונים לא מאותחל');
+        setError(t('dbNotInitialized', 'מסד הנתונים לא מאותחל'));
         setLoading(false);
         return;
       }
@@ -51,18 +56,24 @@ const PatentDetail = () => {
           
           // Check if user has permission to view this patent
           if (userRole === 'RESEARCHER' && data.researcherId !== user?.id) {
-            setError('אין הרשאה לצפות בפטנט זה');
+            setError(t('noPermissionViewPatent', 'אין הרשאה לצפות בפטנט זה'));
+            setLoading(false);
+            return;
+          }
+
+          if (userRole === 'ADMIN' && isDraft(data)) {
+            setError(t('draftNotVisibleToAdmin', 'טיוטה זו אינה זמינה לרשות המחקר עד להגשה'));
             setLoading(false);
             return;
           }
 
           setPatentData(data);
         } else {
-          setError('הפטנט לא נמצא');
+          setError(t('patentNotFound', 'הפטנט לא נמצא'));
         }
       } catch (err) {
         console.error('Error fetching patent:', err);
-        setError('שגיאה בטעינת פרטי הפטנט');
+        setError(t('loadPatentError', 'שגיאה בטעינת פרטי הפטנט'));
       } finally {
         setLoading(false);
       }
@@ -93,7 +104,7 @@ const PatentDetail = () => {
           const data = researchSnap.data();
           setLinkedResearch({
             id: researchId,
-            title: data.projectTitle || data.title || 'ללא כותרת'
+            title: data.projectTitle || data.title || t('noTitle', 'ללא כותרת')
           });
         } else {
           setLinkedResearch(null);
@@ -149,16 +160,16 @@ const PatentDetail = () => {
   }, [id]);
 
   const formatDate = (timestamp) => {
-    if (!timestamp) return 'לא צוין';
+    if (!timestamp) return notSpecified;
     try {
       if (timestamp && typeof timestamp.toDate === 'function') {
-        return timestamp.toDate().toLocaleDateString('he-IL');
+        return timestamp.toDate().toLocaleDateString(locale);
       }
       if (timestamp && timestamp.seconds) {
-        return new Date(timestamp.seconds * 1000).toLocaleDateString('he-IL');
+        return new Date(timestamp.seconds * 1000).toLocaleDateString(locale);
       }
       if (typeof timestamp === 'string') {
-        return new Date(timestamp).toLocaleDateString('he-IL');
+        return new Date(timestamp).toLocaleDateString(locale);
       }
       return String(timestamp);
     } catch (e) {
@@ -167,23 +178,23 @@ const PatentDetail = () => {
   };
 
   const formatCurrency = (amount, currency = 'ILS') => {
-    if (!amount) return 'לא צוין';
+    if (!amount) return notSpecified;
     const currencySymbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '₪';
-    return `${currencySymbol} ${Number(amount).toLocaleString('he-IL')}`;
+    return `${currencySymbol} ${Number(amount).toLocaleString(locale)}`;
   };
 
   const getStatusLabel = (status) => {
     switch (status) {
       case 'registered':
-        return 'רשום';
+        return t('registered', 'רשום');
       case 'approved':
-        return 'אושר';
+        return t('approved', 'אושר');
       case 'in-process':
-        return 'בהליך';
+        return t('inProcess', 'בהליך');
       case 'rejected':
-        return 'נדחה';
+        return t('rejected', 'נדחה');
       default:
-        return status;
+        return status || notSpecified;
     }
   };
 
@@ -223,7 +234,7 @@ const PatentDetail = () => {
     if (!isAdmin() || !id || !db) return;
 
     if (!newTask.title.trim()) {
-      alert('אנא הזן כותרת למשימה');
+      alert(t('enterTaskTitleAlert', 'אנא הזן כותרת למשימה'));
       return;
     }
 
@@ -429,7 +440,7 @@ const PatentDetail = () => {
   const handleDeleteTask = async (taskId) => {
     if (!isAdmin() || !id || !db || !taskId) return;
 
-    if (!window.confirm('האם אתה בטוח שברצונך למחוק את המשימה הזו?')) {
+    if (!window.confirm(t('confirmDeleteTask', 'האם אתה בטוח שברצונך למחוק את המשימה הזו?'))) {
       return;
     }
 
@@ -488,23 +499,23 @@ const PatentDetail = () => {
     const dir = language === 'en' ? 'ltr' : 'rtl';
     const lang = language === 'en' ? 'en' : 'he';
 
-    const percentageLabel = language === 'en' ? 'Percentage' : 'אחוז';
-    const institutionPctLabel = language === 'en' ? 'Institution percentage' : 'אחוז המוסד';
-    const patentStageLabel = language === 'en' ? 'Patent stage' : 'שלב הפטנט';
-    const commercializationUnitTitle = language === 'en' ? 'Commercialization Unit' : 'יחידת מסחור';
-    const contact1Label = language === 'en' ? 'Contact 1' : 'איש קשר 1';
-    const email1Label = language === 'en' ? 'Email 1' : 'אימייל 1';
-    const contact2Label = language === 'en' ? 'Contact 2' : 'איש קשר 2';
-    const email2Label = language === 'en' ? 'Email 2' : 'אימייל 2';
-    const datesTitle = language === 'en' ? 'Dates' : 'תאריכים';
-    const dateLabelSubmission = language === 'en' ? 'Application date' : 'תאריך הגשת הבקשה';
-    const dateLabelInitialReview = language === 'en' ? 'Initial review date' : 'תאריך בדיקה ראשונית';
-    const dateLabelExamination = language === 'en' ? 'Examination date' : 'תאריך בחינה';
-    const dateLabelApproval = language === 'en' ? 'Approval date' : 'תאריך אישור';
-    const dateLabelRegistration = language === 'en' ? 'Registration date' : 'תאריך רישום';
-    const dateLabelPublication = language === 'en' ? 'Publication date' : 'תאריך פרסום';
-    const dateLabelRenewal = language === 'en' ? 'Renewal date' : 'תאריך חידוש';
-    const dateLabelExpiry = language === 'en' ? 'Expiry date' : 'תאריך תפוגה';
+    const percentageLabel = t('percentage', 'אחוז');
+    const institutionPctLabel = t('patentInstitutionPercentage', 'אחוז המוסד');
+    const patentStageLabel = t('patentStage', 'שלב הפטנט');
+    const commercializationUnitTitle = t('commercializationUnit', 'יחידת מסחור');
+    const contact1Label = t('contact1', 'איש קשר 1');
+    const email1Label = t('email1', 'אימייל 1');
+    const contact2Label = t('contact2', 'איש קשר 2');
+    const email2Label = t('email2', 'אימייל 2');
+    const datesTitle = t('datesTitle', 'תאריכים');
+    const dateLabelSubmission = t('patentDateSubmission', 'תאריך הגשת הבקשה');
+    const dateLabelInitialReview = t('patentDateInitialReview', 'תאריך בדיקה ראשונית');
+    const dateLabelExamination = t('patentDateExamination', 'תאריך בחינה');
+    const dateLabelApproval = t('patentDateApproval', 'תאריך אישור');
+    const dateLabelRegistration = t('patentDateRegistration', 'תאריך רישום');
+    const dateLabelPublication = t('patentDatePublication', 'תאריך פרסום');
+    const dateLabelRenewal = t('patentDateRenewal', 'תאריך חידוש');
+    const dateLabelExpiry = t('patentDateExpiry', 'תאריך תפוגה');
 
     const partners = Array.isArray(patentData.partners) ? patentData.partners : [];
     const stageBudgets = patentData.stageBudgets || {};
@@ -645,7 +656,7 @@ const PatentDetail = () => {
 
         {loading && (
           <div className="no-results">
-            <p>טוען פרטי פטנט...</p>
+            <p>{t('loadingPatentDetails', 'טוען פרטי פטנט...')}</p>
           </div>
         )}
 
@@ -656,9 +667,9 @@ const PatentDetail = () => {
         )}
 
         {!loading && !error && patentData && (
-          <div style={{ textAlign: language === 'en' ? 'left' : 'right' }}>
+          <div style={{ textAlign }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-              <h1 style={{ margin: 0, color: '#333' }}>פרטי פטנט</h1>
+              <h1 style={{ margin: 0, color: '#333' }}>{t('patentDetailsTitle', 'פרטי פטנט')}</h1>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                 <button
                   type="button"
@@ -676,11 +687,9 @@ const PatentDetail = () => {
                 >
                   {t('exportPdf', 'ייצוא ל-PDF')}
                 </button>
-                {isAdmin() && (
+                {(isAdmin() || (userRole === 'RESEARCHER' && canResearcherEditPatent(patentData))) && (
                   <button
                     onClick={() => {
-                      // Navigate to new patent form with edit mode
-                      // For now, we'll use the new form - you can enhance this later to support edit mode
                       navigate(`/patents/new?edit=${id}`);
                     }}
                     style={{
@@ -694,7 +703,7 @@ const PatentDetail = () => {
                       fontWeight: 'bold'
                     }}
                   >
-                    ✏️ ערוך פטנט
+                    ✏️ {t('editPatent', 'ערוך פטנט')}
                   </button>
                 )}
               </div>
@@ -707,7 +716,7 @@ const PatentDetail = () => {
               borderRadius: '8px',
               marginBottom: '20px'
             }}>
-              <h2 style={{ marginBottom: '20px', color: '#667eea' }}>פרטים כלליים</h2>
+              <h2 style={{ marginBottom: '20px', color: '#667eea' }}>{t('generalDetails', 'פרטים כלליים')}</h2>
               
               <div style={{ 
                 display: 'grid', 
@@ -722,10 +731,10 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    כותרת הפרויקט:
+                    {t('projectTitleShort', 'כותרת הפרויקט')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
-                    {patentData.projectTitle || patentData.title || 'לא צוין'}
+                    {patentData.projectTitle || patentData.title || notSpecified}
                   </span>
                 </div>
 
@@ -736,10 +745,10 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    אחוז המוסד:
+                    {t('patentInstitutionPercentage', 'אחוז המוסד')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
-                    {patentData.institutionPercentage || 'לא צוין'}
+                    {patentData.institutionPercentage || notSpecified}
                   </span>
                 </div>
 
@@ -750,9 +759,9 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    מסלול הגשה:
+                    {t('submissionPathShort', 'מסלול הגשה')}:
                   </label>
-                  <span style={{ fontSize: '16px' }}>{patentData.submissionPath || 'לא צוין'}</span>
+                  <span style={{ fontSize: '16px' }}>{patentData.submissionPath || notSpecified}</span>
                 </div>
 
                 <div>
@@ -762,9 +771,9 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    תפקיד החוקר:
+                    {t('researcherRoleShort', 'תפקיד החוקר')}:
                   </label>
-                  <span style={{ fontSize: '16px' }}>{patentData.researcherRole || 'לא צוין'}</span>
+                  <span style={{ fontSize: '16px' }}>{patentData.researcherRole || notSpecified}</span>
                 </div>
 
                 <div>
@@ -774,11 +783,11 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    מחקר מקושר:
+                    {t('linkedResearch', 'מחקר מקושר')}:
                   </label>
                   {patentData.researchProposalId ? (
                     linkedResearchLoading ? (
-                      <span style={{ fontSize: '16px' }}>טוען...</span>
+                      <span style={{ fontSize: '16px' }}>{t('loadingShort', 'טוען...')}</span>
                     ) : linkedResearch ? (
                       <button
                         type="button"
@@ -796,10 +805,10 @@ const PatentDetail = () => {
                         {linkedResearch.title}
                       </button>
                     ) : (
-                      <span style={{ fontSize: '16px' }}>לא נמצא</span>
+                      <span style={{ fontSize: '16px' }}>{t('linkedNotFound', 'לא נמצא')}</span>
                     )
                   ) : (
-                    <span style={{ fontSize: '16px' }}>לא מקושר</span>
+                    <span style={{ fontSize: '16px' }}>{t('notLinked', 'לא מקושר')}</span>
                   )}
                 </div>
 
@@ -810,9 +819,9 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    חוקר:
+                    {t('researcher', 'חוקר')}:
                   </label>
-                  <span style={{ fontSize: '16px' }}>{patentData.researcherName || 'לא צוין'}</span>
+                  <span style={{ fontSize: '16px' }}>{patentData.researcherName || notSpecified}</span>
                 </div>
 
                 <div>
@@ -822,7 +831,7 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    סטטוס:
+                    {t('status', 'סטטוס')}:
                   </label>
                   <span 
                     className={`status-button ${getStatusClass(patentData.status)}`}
@@ -848,9 +857,9 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    שלב הפטנט:
+                    {t('patentStage', 'שלב הפטנט')}:
                   </label>
-                  <span style={{ fontSize: '16px' }}>{patentData.patentStage || 'לא צוין'}</span>
+                  <span style={{ fontSize: '16px' }}>{patentData.patentStage || notSpecified}</span>
                 </div>
               </div>
             </div>
@@ -862,7 +871,7 @@ const PatentDetail = () => {
               borderRadius: '8px',
               marginBottom: '20px'
             }}>
-              <h2 style={{ marginBottom: '20px', color: '#667eea' }}>יחידת מסחור</h2>
+              <h2 style={{ marginBottom: '20px', color: '#667eea' }}>{t('commercializationUnit', 'יחידת מסחור')}</h2>
               
               <div style={{ 
                 display: 'grid', 
@@ -876,10 +885,10 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    יחידת מסחור:
+                    {t('commercializationUnit', 'יחידת מסחור')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
-                    {patentData.commercializationUnit || 'לא צוין'}
+                    {patentData.commercializationUnit || notSpecified}
                   </span>
                 </div>
 
@@ -890,10 +899,10 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    איש קשר 1:
+                    {t('contact1', 'איש קשר 1')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
-                    {patentData.commercializationContact1 || 'לא צוין'}
+                    {patentData.commercializationContact1 || notSpecified}
                   </span>
                 </div>
 
@@ -904,10 +913,10 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    אימייל 1:
+                    {t('email1', 'אימייל 1')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
-                    {patentData.commercializationEmail1 || 'לא צוין'}
+                    {patentData.commercializationEmail1 || notSpecified}
                   </span>
                 </div>
 
@@ -918,10 +927,10 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    איש קשר 2:
+                    {t('contact2', 'איש קשר 2')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
-                    {patentData.commercializationContact2 || 'לא צוין'}
+                    {patentData.commercializationContact2 || notSpecified}
                   </span>
                 </div>
 
@@ -932,10 +941,10 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    אימייל 2:
+                    {t('email2', 'אימייל 2')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
-                    {patentData.commercializationEmail2 || 'לא צוין'}
+                    {patentData.commercializationEmail2 || notSpecified}
                   </span>
                 </div>
               </div>
@@ -948,7 +957,7 @@ const PatentDetail = () => {
               borderRadius: '8px',
               marginBottom: '20px'
             }}>
-              <h2 style={{ marginBottom: '20px', color: '#667eea' }}>תאריכים</h2>
+              <h2 style={{ marginBottom: '20px', color: '#667eea' }}>{t('datesTitle', 'תאריכים')}</h2>
               
               <div style={{ 
                 display: 'grid', 
@@ -962,7 +971,7 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    תאריך הגשת הבקשה:
+                    {t('patentDateSubmission', 'תאריך הגשת הבקשה')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
                     {formatDate(patentData.submissionDate)}
@@ -976,7 +985,7 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    תאריך בדיקה ראשונית:
+                    {t('patentDateInitialReview', 'תאריך בדיקה ראשונית')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
                     {formatDate(patentData.initialReviewDate)}
@@ -990,7 +999,7 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    תאריך בחינה:
+                    {t('patentDateExamination', 'תאריך בחינה')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
                     {formatDate(patentData.examinationDate)}
@@ -1004,7 +1013,7 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    תאריך אישור:
+                    {t('patentDateApproval', 'תאריך אישור')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
                     {formatDate(patentData.approvalDate)}
@@ -1018,7 +1027,7 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    תאריך רישום:
+                    {t('patentDateRegistration', 'תאריך רישום')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
                     {formatDate(patentData.registrationDate)}
@@ -1032,7 +1041,7 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    תאריך פרסום:
+                    {t('patentDatePublication', 'תאריך פרסום')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
                     {formatDate(patentData.publicationDate)}
@@ -1046,7 +1055,7 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    תאריך חידוש:
+                    {t('patentDateRenewal', 'תאריך חידוש')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
                     {formatDate(patentData.renewalDate)}
@@ -1060,7 +1069,7 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    תאריך תפוגה:
+                    {t('patentDateExpiry', 'תאריך תפוגה')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
                     {formatDate(patentData.expiryDate)}
@@ -1076,7 +1085,7 @@ const PatentDetail = () => {
               borderRadius: '8px',
               marginBottom: '20px'
             }}>
-              <h2 style={{ marginBottom: '20px', color: '#667eea' }}>תקציב</h2>
+              <h2 style={{ marginBottom: '20px', color: '#667eea' }}>{t('budgetTitle', 'תקציב')}</h2>
               
               <div style={{ 
                 display: 'grid', 
@@ -1091,7 +1100,7 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    תקציב כולל:
+                    {t('totalBudget', 'תקציב כולל')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
                     {formatCurrency(patentData.totalBudget, patentData.currency)}
@@ -1105,7 +1114,7 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    מטבע:
+                    {t('currency', 'מטבע')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>{patentData.currency || 'ILS'}</span>
                 </div>
@@ -1117,7 +1126,7 @@ const PatentDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    תקציב מומר:
+                    {t('convertedBudget', 'תקציב מומר')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
                     {formatCurrency(patentData.convertedBudget, 'ILS')}
@@ -1127,7 +1136,7 @@ const PatentDetail = () => {
 
               {patentData.stageBudgets && Object.keys(patentData.stageBudgets).length > 0 && (
                 <div style={{ marginTop: '20px' }}>
-                  <h3 style={{ marginBottom: '15px', color: '#666' }}>תקציב לפי שלבים:</h3>
+                  <h3 style={{ marginBottom: '15px', color: '#666' }}>{t('stageBudgetByStage', 'תקציב לפי שלבים')}:</h3>
                   <div style={{ 
                     display: 'grid', 
                     gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
@@ -1159,7 +1168,7 @@ const PatentDetail = () => {
                 borderRadius: '8px',
                 marginBottom: '20px'
               }}>
-                <h2 style={{ marginBottom: '20px', color: '#667eea' }}>שותפים</h2>
+                <h2 style={{ marginBottom: '20px', color: '#667eea' }}>{t('partners', 'שותפים')}</h2>
                 
                 <div style={{ 
                   display: 'grid', 
@@ -1174,20 +1183,20 @@ const PatentDetail = () => {
                       border: '1px solid #ddd'
                     }}>
                       <div style={{ marginBottom: '10px' }}>
-                        <label style={{ fontWeight: 'bold', color: '#666', marginLeft: '10px' }}>שם:</label>
-                        <span>{partner.name || 'לא צוין'}</span>
+                        <label style={{ fontWeight: 'bold', color: '#666', marginLeft: '10px' }}>{t('name', 'שם')}:</label>
+                        <span>{partner.name || notSpecified}</span>
                       </div>
                       <div style={{ marginBottom: '10px' }}>
-                        <label style={{ fontWeight: 'bold', color: '#666', marginLeft: '10px' }}>אימייל:</label>
-                        <span>{partner.email || 'לא צוין'}</span>
+                        <label style={{ fontWeight: 'bold', color: '#666', marginLeft: '10px' }}>{t('email', 'אימייל')}:</label>
+                        <span>{partner.email || notSpecified}</span>
                       </div>
                       <div style={{ marginBottom: '10px' }}>
-                        <label style={{ fontWeight: 'bold', color: '#666', marginLeft: '10px' }}>מוסד:</label>
-                        <span>{partner.institution || 'לא צוין'}</span>
+                        <label style={{ fontWeight: 'bold', color: '#666', marginLeft: '10px' }}>{t('institution', 'מוסד')}:</label>
+                        <span>{partner.institution || notSpecified}</span>
                       </div>
                       {partner.percentage && (
                         <div>
-                          <label style={{ fontWeight: 'bold', color: '#666', marginLeft: '10px' }}>אחוז:</label>
+                          <label style={{ fontWeight: 'bold', color: '#666', marginLeft: '10px' }}>{t('percentage', 'אחוז')}:</label>
                           <span>{partner.percentage}</span>
                         </div>
                       )}
@@ -1205,7 +1214,7 @@ const PatentDetail = () => {
                 borderRadius: '8px',
                 marginBottom: '20px'
               }}>
-                <h2 style={{ marginBottom: '20px', color: '#667eea' }}>הערות</h2>
+                <h2 style={{ marginBottom: '20px', color: '#667eea' }}>{t('notesFreeText', 'הערות')}</h2>
                 <p style={{ fontSize: '16px', lineHeight: '1.6' }}>{patentData.notes}</p>
               </div>
             )}
@@ -1218,7 +1227,7 @@ const PatentDetail = () => {
               marginBottom: '20px'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2 style={{ margin: 0, color: '#667eea' }}>משימות והגשות</h2>
+                <h2 style={{ margin: 0, color: '#667eea' }}>{t('tasksAndSubmissions', 'משימות והגשות')}</h2>
                 {isAdmin() && (
                   <button
                     onClick={() => setShowAddTask(!showAddTask)}
@@ -1232,7 +1241,7 @@ const PatentDetail = () => {
                       fontSize: '14px'
                     }}
                   >
-                    {showAddTask ? '✖️ ביטול' : '➕ הוסף משימה'}
+                    {showAddTask ? `✖️ ${t('cancelAddTask', 'ביטול')}` : `➕ ${t('addTaskButton', 'הוסף משימה')}`}
                   </button>
                 )}
               </div>
@@ -1246,10 +1255,10 @@ const PatentDetail = () => {
                   marginBottom: '20px',
                   border: '2px solid #667eea'
                 }}>
-                  <h3 style={{ marginBottom: '15px' }}>הוספת משימה חדשה</h3>
+                  <h3 style={{ marginBottom: '15px' }}>{t('addNewTaskTitle', 'הוספת משימה חדשה')}</h3>
                   <div style={{ marginBottom: '15px' }}>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                      כותרת המשימה: *
+                      {t('taskTitle', 'כותרת המשימה')}: *
                     </label>
                     <input
                       type="text"
@@ -1262,12 +1271,12 @@ const PatentDetail = () => {
                         border: '1px solid #ddd',
                         fontSize: '16px'
                       }}
-                      placeholder="הזן כותרת למשימה"
+                      placeholder={t('enterTaskTitle', 'הזן כותרת למשימה')}
                     />
                   </div>
                   <div style={{ marginBottom: '15px' }}>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                      תיאור:
+                      {t('description', 'תיאור')}:
                     </label>
                     <textarea
                       value={newTask.description}
@@ -1281,12 +1290,12 @@ const PatentDetail = () => {
                         minHeight: '100px',
                         resize: 'vertical'
                       }}
-                      placeholder="הזן תיאור למשימה"
+                      placeholder={t('enterTaskDescription', 'הזן תיאור למשימה')}
                     />
                   </div>
                   <div style={{ marginBottom: '15px' }}>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-                      תאריך יעד:
+                      {t('dueDate', 'תאריך יעד')}:
                     </label>
                     <input
                       type="date"
@@ -1303,21 +1312,16 @@ const PatentDetail = () => {
                   </div>
                   <div style={{ marginBottom: '15px' }}>
                     <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
-                      קבצים מצורפים:
+                      {t('attachedFiles', 'קבצים מצורפים')}:
                     </label>
-                    <label style={{ background: '#f0f0f0', color: '#333', border: '1px solid #ccc', padding: '7px 14px', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', display: 'inline-block' }}>
-                      📎 הוסף קבצים
-                      <input
-                        type="file"
-                        multiple
-                        style={{ display: 'none' }}
-                        onChange={(e) => {
-                          const selected = Array.from(e.target.files);
-                          setNewTask(prev => ({ ...prev, files: [...(prev.files || []), ...selected] }));
-                          e.target.value = '';
-                        }}
-                      />
-                    </label>
+                    <FileDropZone
+                      variant="compact"
+                      disabled={uploading}
+                      label={t('addFiles', 'הוסף קבצים')}
+                      onFiles={(selected) => {
+                        setNewTask(prev => ({ ...prev, files: [...(prev.files || []), ...selected] }));
+                      }}
+                    />
                     {(newTask.files || []).length > 0 && (
                       <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         {(newTask.files || []).map((file, idx) => (
@@ -1328,7 +1332,7 @@ const PatentDetail = () => {
                               onClick={() => setNewTask(prev => ({ ...prev, files: prev.files.filter((_, i) => i !== idx) }))}
                               style={{ border: '1px solid #cbd5e1', background: 'white', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer', fontSize: '12px' }}
                             >
-                              הסר
+                              {t('remove', 'הסר')}
                             </button>
                           </div>
                         ))}
@@ -1349,7 +1353,7 @@ const PatentDetail = () => {
                       fontWeight: 'bold'
                     }}
                   >
-                    {uploading ? 'שומר...' : 'שמור משימה'}
+                    {uploading ? t('saving', 'שומר...') : t('saveTask', 'שמור משימה')}
                   </button>
                 </div>
               )}
@@ -1357,7 +1361,7 @@ const PatentDetail = () => {
               {/* Tasks list */}
               {tasks.length === 0 ? (
                 <p style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
-                  {isAdmin() ? 'אין משימות. הוסף משימה חדשה.' : 'אין משימות להצגה.'}
+                  {isAdmin() ? t('noTasksAdmin', 'אין משימות. הוסף משימה חדשה.') : t('noTasksResearcher', 'אין משימות להצגה.')}
                 </p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
@@ -1390,12 +1394,12 @@ const PatentDetail = () => {
                               <p style={{ margin: '5px 0', color: '#666' }}>{task.description}</p>
                             )}
                             <div style={{ fontSize: '14px', color: '#888', marginTop: '10px' }}>
-                              <span>נוצרה: {formatDate(task.createdAt)}</span>
+                              <span>{t('taskCreated', 'נוצרה')}: {formatDate(task.createdAt)}</span>
                               {task.dueDate && (
-                                <span style={{ marginRight: '15px' }}> | תאריך יעד: {formatDate(task.dueDate)}</span>
+                                <span style={{ marginRight: '15px' }}> | {t('dueDate', 'תאריך יעד')}: {formatDate(task.dueDate)}</span>
                               )}
                               {task.status === 'submitted' && task.submittedAt && (
-                                <span style={{ marginRight: '15px' }}> | הוגשה: {formatDate(task.submittedAt)}</span>
+                                <span style={{ marginRight: '15px' }}> | {t('taskSubmitted', 'הוגשה')}: {formatDate(task.submittedAt)}</span>
                               )}
                             </div>
 
@@ -1426,7 +1430,7 @@ const PatentDetail = () => {
                               whiteSpace: 'nowrap'
                             }}
                           >
-                            {task.status === 'submitted' ? 'הוגשה' : 'ממתינה'}
+                            {task.status === 'submitted' ? t('taskStatusSubmitted', 'הוגשה') : t('taskStatusPending', 'ממתינה')}
                           </span>
                           {isAdmin() && (
                             <div style={{ display: 'flex', gap: '3px', opacity: 0.5, transition: 'opacity 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.opacity = '1'} onMouseLeave={(e) => e.currentTarget.style.opacity = '0.5'}>
@@ -1443,7 +1447,7 @@ const PatentDetail = () => {
                                   fontSize: '14px',
                                   opacity: uploading ? 0.5 : 1
                                 }}
-                                title="ערוך משימה"
+                                title={t('editTask', 'ערוך משימה')}
                               >
                                 ✏️
                               </button>
@@ -1460,7 +1464,7 @@ const PatentDetail = () => {
                                   fontSize: '14px',
                                   opacity: uploading ? 0.5 : 1
                                 }}
-                                title="מחק משימה"
+                                title={t('deleteTask', 'מחק משימה')}
                               >
                                 🗑️
                               </button>
@@ -1474,28 +1478,17 @@ const PatentDetail = () => {
                       {!isAdmin() && task.status === 'pending' && (
                         <div style={{ marginTop: '15px', padding: '15px', background: '#f0f0f0', borderRadius: '4px' }}>
                           <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
-                            העלה קבצים להגשה:
+                            {t('uploadFilesForSubmissionShort', 'העלה קבצים להגשה')}:
                           </label>
-                          <input
-                            type="file"
-                            multiple
-                            onChange={async (e) => {
-                              if (e.target.files && e.target.files.length > 0) {
-                                await handleFileUpload(task.id, Array.from(e.target.files), e.target);
-                              }
-                            }}
+                          <FileDropZone
                             disabled={uploading}
-                            style={{
-                              width: '100%',
-                              padding: '10px',
-                              borderRadius: '4px',
-                              border: '1px solid #ddd',
-                              fontSize: '14px'
+                            onFiles={async (files) => {
+                              await handleFileUpload(task.id, files);
                             }}
                           />
                           {uploading && (
                             <div style={{ marginTop: '10px' }}>
-                              <p style={{ color: '#667eea', fontWeight: 'bold' }}>מעלה קבצים...</p>
+                              <p style={{ color: '#667eea', fontWeight: 'bold' }}>{t('uploadingFiles', 'מעלה קבצים...')}</p>
                               <div style={{ 
                                 width: '100%', 
                                 height: '4px', 
@@ -1519,7 +1512,7 @@ const PatentDetail = () => {
                       {/* Show submitted files (both admin and researcher) */}
                       {task.submissions && task.submissions.length > 0 && (
                         <div style={{ marginTop: '15px', padding: '15px', background: '#e8f5e9', borderRadius: '4px' }}>
-                          <h4 style={{ margin: 0, marginBottom: '10px', color: '#2e7d32' }}>קבצים שהוגשו:</h4>
+                          <h4 style={{ margin: 0, marginBottom: '10px', color: '#2e7d32' }}>{t('submittedFiles', 'קבצים שהוגשו')}:</h4>
                           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                             {task.submissions.map((file, idx) => (
                               <li key={idx} style={{ marginBottom: '8px' }}>

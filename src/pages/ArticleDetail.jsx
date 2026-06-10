@@ -8,12 +8,16 @@ import './Page.css';
 import './Research.css';
 import { exportPrintableHtmlToPdf, escapeHtml } from '../utils/exportPdf';
 import { navigateBackOrFallback } from '../utils/navigation';
+import { canResearcherEditArticle, isDraft } from '../utils/submissionStatus';
 
 const ArticleDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAdmin, userRole, user } = useAuth();
-  const { t, language } = useLanguage();
+  const { t, language, isRTL } = useLanguage();
+  const textAlign = isRTL ? 'right' : 'left';
+  const locale = language === 'en' ? 'en-US' : 'he-IL';
+  const notSpecified = t('notSpecified', 'לא צוין');
   const [articleData, setArticleData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -23,7 +27,7 @@ const ArticleDetail = () => {
   useEffect(() => {
     const fetchArticle = async () => {
       if (!db) {
-        setError('מסד הנתונים לא מאותחל');
+        setError(t('dbNotInitialized', 'מסד הנתונים לא מאותחל'));
         setLoading(false);
         return;
       }
@@ -40,18 +44,24 @@ const ArticleDetail = () => {
           
           // Check if user has permission to view this article
           if (userRole === 'RESEARCHER' && data.researcherId !== user?.id) {
-            setError('אין הרשאה לצפות במאמר זה');
+            setError(t('noPermissionViewArticle', 'אין הרשאה לצפות במאמר זה'));
+            setLoading(false);
+            return;
+          }
+
+          if (userRole === 'ADMIN' && isDraft(data)) {
+            setError(t('draftNotVisibleToAdmin', 'טיוטה זו אינה זמינה לרשות המחקר עד להגשה'));
             setLoading(false);
             return;
           }
 
           setArticleData(data);
         } else {
-          setError('המאמר לא נמצא');
+          setError(t('articleNotFound', 'המאמר לא נמצא'));
         }
       } catch (err) {
         console.error('Error fetching article:', err);
-        setError('שגיאה בטעינת פרטי המאמר');
+        setError(t('loadArticleError', 'שגיאה בטעינת פרטי המאמר'));
       } finally {
         setLoading(false);
       }
@@ -82,7 +92,7 @@ const ArticleDetail = () => {
           const data = researchSnap.data();
           setLinkedResearch({
             id: researchId,
-            title: data.projectTitle || data.title || 'ללא כותרת'
+            title: data.projectTitle || data.title || t('noTitle', 'ללא כותרת')
           });
         } else {
           setLinkedResearch(null);
@@ -106,16 +116,16 @@ const ArticleDetail = () => {
   }, [db, articleData?.researchProposalId]);
 
   const formatDate = (timestamp) => {
-    if (!timestamp) return 'לא צוין';
+    if (!timestamp) return notSpecified;
     try {
       if (timestamp && typeof timestamp.toDate === 'function') {
-        return timestamp.toDate().toLocaleDateString('he-IL');
+        return timestamp.toDate().toLocaleDateString(locale);
       }
       if (timestamp && timestamp.seconds) {
-        return new Date(timestamp.seconds * 1000).toLocaleDateString('he-IL');
+        return new Date(timestamp.seconds * 1000).toLocaleDateString(locale);
       }
       if (typeof timestamp === 'string') {
-        return new Date(timestamp).toLocaleDateString('he-IL');
+        return new Date(timestamp).toLocaleDateString(locale);
       }
       return String(timestamp);
     } catch (e) {
@@ -126,13 +136,13 @@ const ArticleDetail = () => {
   const getStatusLabel = (status) => {
     switch (status) {
       case 'published':
-        return 'פורסם';
+        return t('published', 'פורסם');
       case 'in-review':
-        return 'בביקורת';
+        return t('inReview', 'בביקורת');
       case 'rejected':
-        return 'נדחה';
+        return t('rejected', 'נדחה');
       default:
-        return status;
+        return status || notSpecified;
     }
   };
 
@@ -152,11 +162,11 @@ const ArticleDetail = () => {
   const getPublicationTypeLabel = (type) => {
     switch (type) {
       case 'journal':
-        return 'כתב עת';
+        return t('journal', 'כתב עת');
       case 'conference':
-        return 'כנס';
+        return t('conference', 'כנס');
       default:
-        return type || 'לא צוין';
+        return type || notSpecified;
     }
   };
 
@@ -264,7 +274,7 @@ const ArticleDetail = () => {
 
         {loading && (
           <div className="no-results">
-            <p>טוען פרטי מאמר...</p>
+            <p>{t('loadingArticleDetails', 'טוען פרטי מאמר...')}</p>
           </div>
         )}
 
@@ -275,25 +285,45 @@ const ArticleDetail = () => {
         )}
 
         {!loading && !error && articleData && (
-          <div style={{ textAlign: language === 'en' ? 'left' : 'right' }}>
+          <div style={{ textAlign }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-              <h1 style={{ margin: 0, color: '#333' }}>פרטי מאמר</h1>
-              <button
-                type="button"
-                onClick={handleExportPDF}
-                style={{
-                  padding: '10px 20px',
-                  background: '#17a2b8',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  fontWeight: 'bold'
-                }}
-              >
-                {t('exportPdf', 'ייצוא ל-PDF')}
-              </button>
+              <h1 style={{ margin: 0, color: '#333' }}>{t('articleDetailsTitle', 'פרטי מאמר')}</h1>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={handleExportPDF}
+                  style={{
+                    padding: '10px 20px',
+                    background: '#17a2b8',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  {t('exportPdf', 'ייצוא ל-PDF')}
+                </button>
+                {(userRole === 'ADMIN' || canResearcherEditArticle(articleData)) && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/articles/new?edit=${id}`)}
+                    style={{
+                      padding: '10px 20px',
+                      background: '#28a745',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '16px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    ✏️ {t('editArticle', 'ערוך מאמר')}
+                  </button>
+                )}
+              </div>
             </div>
 
             <div style={{ 
@@ -302,7 +332,7 @@ const ArticleDetail = () => {
               borderRadius: '8px',
               marginBottom: '20px'
             }}>
-              <h2 style={{ marginBottom: '20px', color: '#667eea' }}>פרטים כלליים</h2>
+              <h2 style={{ marginBottom: '20px', color: '#667eea' }}>{t('generalDetails', 'פרטים כלליים')}</h2>
               
               <div style={{ 
                 display: 'grid', 
@@ -317,9 +347,9 @@ const ArticleDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    כותרת המאמר:
+                    {t('articleTitleShort', 'כותרת המאמר')}:
                   </label>
-                  <span style={{ fontSize: '16px' }}>{articleData.title || 'לא צוין'}</span>
+                  <span style={{ fontSize: '16px' }}>{articleData.title || notSpecified}</span>
                 </div>
 
                 <div>
@@ -329,9 +359,9 @@ const ArticleDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    שם העיתון:
+                    {t('journalNameShort', 'שם העיתון')}:
                   </label>
-                  <span style={{ fontSize: '16px' }}>{articleData.journalName || 'לא צוין'}</span>
+                  <span style={{ fontSize: '16px' }}>{articleData.journalName || notSpecified}</span>
                 </div>
 
                 <div>
@@ -341,9 +371,9 @@ const ArticleDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    דירוג העיתון:
+                    {t('journalRankingShort', 'דירוג העיתון')}:
                   </label>
-                  <span style={{ fontSize: '16px' }}>{articleData.journalRanking || 'לא צוין'}</span>
+                  <span style={{ fontSize: '16px' }}>{articleData.journalRanking || notSpecified}</span>
                 </div>
 
                 <div>
@@ -353,9 +383,9 @@ const ArticleDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    שנת פרסום:
+                    {t('publicationYearShort', 'שנת פרסום')}:
                   </label>
-                  <span style={{ fontSize: '16px' }}>{articleData.publicationYear || 'לא צוין'}</span>
+                  <span style={{ fontSize: '16px' }}>{articleData.publicationYear || notSpecified}</span>
                 </div>
 
                 <div>
@@ -365,7 +395,7 @@ const ArticleDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    תאריך פרסום:
+                    {t('publicationDateLabel', 'תאריך פרסום')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>{formatDate(articleData.publicationDate)}</span>
                 </div>
@@ -377,7 +407,7 @@ const ArticleDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    סוג פרסום:
+                    {t('publicationTypeLabel', 'סוג פרסום')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>
                     {getPublicationTypeLabel(articleData.publicationType)}
@@ -391,9 +421,9 @@ const ArticleDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    חוקר:
+                    {t('researcher', 'חוקר')}:
                   </label>
-                  <span style={{ fontSize: '16px' }}>{articleData.researcherName || 'לא צוין'}</span>
+                  <span style={{ fontSize: '16px' }}>{articleData.researcherName || notSpecified}</span>
                 </div>
 
                 <div>
@@ -403,11 +433,11 @@ const ArticleDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    מחקר מקושר:
+                    {t('linkedResearch', 'מחקר מקושר')}:
                   </label>
                   {articleData.researchProposalId ? (
                     linkedResearchLoading ? (
-                      <span style={{ fontSize: '16px' }}>טוען...</span>
+                      <span style={{ fontSize: '16px' }}>{t('loadingShort', 'טוען...')}</span>
                     ) : linkedResearch ? (
                       <button
                         type="button"
@@ -425,10 +455,10 @@ const ArticleDetail = () => {
                         {linkedResearch.title}
                       </button>
                     ) : (
-                      <span style={{ fontSize: '16px' }}>לא נמצא</span>
+                      <span style={{ fontSize: '16px' }}>{t('linkedNotFound', 'לא נמצא')}</span>
                     )
                   ) : (
-                    <span style={{ fontSize: '16px' }}>לא מקושר</span>
+                    <span style={{ fontSize: '16px' }}>{t('notLinked', 'לא מקושר')}</span>
                   )}
                 </div>
 
@@ -439,7 +469,7 @@ const ArticleDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    סטטוס:
+                    {t('status', 'סטטוס')}:
                   </label>
                   <span 
                     className={`status-button ${getStatusClass(articleData.status)}`}
@@ -463,7 +493,7 @@ const ArticleDetail = () => {
                     marginBottom: '10px',
                     color: '#666'
                   }}>
-                    קישור למאמר:
+                    {t('articleLinkLabel', 'קישור למאמר')}:
                   </label>
                   <a 
                     href={articleData.articleLink} 

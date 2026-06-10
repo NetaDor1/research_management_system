@@ -4,9 +4,9 @@ import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
-import DetailModal from '../components/DetailModal';
 import { shouldShowNewBadge } from '../utils/newBadge';
 import './Research.css';
+import { isSubmitted } from '../utils/submissionStatus';
 
 const Articles = () => {
   const { isAdmin, user, userRole } = useAuth();
@@ -19,8 +19,8 @@ const Articles = () => {
   const [articlesData, setArticlesData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedArticleId, setSelectedArticleId] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const getDisplayStatus = (item) =>
+    item.submissionStatus === 'draft' ? 'draft' : item.status;
 
   // Fetch articles from Firestore
   useEffect(() => {
@@ -73,9 +73,13 @@ const Articles = () => {
           }
         }
 
-        console.log(`Found ${querySnapshot.docs.length} article documents`);
+        const visibleDocs = userRole === 'ADMIN'
+          ? querySnapshot.docs.filter((docItem) => isSubmitted(docItem.data()))
+          : querySnapshot.docs;
 
-        const articlesList = querySnapshot.docs.map((doc) => {
+        console.log(`Found ${visibleDocs.length} article documents`);
+
+        const articlesList = visibleDocs.map((doc) => {
           const data = doc.data();
           
           // Convert Firestore Timestamp to date string
@@ -95,6 +99,7 @@ const Articles = () => {
             title: data.title || 'ללא כותרת',
             researcher: data.researcherName || data.researcher || 'חוקר',
             status: data.status || 'published',
+            submissionStatus: data.submissionStatus || 'submitted',
             publicationDate: toDateString(data.publicationDate),
             publicationType: data.publicationType || 'journal',
             isNew: data.isNew || false,
@@ -173,7 +178,7 @@ const Articles = () => {
 
     // Status filter
     if (filterStatus !== 'all') {
-      filtered = filtered.filter(item => item.status === filterStatus);
+      filtered = filtered.filter((item) => getDisplayStatus(item) === filterStatus);
     }
 
     // Publication type filter
@@ -191,20 +196,16 @@ const Articles = () => {
     return filtered;
   }, [filteredByRole, searchTerm, filterStatus, filterType, sortBy]);
 
-  const handleArticleClick = (articleId) => {
+  const handleArticleClick = (article) => {
     if (isAdmin()) {
-      // Admin navigates to detail page
-      navigate(`/articles/${articleId}`);
-    } else {
-      // Researcher uses modal
-      setSelectedArticleId(articleId);
-      setIsModalOpen(true);
+      navigate(`/articles/${article.id}`);
+      return;
     }
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedArticleId(null);
+    if (article.submissionStatus === 'draft') {
+      navigate(`/articles/new?edit=${article.id}`);
+      return;
+    }
+    navigate(`/articles/${article.id}`);
   };
 
   const handleAddArticle = () => {
@@ -213,6 +214,8 @@ const Articles = () => {
 
   const getStatusLabel = (status) => {
     switch (status) {
+      case 'draft':
+        return t('draft', 'טיוטה');
       case 'published':
         return t('published', 'פורסם');
       case 'in-review':
@@ -226,6 +229,8 @@ const Articles = () => {
 
   const getStatusClass = (status) => {
     switch (status) {
+      case 'draft':
+        return 'status-draft';
       case 'published':
         return 'status-awarded';
       case 'in-review':
@@ -260,6 +265,7 @@ const Articles = () => {
               className="filter-select"
             >
               <option value="all">{t('status', 'סטטוס')}</option>
+              <option value="draft">{t('draft', 'טיוטה')}</option>
               <option value="published">{t('published', 'פורסם')}</option>
               <option value="in-review">{t('inReview', 'בביקורת')}</option>
               <option value="rejected">{t('rejected', 'נדחה')}</option>
@@ -269,7 +275,7 @@ const Articles = () => {
               onChange={(e) => setFilterType(e.target.value)}
               className="filter-select"
             >
-              <option value="all">סוג פרסום</option>
+              <option value="all">{t('filterAllPublicationTypes', 'כל סוגי הפרסום')}</option>
               <option value="journal">{t('journal', 'כתב עת')}</option>
               <option value="conference">{t('conference', 'כנס')}</option>
             </select>
@@ -282,7 +288,7 @@ const Articles = () => {
               className="filter-select"
             >
               <option value="alphabetical">{t('alphabetical', 'אלף בית')}</option>
-              <option value="date">{t('date', 'תאריך')} {t('published', 'פרסום')}</option>
+              <option value="date">{t('sortByPublicationDate', 'תאריך פרסום')}</option>
             </select>
           </div>
         </div>
@@ -311,38 +317,30 @@ const Articles = () => {
           </button>
         )}
 
+        {!loading && !error && filteredAndSorted.length === 0 && (
+          <div className="no-results-grid-item">
+            <p>{t('noArticlesFound', 'לא נמצאו מאמרים')}</p>
+          </div>
+        )}
+
         {!loading && !error && filteredAndSorted.map((article) => (
           <button
             key={article.id}
             className="research-card"
-            onClick={() => handleArticleClick(article.id)}
+            onClick={() => handleArticleClick(article)}
           >
             {shouldShowNewBadge(article.isNew, article.publicationDate) && (
               <span className="new-badge">{t('newBadge', 'חדש!')}</span>
             )}
             <h3 className="research-title">{article.title}</h3>
             <p className="research-researcher">{article.researcher}</p>
-            <button className={`status-button ${getStatusClass(article.status)}`}>
-              {getStatusLabel(article.status)}
+            <button className={`status-button ${getStatusClass(getDisplayStatus(article))}`}>
+              {getStatusLabel(getDisplayStatus(article))}
             </button>
           </button>
         ))}
       </div>
 
-      {!loading && !error && filteredAndSorted.length === 0 && (
-        <div className="no-results">
-          <p>{t('noArticlesFound', 'לא נמצאו מאמרים')}</p>
-        </div>
-      )}
-
-        {!isAdmin() && (
-          <DetailModal
-            isOpen={isModalOpen}
-            onClose={handleCloseModal}
-            itemId={selectedArticleId}
-            type="article"
-          />
-        )}
       </div>
     </div>
   );

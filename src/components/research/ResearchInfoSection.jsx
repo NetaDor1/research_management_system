@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLanguage } from '../../context/LanguageContext';
 
 // Mapping of fund names to their URLs
 const fundLinks = {
@@ -31,33 +32,37 @@ const fundLinks = {
   'מרכז לדאטה ובינה מלאכותית - אונ\' תל אביב': 'https://datascience.tau.ac.il/'
 };
 
-const getStatusLabel = (status) => {
-  switch (status) {
-    case 'awarded':
-      return 'זכייה';
-    case 'pending':
-      return 'המתנה';
-    case 'rejected':
-      return 'לא אושר';
-    default:
-      return status;
-  }
-};
-
-const getStatusClass = (status) => {
-  switch (status) {
-    case 'awarded':
-      return 'status-awarded';
-    case 'pending':
-      return 'status-pending';
-    case 'rejected':
-      return 'status-rejected';
-    default:
-      return '';
-  }
-};
-
 const ResearchInfoSection = ({ researchData }) => {
+  const { t, isRTL } = useLanguage();
+  const textAlign = isRTL ? 'right' : 'left';
+  const notSpecified = t('notSpecified', 'לא צוין');
+
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'awarded':
+        return t('awarded', 'זכייה');
+      case 'pending':
+        return t('pending', 'המתנה');
+      case 'rejected':
+        return t('rejected', 'לא אושר');
+      default:
+        return status;
+    }
+  };
+
+  const getStatusClass = (status) => {
+    switch (status) {
+      case 'awarded':
+        return 'status-awarded';
+      case 'pending':
+        return 'status-pending';
+      case 'rejected':
+        return 'status-rejected';
+      default:
+        return '';
+    }
+  };
+
   if (!researchData) return null;
 
   return (
@@ -65,9 +70,12 @@ const ResearchInfoSection = ({ researchData }) => {
       background: '#f9f9f9', 
       padding: '30px', 
       borderRadius: '8px',
-      marginBottom: '20px'
+      marginBottom: '20px',
+      textAlign,
     }}>
-      <h2 style={{ marginBottom: '20px', color: '#667eea' }}>פרטים כלליים</h2>
+      <h2 style={{ marginBottom: '20px', color: '#667eea' }}>
+        {t('generalDetails', 'פרטים כלליים')}
+      </h2>
       
       <div style={{ 
         display: 'grid', 
@@ -82,9 +90,9 @@ const ResearchInfoSection = ({ researchData }) => {
             marginBottom: '5px',
             color: '#666'
           }}>
-            כותרת הפרויקט:
+            {t('projectTitleShort', 'כותרת הפרויקט')}:
           </label>
-          <span style={{ fontSize: '16px' }}>{researchData.projectTitle || 'לא צוין'}</span>
+          <span style={{ fontSize: '16px' }}>{researchData.projectTitle || notSpecified}</span>
         </div>
 
         <div>
@@ -94,10 +102,10 @@ const ResearchInfoSection = ({ researchData }) => {
             marginBottom: '5px',
             color: '#666'
           }}>
-            שם הקרן:
+            {t('fundNameShort', 'שם הקרן')}:
           </label>
           <div style={{ fontSize: '16px' }}>
-            <span>{researchData.fundName || 'לא צוין'}</span>
+            <span>{researchData.fundName || notSpecified}</span>
             {researchData.fundName && fundLinks[researchData.fundName] && (
               <div style={{ marginTop: '8px' }}>
                 <a 
@@ -115,7 +123,7 @@ const ResearchInfoSection = ({ researchData }) => {
                   onMouseOver={(e) => e.target.style.textDecoration = 'underline'}
                   onMouseOut={(e) => e.target.style.textDecoration = 'none'}
                 >
-                  🔗 קישור לאתר הקרן
+                  🔗 {t('fundLinkLabel', 'קישור לאתר הקרן')}
                 </a>
               </div>
             )}
@@ -129,9 +137,9 @@ const ResearchInfoSection = ({ researchData }) => {
             marginBottom: '5px',
             color: '#666'
           }}>
-            סוג הקרן:
+            {t('fundTypeShort', 'סוג הקרן')}:
           </label>
-          <span style={{ fontSize: '16px' }}>{researchData.fundType || 'לא צוין'}</span>
+          <span style={{ fontSize: '16px' }}>{researchData.fundType || notSpecified}</span>
         </div>
 
         <div>
@@ -141,9 +149,9 @@ const ResearchInfoSection = ({ researchData }) => {
             marginBottom: '5px',
             color: '#666'
           }}>
-            מסלול הגשה:
+            {t('submissionPathShort', 'מסלול הגשה')}:
           </label>
-          <span style={{ fontSize: '16px' }}>{researchData.submissionPath || 'לא צוין'}</span>
+          <span style={{ fontSize: '16px' }}>{researchData.submissionPath || notSpecified}</span>
         </div>
 
         <div>
@@ -153,9 +161,9 @@ const ResearchInfoSection = ({ researchData }) => {
             marginBottom: '5px',
             color: '#666'
           }}>
-            סוג הגשה:
+            {t('submissionTypeShort', 'סוג הגשה')}:
           </label>
-          <span style={{ fontSize: '16px' }}>{researchData.submissionType || 'לא צוין'}</span>
+          <span style={{ fontSize: '16px' }}>{researchData.submissionType || notSpecified}</span>
         </div>
 
         <div>
@@ -165,9 +173,9 @@ const ResearchInfoSection = ({ researchData }) => {
             marginBottom: '5px',
             color: '#666'
           }}>
-            תפקיד החוקר:
+            {t('researcherRoleShort', 'תפקיד החוקר')}:
           </label>
-          <span style={{ fontSize: '16px' }}>{researchData.researcherRole || 'לא צוין'}</span>
+          <span style={{ fontSize: '16px' }}>{researchData.researcherRole || notSpecified}</span>
         </div>
 
         <div>
@@ -177,9 +185,9 @@ const ResearchInfoSection = ({ researchData }) => {
             marginBottom: '5px',
             color: '#666'
           }}>
-            שלב ההצעה:
+            {t('proposalStageShort', 'שלב ההצעה')}:
           </label>
-          <span style={{ fontSize: '16px' }}>{researchData.proposalStage || 'לא צוין'}</span>
+          <span style={{ fontSize: '16px' }}>{researchData.proposalStage || notSpecified}</span>
         </div>
 
         <div>
@@ -189,9 +197,9 @@ const ResearchInfoSection = ({ researchData }) => {
             marginBottom: '5px',
             color: '#666'
           }}>
-            חוקר:
+            {t('researcher', 'חוקר')}:
           </label>
-          <span style={{ fontSize: '16px' }}>{researchData.researcherName || 'לא צוין'}</span>
+          <span style={{ fontSize: '16px' }}>{researchData.researcherName || notSpecified}</span>
         </div>
 
         <div>
@@ -201,7 +209,7 @@ const ResearchInfoSection = ({ researchData }) => {
             marginBottom: '5px',
             color: '#666'
           }}>
-            סטטוס:
+            {t('status', 'סטטוס')}:
           </label>
           <span 
             className={`status-button ${getStatusClass(researchData.status)}`}
@@ -223,9 +231,11 @@ const ResearchInfoSection = ({ researchData }) => {
             marginBottom: '5px',
             color: '#666'
           }}>
-            יש פטנט:
+            {t('hasPatent', 'יש פטנט')}:
           </label>
-          <span style={{ fontSize: '16px' }}>{researchData.hasPatent ? 'כן' : 'לא'}</span>
+          <span style={{ fontSize: '16px' }}>
+            {researchData.hasPatent ? t('yes', 'כן') : t('no', 'לא')}
+          </span>
         </div>
       </div>
     </div>

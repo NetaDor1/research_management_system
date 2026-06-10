@@ -3,6 +3,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useLanguage } from '../context/LanguageContext';
 import { normalizeAcademicYear } from '../utils/academicYear';
+import { getBudgetComponentLabel } from '../utils/budgetComponents';
 import './DetailModal.css';
 
 const DetailModal = ({ isOpen, onClose, itemId, type }) => {
@@ -73,7 +74,8 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
   const formatCurrency = (amount, currency = 'ILS') => {
     if (!amount) return t('notSpecified', 'לא צוין');
     const currencySymbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '₪';
-    return `${currencySymbol} ${Number(amount).toLocaleString('he-IL')}`;
+    const locale = language === 'en' ? 'en-US' : 'he-IL';
+    return `${currencySymbol} ${Number(amount).toLocaleString(locale)}`;
   };
 
   if (!isOpen) return null;
@@ -84,7 +86,7 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
     return (
       <div className="detail-content">
         <div className="detail-section">
-          <h3>פרטים כלליים</h3>
+          <h3>{t('generalDetails', 'פרטים כלליים')}</h3>
           <div className="detail-grid">
             <div className="detail-item">
               <label>{t('projectTitleLabel', 'כותרת הפרוייקט שהוגש לקרן חיצונית')}:</label>
@@ -114,7 +116,7 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
         </div>
 
         <div className="detail-section">
-          <h3>תקופת המחקר</h3>
+          <h3>{t('researchPeriod', 'תקופת המחקר')}</h3>
           <div className="detail-grid">
             <div className="detail-item">
               <label>{t('startDateLabel', 'תאריך לועזי של תחילת המחקר (dd/mm/yyyy)')}:</label>
@@ -136,7 +138,7 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
         </div>
 
         <div className="detail-section">
-          <h3>תקציב</h3>
+          <h3>{t('budgetTitle', 'תקציב')}</h3>
           <div className="detail-grid">
             <div className="detail-item">
               <label>{t('totalBudgetRequested', 'סה"כ התקציב המבוקש (חישוב אוטומטי)')}:</label>
@@ -157,7 +159,7 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
               <div className="budget-list">
                 {Object.entries(itemData.budgetComponents).map(([key, value]) => (
                   <div key={key} className="budget-item">
-                    <span className="budget-label">{key}:</span>
+                    <span className="budget-label">{getBudgetComponentLabel(key, t)}:</span>
                     <span className="budget-value">{formatCurrency(value, itemData.currency)}</span>
                   </div>
                 ))}
@@ -228,133 +230,171 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
     );
   };
 
+  const getPatentStatusLabel = (status) => {
+    switch (status) {
+      case 'registered':
+        return t('registered', 'רשום');
+      case 'approved':
+        return t('approved', 'אושר');
+      case 'in-process':
+        return t('inProcess', 'בהליך');
+      case 'rejected':
+        return t('rejected', 'נדחה');
+      default:
+        return status || t('notSpecified', 'לא צוין');
+    }
+  };
+
+  const getArticleStatusLabel = (status) => {
+    switch (status) {
+      case 'published':
+        return t('published', 'פורסם');
+      case 'in-review':
+        return t('inReview', 'בביקורת');
+      case 'rejected':
+        return t('rejected', 'נדחה');
+      default:
+        return status || t('notSpecified', 'לא צוין');
+    }
+  };
+
+  const getPublicationTypeLabel = (type) => {
+    switch (type) {
+      case 'journal':
+        return t('journal', 'כתב עת');
+      case 'conference':
+        return t('conference', 'כנס');
+      default:
+        return type || t('notSpecified', 'לא צוין');
+    }
+  };
+
+  const notSpecified = t('notSpecified', 'לא צוין');
+
   const renderPatentDetails = () => {
     if (!itemData) return null;
 
     return (
       <div className="detail-content">
         <div className="detail-section">
-          <h3>פרטים כלליים</h3>
+          <h3>{t('generalDetails', 'פרטים כלליים')}</h3>
           <div className="detail-grid">
             <div className="detail-item">
-              <label>כותרת הפרויקט:</label>
-              <span>{itemData.projectTitle || itemData.title || 'לא צוין'}</span>
+              <label>{t('projectTitleShort', 'כותרת הפרויקט')}:</label>
+              <span>{itemData.projectTitle || itemData.title || notSpecified}</span>
             </div>
             <div className="detail-item">
-              <label>אחוז המוסד:</label>
-              <span>{itemData.institutionPercentage || 'לא צוין'}</span>
+              <label>{t('patentInstitutionPercentage', 'אחוז המוסד')}:</label>
+              <span>{itemData.institutionPercentage || notSpecified}</span>
             </div>
             <div className="detail-item">
-              <label>מסלול הגשה:</label>
-              <span>{itemData.submissionPath || 'לא צוין'}</span>
+              <label>{t('submissionPathShort', 'מסלול הגשה')}:</label>
+              <span>{itemData.submissionPath || notSpecified}</span>
             </div>
             <div className="detail-item">
-              <label>תפקיד החוקר:</label>
-              <span>{itemData.researcherRole || 'לא צוין'}</span>
+              <label>{t('researcherRoleShort', 'תפקיד החוקר')}:</label>
+              <span>{itemData.researcherRole || notSpecified}</span>
             </div>
             <div className="detail-item">
-              <label>חוקר:</label>
-              <span>{itemData.researcherName || 'לא צוין'}</span>
+              <label>{t('researcher', 'חוקר')}:</label>
+              <span>{itemData.researcherName || notSpecified}</span>
             </div>
             <div className="detail-item">
-              <label>סטטוס:</label>
+              <label>{t('status', 'סטטוס')}:</label>
               <span className={`status-badge status-${itemData.status || 'in-process'}`}>
-                {itemData.status === 'registered' ? 'רשום' : 
-                 itemData.status === 'approved' ? 'אושר' : 
-                 itemData.status === 'in-process' ? 'בהליך' : 
-                 itemData.status === 'rejected' ? 'נדחה' : itemData.status}
+                {getPatentStatusLabel(itemData.status)}
               </span>
             </div>
             <div className="detail-item">
-              <label>שלב הפטנט:</label>
-              <span>{itemData.patentStage || 'לא צוין'}</span>
+              <label>{t('patentStage', 'שלב הפטנט')}:</label>
+              <span>{itemData.patentStage || notSpecified}</span>
             </div>
           </div>
         </div>
 
         <div className="detail-section">
-          <h3>יחידת מסחור</h3>
+          <h3>{t('commercializationUnit', 'יחידת מסחור')}</h3>
           <div className="detail-grid">
             <div className="detail-item">
-              <label>יחידת מסחור:</label>
-              <span>{itemData.commercializationUnit || 'לא צוין'}</span>
+              <label>{t('commercializationUnit', 'יחידת מסחור')}:</label>
+              <span>{itemData.commercializationUnit || notSpecified}</span>
             </div>
             <div className="detail-item">
-              <label>איש קשר 1:</label>
-              <span>{itemData.commercializationContact1 || 'לא צוין'}</span>
+              <label>{t('contact1', 'איש קשר 1')}:</label>
+              <span>{itemData.commercializationContact1 || notSpecified}</span>
             </div>
             <div className="detail-item">
-              <label>אימייל 1:</label>
-              <span>{itemData.commercializationEmail1 || 'לא צוין'}</span>
+              <label>{t('email1', 'אימייל 1')}:</label>
+              <span>{itemData.commercializationEmail1 || notSpecified}</span>
             </div>
             <div className="detail-item">
-              <label>איש קשר 2:</label>
-              <span>{itemData.commercializationContact2 || 'לא צוין'}</span>
+              <label>{t('contact2', 'איש קשר 2')}:</label>
+              <span>{itemData.commercializationContact2 || notSpecified}</span>
             </div>
             <div className="detail-item">
-              <label>אימייל 2:</label>
-              <span>{itemData.commercializationEmail2 || 'לא צוין'}</span>
+              <label>{t('email2', 'אימייל 2')}:</label>
+              <span>{itemData.commercializationEmail2 || notSpecified}</span>
             </div>
           </div>
         </div>
 
         <div className="detail-section">
-          <h3>תאריכים</h3>
+          <h3>{t('datesTitle', 'תאריכים')}</h3>
           <div className="detail-grid">
             <div className="detail-item">
-              <label>תאריך הגשת הבקשה:</label>
+              <label>{t('patentDateSubmission', 'תאריך הגשת הבקשה')}:</label>
               <span>{formatDate(itemData.submissionDate)}</span>
             </div>
             <div className="detail-item">
-              <label>תאריך בדיקה ראשונית:</label>
+              <label>{t('patentDateInitialReview', 'תאריך בדיקה ראשונית')}:</label>
               <span>{formatDate(itemData.initialReviewDate)}</span>
             </div>
             <div className="detail-item">
-              <label>תאריך בחינה:</label>
+              <label>{t('patentDateExamination', 'תאריך בחינה')}:</label>
               <span>{formatDate(itemData.examinationDate)}</span>
             </div>
             <div className="detail-item">
-              <label>תאריך אישור:</label>
+              <label>{t('patentDateApproval', 'תאריך אישור')}:</label>
               <span>{formatDate(itemData.approvalDate)}</span>
             </div>
             <div className="detail-item">
-              <label>תאריך רישום:</label>
+              <label>{t('patentDateRegistration', 'תאריך רישום')}:</label>
               <span>{formatDate(itemData.registrationDate)}</span>
             </div>
             <div className="detail-item">
-              <label>תאריך פרסום:</label>
+              <label>{t('patentDatePublication', 'תאריך פרסום')}:</label>
               <span>{formatDate(itemData.publicationDate)}</span>
             </div>
             <div className="detail-item">
-              <label>תאריך חידוש:</label>
+              <label>{t('patentDateRenewal', 'תאריך חידוש')}:</label>
               <span>{formatDate(itemData.renewalDate)}</span>
             </div>
             <div className="detail-item">
-              <label>תאריך תפוגה:</label>
+              <label>{t('patentDateExpiry', 'תאריך תפוגה')}:</label>
               <span>{formatDate(itemData.expiryDate)}</span>
             </div>
           </div>
         </div>
 
         <div className="detail-section">
-          <h3>תקציב</h3>
+          <h3>{t('budgetTitle', 'תקציב')}</h3>
           <div className="detail-grid">
             <div className="detail-item">
-              <label>תקציב כולל:</label>
+              <label>{t('totalBudget', 'תקציב כולל')}:</label>
               <span>{formatCurrency(itemData.totalBudget, itemData.currency)}</span>
             </div>
             <div className="detail-item">
-              <label>מטבע:</label>
+              <label>{t('currency', 'מטבע')}:</label>
               <span>{itemData.currency || 'ILS'}</span>
             </div>
             <div className="detail-item">
-              <label>תקציב מומר:</label>
+              <label>{t('convertedBudget', 'תקציב מומר')}:</label>
               <span>{formatCurrency(itemData.convertedBudget, 'ILS')}</span>
             </div>
           </div>
           {itemData.stageBudgets && Object.keys(itemData.stageBudgets).length > 0 && (
             <div className="budget-components">
-              <h4>תקציב לפי שלבים:</h4>
+              <h4>{t('stageBudgetByStage', 'תקציב לפי שלבים')}:</h4>
               <div className="budget-list">
                 {Object.entries(itemData.stageBudgets).map(([key, value]) => (
                   <div key={key} className="budget-item">
@@ -369,25 +409,25 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
 
         {itemData.partners && itemData.partners.length > 0 && (
           <div className="detail-section">
-            <h3>שותפים</h3>
+            <h3>{t('partners', 'שותפים')}</h3>
             <div className="partners-list">
               {itemData.partners.map((partner, index) => (
                 <div key={index} className="partner-card">
                   <div className="partner-detail">
-                    <label>שם:</label>
-                    <span>{partner.name || 'לא צוין'}</span>
+                    <label>{t('name', 'שם')}:</label>
+                    <span>{partner.name || notSpecified}</span>
                   </div>
                   <div className="partner-detail">
-                    <label>אימייל:</label>
-                    <span>{partner.email || 'לא צוין'}</span>
+                    <label>{t('email', 'אימייל')}:</label>
+                    <span>{partner.email || notSpecified}</span>
                   </div>
                   <div className="partner-detail">
-                    <label>מוסד:</label>
-                    <span>{partner.institution || 'לא צוין'}</span>
+                    <label>{t('institution', 'מוסד')}:</label>
+                    <span>{partner.institution || notSpecified}</span>
                   </div>
                   {partner.percentage && (
                     <div className="partner-detail">
-                      <label>אחוז:</label>
+                      <label>{t('percentage', 'אחוז')}:</label>
                       <span>{partner.percentage}</span>
                     </div>
                   )}
@@ -399,7 +439,7 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
 
         {itemData.notes && (
           <div className="detail-section">
-            <h3>הערות</h3>
+            <h3>{t('notesFreeText', 'הערות')}</h3>
             <p className="notes-text">{itemData.notes}</p>
           </div>
         )}
@@ -413,44 +453,40 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
     return (
       <div className="detail-content">
         <div className="detail-section">
-          <h3>פרטים כלליים</h3>
+          <h3>{t('generalDetails', 'פרטים כלליים')}</h3>
           <div className="detail-grid">
             <div className="detail-item">
-              <label>כותרת המאמר:</label>
-              <span>{itemData.title || 'לא צוין'}</span>
+              <label>{t('articleTitleShort', 'כותרת המאמר')}:</label>
+              <span>{itemData.title || notSpecified}</span>
             </div>
             <div className="detail-item">
-              <label>שם העיתון:</label>
-              <span>{itemData.journalName || 'לא צוין'}</span>
+              <label>{t('journalNameShort', 'שם העיתון')}:</label>
+              <span>{itemData.journalName || notSpecified}</span>
             </div>
             <div className="detail-item">
-              <label>דירוג העיתון:</label>
-              <span>{itemData.journalRanking || 'לא צוין'}</span>
+              <label>{t('journalRankingShort', 'דירוג העיתון')}:</label>
+              <span>{itemData.journalRanking || notSpecified}</span>
             </div>
             <div className="detail-item">
-              <label>שנת פרסום:</label>
-              <span>{itemData.publicationYear || 'לא צוין'}</span>
+              <label>{t('publicationYearShort', 'שנת פרסום')}:</label>
+              <span>{itemData.publicationYear || notSpecified}</span>
             </div>
             <div className="detail-item">
-              <label>תאריך פרסום:</label>
+              <label>{t('publicationDateLabel', 'תאריך פרסום')}:</label>
               <span>{formatDate(itemData.publicationDate)}</span>
             </div>
             <div className="detail-item">
-              <label>סוג פרסום:</label>
-              <span>{itemData.publicationType === 'journal' ? 'כתב עת' : 
-                     itemData.publicationType === 'conference' ? 'כנס' : 
-                     itemData.publicationType || 'לא צוין'}</span>
+              <label>{t('publicationTypeLabel', 'סוג פרסום')}:</label>
+              <span>{getPublicationTypeLabel(itemData.publicationType)}</span>
             </div>
             <div className="detail-item">
-              <label>חוקר:</label>
-              <span>{itemData.researcherName || 'לא צוין'}</span>
+              <label>{t('researcher', 'חוקר')}:</label>
+              <span>{itemData.researcherName || notSpecified}</span>
             </div>
             <div className="detail-item">
-              <label>סטטוס:</label>
+              <label>{t('status', 'סטטוס')}:</label>
               <span className={`status-badge status-${itemData.status || 'published'}`}>
-                {itemData.status === 'published' ? 'פורסם' : 
-                 itemData.status === 'in-review' ? 'בביקורת' : 
-                 itemData.status === 'rejected' ? 'נדחה' : itemData.status}
+                {getArticleStatusLabel(itemData.status)}
               </span>
             </div>
           </div>
@@ -458,7 +494,7 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
 
         {itemData.articleLink && (
           <div className="detail-section">
-            <h3>קישור למאמר</h3>
+            <h3>{t('articleLinkLabel', 'קישור למאמר')}</h3>
             <div className="detail-item">
               <a href={itemData.articleLink} target="_blank" rel="noopener noreferrer" className="article-link">
                 {itemData.articleLink}
@@ -475,8 +511,8 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>
-            {type === 'research' ? 'פרטי מחקר' : 
-             type === 'patent' ? 'פרטי פטנט' : 'פרטי מאמר'}
+            {type === 'research' ? t('researchDetailsTitle', 'פרטי מחקר') : 
+             type === 'patent' ? t('patentDetailsTitle', 'פרטי פטנט') : t('articleDetailsTitle', 'פרטי מאמר')}
           </h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>

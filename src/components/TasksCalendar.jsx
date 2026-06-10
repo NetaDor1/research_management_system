@@ -1,6 +1,8 @@
 import React from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
+import heLocale from '@fullcalendar/core/locales/he';
+import enGbLocale from '@fullcalendar/core/locales/en-gb';
 import { useLanguage } from '../context/LanguageContext';
 import './TasksCalendar.css';
 
@@ -28,7 +30,9 @@ import './TasksCalendar.css';
  * @param {Function} onEventClick - Callback when an event is clicked
  */
 const TasksCalendar = ({ tasks = [], onEventClick }) => {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, language } = useLanguage();
+  const textAlign = isRTL ? 'right' : 'left';
+  const calendarLocale = language === 'en' ? enGbLocale : heLocale;
 
   // Convert tasks to FullCalendar events
   const events = React.useMemo(() => {
@@ -91,21 +95,23 @@ const TasksCalendar = ({ tasks = [], onEventClick }) => {
   return (
     <div className="tasks-calendar-container">
       {events.length > 0 && (
-        <div style={{ marginBottom: '10px', fontSize: '14px', color: '#666', textAlign: 'right' }}>
+        <div style={{ marginBottom: '10px', fontSize: '14px', color: '#666', textAlign }}>
           {events.length} {t('calendarTasksCount', 'משימות בלוח השנה')}
         </div>
       )}
       {events.length === 0 && (
-        <div style={{ marginBottom: '10px', fontSize: '14px', color: '#999', textAlign: 'right' }}>
+        <div style={{ marginBottom: '10px', fontSize: '14px', color: '#999', textAlign }}>
           {t('calendarNoTasks', 'אין משימות להצגה בלוח השנה')}
         </div>
       )}
       <div style={{ width: '100%' }}>
         <FullCalendar
+          key={language}
           plugins={[dayGridPlugin]}
           initialView="dayGridMonth"
           events={events}
           eventClick={handleEventClick}
+          locale={calendarLocale}
           headerToolbar={{
             left: 'prev',
             center: 'title',
@@ -115,7 +121,7 @@ const TasksCalendar = ({ tasks = [], onEventClick }) => {
           height="auto"
           contentHeight="auto"
           aspectRatio={1.35}
-          firstDay={0} // Sunday as first day (common in Hebrew calendars)
+          firstDay={0}
         />
       </div>
     </div>

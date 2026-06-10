@@ -4,9 +4,9 @@ import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
-import DetailModal from '../components/DetailModal';
 import { shouldShowNewBadge } from '../utils/newBadge';
 import './Research.css';
+import { isSubmitted } from '../utils/submissionStatus';
 
 const Patents = () => {
   const { isAdmin, user, userRole } = useAuth();
@@ -18,8 +18,8 @@ const Patents = () => {
   const [patentsData, setPatentsData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedPatentId, setSelectedPatentId] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const getDisplayStatus = (item) =>
+    item.submissionStatus === 'draft' ? 'draft' : item.status;
 
   // Fetch patents from Firestore
   useEffect(() => {
@@ -72,9 +72,13 @@ const Patents = () => {
           }
         }
 
-        console.log(`Found ${querySnapshot.docs.length} patent documents`);
+        const visibleDocs = userRole === 'ADMIN'
+          ? querySnapshot.docs.filter((docItem) => isSubmitted(docItem.data()))
+          : querySnapshot.docs;
 
-        const patentsList = querySnapshot.docs.map((doc) => {
+        console.log(`Found ${visibleDocs.length} patent documents`);
+
+        const patentsList = visibleDocs.map((doc) => {
           const data = doc.data();
           
           // Convert Firestore Timestamp to date string
@@ -94,6 +98,7 @@ const Patents = () => {
             title: data.title || data.projectTitle || 'ללא כותרת',
             researcher: data.researcherName || data.researcher || 'חוקר',
             status: data.status || 'in-process',
+            submissionStatus: data.submissionStatus || 'submitted',
             registrationDate: toDateString(data.registrationDate || data.submissionDate || data.createdAt),
             isNew: data.isNew || false,
             researcherId: data.researcherId, // Keep for debugging
@@ -171,7 +176,7 @@ const Patents = () => {
 
     // Status filter
     if (filterStatus !== 'all') {
-      filtered = filtered.filter(item => item.status === filterStatus);
+      filtered = filtered.filter((item) => getDisplayStatus(item) === filterStatus);
     }
 
     // Sort
@@ -184,20 +189,16 @@ const Patents = () => {
     return filtered;
   }, [filteredByRole, searchTerm, filterStatus, sortBy]);
 
-  const handlePatentClick = (patentId) => {
+  const handlePatentClick = (patent) => {
     if (isAdmin()) {
-      // Admin navigates to detail page
-      navigate(`/patents/${patentId}`);
-    } else {
-      // Researcher uses modal
-      setSelectedPatentId(patentId);
-      setIsModalOpen(true);
+      navigate(`/patents/${patent.id}`);
+      return;
     }
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedPatentId(null);
+    if (patent.submissionStatus === 'draft') {
+      navigate(`/patents/new?edit=${patent.id}`);
+      return;
+    }
+    navigate(`/patents/${patent.id}`);
   };
 
   const handleAddPatent = () => {
@@ -206,6 +207,8 @@ const Patents = () => {
 
   const getStatusLabel = (status) => {
     switch (status) {
+      case 'draft':
+        return t('draft', 'טיוטה');
       case 'registered':
         return t('registered', 'רשום');
       case 'approved':
@@ -221,6 +224,8 @@ const Patents = () => {
 
   const getStatusClass = (status) => {
     switch (status) {
+      case 'draft':
+        return 'status-draft';
       case 'registered':
         return 'status-awarded';
       case 'approved':
@@ -257,6 +262,7 @@ const Patents = () => {
               className="filter-select"
             >
               <option value="all">{t('status', 'סטטוס')}</option>
+              <option value="draft">{t('draft', 'טיוטה')}</option>
               <option value="registered">{t('registered', 'רשום')}</option>
               <option value="approved">{t('approved', 'אושר')}</option>
               <option value="in-process">{t('inProcess', 'בהליך')}</option>
@@ -271,7 +277,7 @@ const Patents = () => {
               className="filter-select"
             >
               <option value="alphabetical">{t('alphabetical', 'אלף בית')}</option>
-              <option value="date">{t('date', 'תאריך')} {t('registered', 'רישום')}</option>
+              <option value="date">{t('sortByRegistrationDate', 'תאריך רישום')}</option>
             </select>
           </div>
         </div>
@@ -300,38 +306,30 @@ const Patents = () => {
           </button>
         )}
 
+        {!loading && !error && filteredAndSorted.length === 0 && (
+          <div className="no-results-grid-item">
+            <p>{t('noPatentsFound', 'לא נמצאו פטנטים')}</p>
+          </div>
+        )}
+
         {!loading && !error && filteredAndSorted.map((patent) => (
           <button
             key={patent.id}
             className="research-card"
-            onClick={() => handlePatentClick(patent.id)}
+            onClick={() => handlePatentClick(patent)}
           >
             {shouldShowNewBadge(patent.isNew, patent.registrationDate) && (
               <span className="new-badge">{t('newBadge', 'חדש!')}</span>
             )}
             <h3 className="research-title">{patent.title}</h3>
             <p className="research-researcher">{patent.researcher}</p>
-            <button className={`status-button ${getStatusClass(patent.status)}`}>
-              {getStatusLabel(patent.status)}
+            <button className={`status-button ${getStatusClass(getDisplayStatus(patent))}`}>
+              {getStatusLabel(getDisplayStatus(patent))}
             </button>
           </button>
         ))}
       </div>
 
-      {!loading && !error && filteredAndSorted.length === 0 && (
-        <div className="no-results">
-          <p>{t('noPatentsFound', 'לא נמצאו פטנטים')}</p>
-        </div>
-      )}
-
-        {!isAdmin() && (
-          <DetailModal
-            isOpen={isModalOpen}
-            onClose={handleCloseModal}
-            itemId={selectedPatentId}
-            type="patent"
-          />
-        )}
       </div>
     </div>
   );

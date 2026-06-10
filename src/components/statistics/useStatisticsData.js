@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../../services/firebase';
+import { useLanguage } from '../../context/LanguageContext';
 import { toDateString } from './utils';
+import { isSubmitted } from '../../utils/submissionStatus';
 
 export const useStatisticsData = (userRole, userId) => {
+  const { t } = useLanguage();
   const [researchData, setResearchData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -12,7 +15,7 @@ export const useStatisticsData = (userRole, userId) => {
     const fetchResearch = async () => {
       if (!db) {
         console.error('Firestore database not initialized');
-        setError('מסד הנתונים לא מאותחל');
+        setError(t('dbNotInitialized', 'מסד הנתונים לא מאותחל'));
         setLoading(false);
         return;
       }
@@ -24,7 +27,6 @@ export const useStatisticsData = (userRole, userId) => {
         const researchRef = collection(db, 'researchProposals');
         let querySnapshot;
 
-        // Filter by researcher if not admin
         if (userRole === 'RESEARCHER' && userId) {
           try {
             const q = query(
@@ -49,13 +51,17 @@ export const useStatisticsData = (userRole, userId) => {
           }
         }
 
-        const researchList = querySnapshot.docs.map((doc) => {
+        const visibleDocs = userRole === 'ADMIN'
+          ? querySnapshot.docs.filter((docItem) => isSubmitted(docItem.data()))
+          : querySnapshot.docs;
+
+        const researchList = visibleDocs.map((doc) => {
           const data = doc.data();
           
           return {
             id: doc.id,
-            title: data.projectTitle || data.title || 'ללא כותרת',
-            researcherName: data.researcherName || data.researcher || 'חוקר',
+            title: data.projectTitle || data.title || t('noTitle', 'ללא כותרת'),
+            researcherName: data.researcherName || data.researcher || t('researcher', 'חוקר'),
             researcherId: data.researcherId,
             status: data.status || 'pending',
             hasPatent: data.hasPatent || false,
@@ -71,7 +77,7 @@ export const useStatisticsData = (userRole, userId) => {
         setResearchData(researchList);
       } catch (err) {
         console.error('Error fetching research:', err);
-        setError('שגיאה בטעינת נתונים');
+        setError(t('loadStatisticsError', 'שגיאה בטעינת נתונים'));
         setResearchData([]);
       } finally {
         setLoading(false);
@@ -81,7 +87,7 @@ export const useStatisticsData = (userRole, userId) => {
     if (userRole && userId) {
       fetchResearch();
     }
-  }, [userRole, userId]);
+  }, [userRole, userId, t]);
 
   return { researchData, loading, error };
 };

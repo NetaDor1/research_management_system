@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLanguage } from '../../context/LanguageContext';
 import TaskForm from './TaskForm';
 import TaskItem from './TaskItem';
 
@@ -11,6 +12,8 @@ const TasksSection = ({
   onSaveEditTask,
   uploading 
 }) => {
+  const { t, isRTL } = useLanguage();
+  const textAlign = isRTL ? 'right' : 'left';
   const [showAddTask, setShowAddTask] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
@@ -41,10 +44,13 @@ const TasksSection = ({
       background: '#f9f9f9', 
       padding: '30px', 
       borderRadius: '8px',
-      marginBottom: '20px'
+      marginBottom: '20px',
+      textAlign,
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2 style={{ margin: 0, color: '#667eea' }}>משימות והגשות</h2>
+        <h2 style={{ margin: 0, color: '#667eea' }}>
+          {t('tasksAndSubmissions', 'משימות והגשות')}
+        </h2>
         {isAdmin && (
           <button
             onClick={() => setShowAddTask(!showAddTask)}
@@ -58,12 +64,13 @@ const TasksSection = ({
               fontSize: '14px'
             }}
           >
-            {showAddTask ? '✖️ ביטול' : '➕ הוסף משימה'}
+            {showAddTask
+              ? `✖️ ${t('cancelAddTask', 'ביטול')}`
+              : `➕ ${t('addTaskButton', 'הוסף משימה')}`}
           </button>
         )}
       </div>
 
-      {/* Form to add new task (admin only) */}
       {isAdmin && showAddTask && (
         <TaskForm
           onSave={handleAddTask}
@@ -72,10 +79,11 @@ const TasksSection = ({
         />
       )}
 
-      {/* Tasks list */}
       {tasks.length === 0 ? (
         <p style={{ textAlign: 'center', color: '#666', padding: '20px' }}>
-          {isAdmin ? 'אין משימות. הוסף משימה חדשה.' : 'אין משימות להצגה.'}
+          {isAdmin
+            ? t('noTasksAdmin', 'אין משימות. הוסף משימה חדשה.')
+            : t('noTasksResearcher', 'אין משימות להצגה.')}
         </p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>

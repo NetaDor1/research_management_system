@@ -224,9 +224,9 @@ const Statistics = () => {
           {isAdmin() ? t('adminStatistics', 'סטטיסטיקות רשות המחקר') : t('myStatistics', 'הסטטיסטיקות שלי')}
         </h1>
         <p className="welcome-text">
-          {isAdmin() 
-            ? 'סקירה מפורטת של כל המחקרים במכללה עם חיתוכים שונים'
-            : 'סקירה של המחקרים שלך עם חיתוכים שונים'}
+          {isAdmin()
+            ? t('statsAdminSubtitle', 'סקירה מפורטת של כל המחקרים במכללה עם חיתוכים שונים')
+            : t('statsResearcherSubtitle', 'סקירה של המחקרים שלך עם חיתוכים שונים')}
         </p>
 
         {/* Researcher Statistics */}

@@ -2,7 +2,8 @@ import React from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 
 const ResearchDescriptionSection = ({ researchData }) => {
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
+  const textAlign = isRTL ? 'right' : 'left';
 
   if (!researchData) return null;
 
@@ -48,6 +49,7 @@ const ResearchDescriptionSection = ({ researchData }) => {
       padding: '30px',
       borderRadius: '8px',
       marginBottom: '20px',
+      textAlign,
     }}>
       <h2 style={{ marginBottom: '20px', color: '#667eea' }}>
         {t('researchDescriptionTitle', 'תיאור המחקר')}

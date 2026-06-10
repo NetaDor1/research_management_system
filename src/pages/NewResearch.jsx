@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { collection, addDoc, doc, getDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, getDocs, updateDoc, writeBatch, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -16,8 +16,10 @@ import DocumentsSection from '../components/research/form/DocumentsSection';
 import DigitalSignatureSection from '../components/research/form/DigitalSignatureSection';
 import AdditionalInfoSection from '../components/research/form/AdditionalInfoSection';
 import ResearchProposalReviewAssistant from '../components/research/ResearchProposalReviewAssistant';
+import FormEditToolbar from '../components/FormEditToolbar';
 import WorkPlanSection from '../components/research/WorkPlanSection';
 import { getHebrewAcademicYearFromDate, normalizeAcademicYear } from '../utils/academicYear';
+import { canDeleteResearch, getSubmissionStatus } from '../utils/submissionStatus';
 import { navigateBackOrFallback } from '../utils/navigation';
 import {
   exportPrintableHtmlToPdf,
@@ -183,6 +185,7 @@ const NewResearch = () => {
   const endDatePickerRef = useRef(null);
   const expectedDatePickerRef = useRef(null);
   const [loadingExisting, setLoadingExisting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Normalize work-plan tasks so edit mode can load both old/new schemas.
   const normalizeWorkPlanTasks = (tasks) => {
@@ -790,21 +793,34 @@ const NewResearch = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const validateDraftForm = () => {
+    if (!formData.projectTitle.trim()) {
+      setErrors({ projectTitle: t('draftTitleRequired', 'יש להזין לפחות כותרת לשמירת טיוטה') });
+      return false;
+    }
+    setErrors({});
+    return true;
+  };
 
+  const saveResearch = async (asDraft = false) => {
     if (loadingExisting) {
       alert('הנתונים הקיימים עדיין בטעינה. נסו שוב בעוד רגע.');
       return;
     }
-    
-    if (!validateForm()) {
+
+    if (asDraft) {
+      if (!validateDraftForm()) {
+        alert(t('draftTitleRequired', 'יש להזין לפחות כותרת לשמירת טיוטה'));
+        return;
+      }
+    } else if (!validateForm()) {
       alert('יש למלא את כל השדות החובה');
       return;
     }
 
     try {
       const isEdit = Boolean(editId);
+      const wasDraft = getSubmissionStatus(previousResearchRef.current) === 'draft';
       const researcherId = user?.id || 'temp-user-id';
       const researcherName = user?.name || 'חוקר';
 
@@ -835,6 +851,8 @@ const NewResearch = () => {
       const existingCreatedAt = previousResearchRef.current?.createdAt;
       const existingSubmissionDate = previousResearchRef.current?.submissionDate;
       const existingIsNew = previousResearchRef.current?.isNew;
+      const existingSubmittedAt = previousResearchRef.current?.submittedAt;
+      const existingSubmissionStatus = previousResearchRef.current?.submissionStatus;
       const existingApprovedBudget = previousResearchRef.current?.approvedBudget;
       const existingResearcherName = previousResearchRef.current?.researcherName || '';
       const finalResearcherId = isEdit && userRole === 'ADMIN' && existingResearcherId
@@ -927,6 +945,13 @@ const NewResearch = () => {
         
         // סטטוס
         status: isEdit ? (existingStatus || 'pending') : 'pending',
+        submissionStatus: userRole === 'ADMIN' && isEdit
+          ? (existingSubmissionStatus || 'submitted')
+          : (asDraft ? 'draft' : 'submitted'),
+        submittedAt: asDraft
+          ? (existingSubmittedAt || null)
+          : serverTimestamp(),
+        draftUpdatedAt: asDraft ? serverTimestamp() : (previousResearchRef.current?.draftUpdatedAt || null),
         hasPatent: isEdit ? Boolean(existingHasPatent) : false,
         approvedBudget: isEdit ? (existingApprovedBudget ?? null) : null,
         
@@ -936,7 +961,7 @@ const NewResearch = () => {
           : (researchStartDate || serverTimestamp()),
         createdAt: isEdit ? (existingCreatedAt || serverTimestamp()) : serverTimestamp(),
         updatedAt: serverTimestamp(),
-        isNew: isEdit ? Boolean(existingIsNew) : true
+        isNew: asDraft ? false : ((!isEdit || wasDraft) ? true : Boolean(existingIsNew))
       };
 
       console.log('Research data prepared:', researchData);
@@ -1019,20 +1044,21 @@ const NewResearch = () => {
         }
       }
 
-      // ── Notify admin when RESEARCHER creates or edits a proposal ────────────────
-      if (userRole === 'RESEARCHER') {
+      // ── Notify admin when RESEARCHER submits (not draft) ────────────────
+      if (userRole === 'RESEARCHER' && !asDraft) {
+        const notifyAsNew = !isEdit || wasDraft;
         await createNotification({
           userId: 'ADMIN',
           targetRole: 'ADMIN',
-          title: isEdit ? 'חוקר עדכן הצעת מחקר' : 'חוקר הגיש הצעת מחקר חדשה',
-          message: isEdit
-            ? `${user?.name || 'חוקר'} עדכן/ה את הצעת המחקר "${formData.projectTitle}".`
-            : `${user?.name || 'חוקר'} הגיש/ה הצעת מחקר חדשה: "${formData.projectTitle}".`,
-          type: isEdit ? 'researcher_edit_proposal' : 'researcher_new_proposal',
+          title: notifyAsNew ? 'חוקר הגיש הצעת מחקר חדשה' : 'חוקר עדכן הצעת מחקר',
+          message: notifyAsNew
+            ? `${user?.name || 'חוקר'} הגיש/ה הצעת מחקר חדשה: "${formData.projectTitle}".`
+            : `${user?.name || 'חוקר'} עדכן/ה את הצעת המחקר "${formData.projectTitle}".`,
+          type: notifyAsNew ? 'researcher_new_proposal' : 'researcher_edit_proposal',
           entityType: 'research',
           entityId: docId,
           link: `/research/${docId}`,
-          eventKey: `${isEdit ? 'researcher_edit_proposal' : 'researcher_new_proposal'}:${docId}:${Date.now()}`
+          eventKey: `${notifyAsNew ? 'researcher_new_proposal' : 'researcher_edit_proposal'}:${docId}:${Date.now()}`
         });
       }
 
@@ -1110,6 +1136,13 @@ const NewResearch = () => {
       }
 
       console.log('Research proposal saved successfully!');
+      if (asDraft) {
+        alert(t('draftSavedSuccess', 'הטיוטה נשמרה בהצלחה'));
+        if (!isEdit) {
+          navigate(`/research/new?edit=${docId}`, { replace: true });
+        }
+        return;
+      }
       alert('הצעת המחקר נשלחה בהצלחה!');
       navigate(userRole === 'RESEARCHER' ? '/' : '/research');
     } catch (error) {
@@ -1129,6 +1162,69 @@ const NewResearch = () => {
       
       alert(errorMessage);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await saveResearch(false);
+  };
+
+  const handleSaveDraft = async (e) => {
+    e.preventDefault();
+    await saveResearch(true);
+  };
+
+  const handleDeleteResearch = async () => {
+    if (!editId || !db || deleting) return;
+
+    const existing = previousResearchRef.current;
+    if (!canDeleteResearch(existing)) {
+      alert(t('deleteResearchNotAllowed', 'ניתן למחוק רק הצעה בטיוטה או בסטטוס המתנה'));
+      return;
+    }
+
+    if (userRole === 'RESEARCHER' && existing?.researcherId !== user?.id) {
+      alert(t('noPermissionAction', 'אין הרשאה לבצע פעולה זו'));
+      return;
+    }
+
+    if (!window.confirm(t('confirmDeleteResearch', 'האם את/ה בטוח/ה שברצונך למחוק את הצעת המחקר? פעולה זו אינה ניתנת לביטול.'))) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const tasksSnap = await getDocs(collection(db, 'researchProposals', editId, 'tasks'));
+      const batch = writeBatch(db);
+      tasksSnap.docs.forEach((taskDoc) => batch.delete(taskDoc.ref));
+      batch.delete(doc(db, 'researchProposals', editId));
+      await batch.commit();
+
+      alert(t('deleteResearchSuccess', 'הצעת המחקר נמחקה בהצלחה'));
+      navigate(userRole === 'RESEARCHER' ? '/' : '/research');
+    } catch (error) {
+      console.error('Error deleting research proposal:', error);
+      alert(t('deleteResearchError', 'שגיאה במחיקת הצעת המחקר'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const isCurrentDraft = !editId || getSubmissionStatus(previousResearchRef.current) === 'draft';
+  const showDraftButton = userRole === 'RESEARCHER' && isCurrentDraft;
+  const showDeleteButton =
+    Boolean(editId) &&
+    canDeleteResearch(previousResearchRef.current) &&
+    (userRole === 'ADMIN' || previousResearchRef.current?.researcherId === user?.id);
+
+  const getCancelTarget = () =>
+    editId ? `/research/${editId}` : (userRole === 'RESEARCHER' ? '/' : '/research');
+
+  const handleCancel = () => {
+    if (editId && !window.confirm(t('confirmCancelEdit', 'השינויים שביצעת לא יישמרו. האם לבטל את העריכה?'))) {
+      return;
+    }
+    navigateBackOrFallback(navigate, getCancelTarget());
   };
 
   const handleExportPDF = () => {
@@ -1319,7 +1415,18 @@ const NewResearch = () => {
   return (
     <div className="page-container">
       <div className="page-content">
-        <h1>{t('submitResearchTitle', 'הגשה לקרנות מחקר')}</h1>
+        <div className="form-page-header">
+          <h1>{t('submitResearchTitle', 'הגשה לקרנות מחקר')}</h1>
+          <FormEditToolbar
+            visible={Boolean(editId)}
+            onCancelEdit={handleCancel}
+            onDelete={handleDeleteResearch}
+            showDelete={showDeleteButton}
+            deleting={deleting}
+            deleteLabel={t('deleteResearch', 'מחק הצעה')}
+            t={t}
+          />
+        </div>
         <p className="welcome-text">
           {t('submitResearchSubtitle', 'מלאו את הפרטים הבאים כדי להגיש הצעת מחקר חדשה')}
         </p>
@@ -1418,22 +1525,41 @@ const NewResearch = () => {
 
           {/* Form Actions */}
           <div className="form-actions">
-            <button
-              type="button"
-              className="cancel-btn"
-              onClick={() => {
-                const targetPath = editId ? `/research/${editId}` : (userRole === 'RESEARCHER' ? '/' : '/research');
-                navigateBackOrFallback(navigate, targetPath);
-              }}
-            >
-              {t('cancel', 'ביטול')}
-            </button>
-            <button type="button" className="btn-export-pdf" onClick={handleExportPDF}>
-              {t('exportPdfShort', 'ייצוא PDF')}
-            </button>
-            <button type="submit" className="btn-submit">
-              {t('submitProposal', 'הגשת הצעה')}
-            </button>
+            <div className="form-actions-start">
+              <button
+                type="button"
+                className="cancel-btn"
+                onClick={handleCancel}
+                disabled={deleting}
+              >
+                {t('cancel', 'ביטול')}
+              </button>
+              {showDeleteButton && (
+                <button
+                  type="button"
+                  className="btn-delete"
+                  onClick={handleDeleteResearch}
+                  disabled={deleting}
+                >
+                  {deleting ? t('deleting', 'מוחק...') : t('deleteResearch', 'מחק הצעה')}
+                </button>
+              )}
+              {showDraftButton && (
+                <button type="button" className="btn-draft" onClick={handleSaveDraft} disabled={deleting}>
+                  {t('saveDraft', 'שמור כטיוטה')}
+                </button>
+              )}
+            </div>
+            <div className="form-actions-end">
+              <button type="button" className="btn-export-pdf" onClick={handleExportPDF} disabled={deleting}>
+                {t('exportPdfShort', 'ייצוא PDF')}
+              </button>
+              <button type="submit" className="btn-submit" disabled={deleting}>
+                {userRole === 'RESEARCHER'
+                  ? t('submitToAuthority', 'הגש לרשות המחקר')
+                  : t('submitProposal', 'הגשת הצעה')}
+              </button>
+            </div>
           </div>
         </form>
 

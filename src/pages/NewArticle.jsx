@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { collection, addDoc, serverTimestamp, Timestamp, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, Timestamp, query, where, getDocs, doc, getDoc, updateDoc, writeBatch, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
 import { createNotification } from '../services/notifications';
 import { navigateBackOrFallback } from '../utils/navigation';
+import { canDeleteArticle, getSubmissionStatus } from '../utils/submissionStatus';
+import FormEditToolbar from '../components/FormEditToolbar';
 import './Page.css';
 import './Research.css';
 
@@ -35,11 +37,13 @@ const NewArticle = () => {
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [researchOptions, setResearchOptions] = useState([]);
   const [researchLoading, setResearchLoading] = useState(true);
   const [researchLoadError, setResearchLoadError] = useState('');
   const backPath = userRole === 'RESEARCHER' ? '/' : '/articles';
   const [existingResearcherId, setExistingResearcherId] = useState('');
+  const previousArticleRef = useRef(null);
 
   useEffect(() => {
     const fetchResearchOptions = async () => {
@@ -102,6 +106,7 @@ const NewArticle = () => {
         }
 
         const data = snap.data();
+        previousArticleRef.current = data;
         setExistingResearcherId(data.researcherId || '');
 
         setFormData(prev => ({
@@ -163,10 +168,22 @@ const NewArticle = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
+  const validateDraftForm = () => {
+    if (!formData.title.trim()) {
+      setErrors({ title: t('draftTitleRequired', 'יש להזין לפחות כותרת לשמירת טיוטה') });
+      return false;
+    }
+    setErrors({});
+    return true;
+  };
+
+  const saveArticle = async (asDraft = false) => {
+    if (asDraft) {
+      if (!validateDraftForm()) {
+        alert(t('draftTitleRequired', 'יש להזין לפחות כותרת לשמירת טיוטה'));
+        return;
+      }
+    } else if (!validateForm()) {
       alert(t('fillRequiredFields', 'יש למלא את כל השדות החובה'));
       return;
     }
@@ -174,6 +191,7 @@ const NewArticle = () => {
     setIsSubmitting(true);
 
     try {
+      const wasDraft = getSubmissionStatus(previousArticleRef.current) === 'draft';
       const researcherId = user?.id || 'temp-user-id';
       const researcherName = user?.name || 'חוקר';
 
@@ -208,9 +226,16 @@ const NewArticle = () => {
         publicationDate: publicationDate,
         
         // תאריכים מערכתיים
-        createdAt: serverTimestamp(),
+        submissionStatus: userRole === 'ADMIN' && editId
+          ? (previousArticleRef.current?.submissionStatus || 'submitted')
+          : (asDraft ? 'draft' : 'submitted'),
+        submittedAt: asDraft
+          ? (previousArticleRef.current?.submittedAt || null)
+          : serverTimestamp(),
+        draftUpdatedAt: asDraft ? serverTimestamp() : (previousArticleRef.current?.draftUpdatedAt || null),
+        createdAt: editId ? (previousArticleRef.current?.createdAt || serverTimestamp()) : serverTimestamp(),
         updatedAt: serverTimestamp(),
-        isNew: true
+        isNew: asDraft ? false : ((!editId || wasDraft) ? true : Boolean(previousArticleRef.current?.isNew))
       };
 
       console.log('Article data prepared:', articleData);
@@ -225,7 +250,7 @@ const NewArticle = () => {
         console.log('Document created with ID:', docId);
       }
 
-      if (docId && formData.researchProposalId) {
+      if (!asDraft && docId && formData.researchProposalId) {
         try {
           await updateDoc(doc(db, 'researchProposals', formData.researchProposalId), {
             hasArticle: true,
@@ -237,20 +262,21 @@ const NewArticle = () => {
         }
       }
 
-      // ── Notify admin when RESEARCHER creates/edits article ──────────────────────
-      if (userRole === 'RESEARCHER') {
+      // ── Notify admin when RESEARCHER submits article (not draft) ──────────────────────
+      if (userRole === 'RESEARCHER' && !asDraft) {
+        const notifyAsNew = !editId || wasDraft;
         await createNotification({
           userId: 'ADMIN',
           targetRole: 'ADMIN',
-          title: editId ? 'חוקר עדכן מאמר' : 'חוקר הוסיף מאמר חדש',
-          message: editId
-            ? `${user?.name || 'חוקר'} עדכן/ה את המאמר "${formData.title}".`
-            : `${user?.name || 'חוקר'} הוסיף/ה מאמר חדש: "${formData.title}".`,
-          type: editId ? 'researcher_edit_article' : 'researcher_new_article',
+          title: notifyAsNew ? 'חוקר הוסיף מאמר חדש' : 'חוקר עדכן מאמר',
+          message: notifyAsNew
+            ? `${user?.name || 'חוקר'} הוסיף/ה מאמר חדש: "${formData.title}".`
+            : `${user?.name || 'חוקר'} עדכן/ה את המאמר "${formData.title}".`,
+          type: notifyAsNew ? 'researcher_new_article' : 'researcher_edit_article',
           entityType: 'article',
           entityId: docId,
           link: `/articles/${docId}`,
-          eventKey: `${editId ? 'researcher_edit_article' : 'researcher_new_article'}:${docId}:${Date.now()}`
+          eventKey: `${notifyAsNew ? 'researcher_new_article' : 'researcher_edit_article'}:${docId}:${Date.now()}`
         });
       }
 
@@ -278,6 +304,13 @@ const NewArticle = () => {
       }
 
       console.log('Article saved successfully!');
+      if (asDraft) {
+        alert(t('draftSavedSuccess', 'הטיוטה נשמרה בהצלחה'));
+        if (!editId) {
+          navigate(`/articles/new?edit=${docId}`, { replace: true });
+        }
+        return;
+      }
       alert(t('saveArticleSuccess', 'המאמר נשמר בהצלחה!'));
       navigate(backPath);
     } catch (error) {
@@ -301,10 +334,97 @@ const NewArticle = () => {
     }
   };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await saveArticle(false);
+  };
+
+  const handleSaveDraft = async (e) => {
+    e.preventDefault();
+    await saveArticle(true);
+  };
+
+  const handleDeleteArticle = async () => {
+    if (!editId || !db || deleting) return;
+
+    const existing = previousArticleRef.current;
+    if (!canDeleteArticle(existing)) {
+      alert(t('deleteArticleNotAllowed', 'ניתן למחוק רק מאמר בטיוטה או בסטטוס בביקורת'));
+      return;
+    }
+
+    if (userRole === 'RESEARCHER' && existing?.researcherId !== user?.id) {
+      alert(t('noPermissionAction', 'אין הרשאה לבצע פעולה זו'));
+      return;
+    }
+
+    if (!window.confirm(t('confirmDeleteArticle', 'האם את/ה בטוח/ה שברצונך למחוק את המאמר? פעולה זו אינה ניתנת לביטול.'))) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const researchProposalId = existing?.researchProposalId;
+      if (researchProposalId) {
+        const researchRef = doc(db, 'researchProposals', researchProposalId);
+        const researchSnap = await getDoc(researchRef);
+        if (researchSnap.exists()) {
+          const linkedIds = (researchSnap.data().linkedArticleIds || []).filter((id) => id !== editId);
+          await updateDoc(researchRef, {
+            linkedArticleIds: arrayRemove(editId),
+            hasArticle: linkedIds.length > 0,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'articles', editId));
+      await batch.commit();
+
+      alert(t('deleteArticleSuccess', 'המאמר נמחק בהצלחה'));
+      navigate(backPath);
+    } catch (error) {
+      console.error('Error deleting article:', error);
+      alert(t('deleteArticleError', 'שגיאה במחיקת המאמר'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const isCurrentDraft = !editId || getSubmissionStatus(previousArticleRef.current) === 'draft';
+  const showDraftButton = userRole === 'RESEARCHER' && isCurrentDraft;
+  const showDeleteButton =
+    Boolean(editId) &&
+    canDeleteArticle(previousArticleRef.current) &&
+    (userRole === 'ADMIN' || previousArticleRef.current?.researcherId === user?.id);
+
+  const getCancelTarget = () => (editId ? `/articles/${editId}` : backPath);
+
+  const handleCancel = () => {
+    if (editId && !window.confirm(t('confirmCancelEdit', 'השינויים שביצעת לא יישמרו. האם לבטל את העריכה?'))) {
+      return;
+    }
+    navigateBackOrFallback(navigate, getCancelTarget());
+  };
+
+  const isBusy = isSubmitting || deleting;
+
   return (
     <div className="page-container">
       <div className="page-content" style={{ maxWidth: '800px' }}>
-        <h1>{t('newArticleTitle', 'הוספת מאמר חדש')}</h1>
+        <div className="form-page-header">
+          <h1>{t('newArticleTitle', 'הוספת מאמר חדש')}</h1>
+          <FormEditToolbar
+            visible={Boolean(editId)}
+            onCancelEdit={handleCancel}
+            onDelete={handleDeleteArticle}
+            showDelete={showDeleteButton}
+            deleting={deleting}
+            deleteLabel={t('deleteArticle', 'מחק מאמר')}
+            t={t}
+          />
+        </div>
         <p className="form-subtitle">{t('newArticleSubtitle', 'מלא/י את הפרטים הבאים להוספת מאמר')}</p>
 
         <form onSubmit={handleSubmit} className="research-form">
@@ -417,12 +537,28 @@ const NewArticle = () => {
 
           {/* כפתורי שליחה */}
           <div className="form-actions">
-            <button type="button" onClick={() => navigateBackOrFallback(navigate, backPath)} className="cancel-btn">
-              {t('cancel', 'ביטול')}
-            </button>
-            <button type="submit" className="submit-btn" disabled={isSubmitting}>
-              {isSubmitting ? t('saving', 'שומר...') : t('saveArticle', 'שמור מאמר')}
-            </button>
+            <div className="form-actions-start">
+              <button type="button" onClick={handleCancel} className="cancel-btn" disabled={isBusy}>
+                {t('cancel', 'ביטול')}
+              </button>
+              {showDeleteButton && (
+                <button type="button" className="btn-delete" onClick={handleDeleteArticle} disabled={isBusy}>
+                  {deleting ? t('deleting', 'מוחק...') : t('deleteArticle', 'מחק מאמר')}
+                </button>
+              )}
+              {showDraftButton && (
+                <button type="button" className="btn-draft" onClick={handleSaveDraft} disabled={isBusy}>
+                  {t('saveDraft', 'שמור כטיוטה')}
+                </button>
+              )}
+            </div>
+            <div className="form-actions-end">
+              <button type="submit" className="submit-btn" disabled={isBusy}>
+                {isSubmitting
+                  ? t('saving', 'שומר...')
+                  : (userRole === 'RESEARCHER' ? t('submitArticle', 'הגש מאמר') : t('saveArticle', 'שמור מאמר'))}
+              </button>
+            </div>
           </div>
         </form>
       </div>

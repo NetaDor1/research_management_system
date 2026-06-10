@@ -1,4 +1,6 @@
-import React, { useRef } from 'react';
+import React from 'react';
+import { useLanguage } from '../../context/LanguageContext';
+import FileDropZone from '../FileDropZone';
 
 const TaskForm = ({ 
   task, 
@@ -6,6 +8,8 @@ const TaskForm = ({
   onCancel, 
   loading 
 }) => {
+  const { t, isRTL } = useLanguage();
+  const textAlign = isRTL ? 'right' : 'left';
   const [formData, setFormData] = React.useState({
     title: task?.title || '',
     description: task?.description || '',
@@ -13,8 +17,6 @@ const TaskForm = ({
     files: [],
     existingAttachments: task?.attachments || []
   });
-
-  const fileInputRef = useRef(null);
 
   React.useEffect(() => {
     if (task) {
@@ -31,16 +33,14 @@ const TaskForm = ({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.title.trim()) {
-      alert('אנא הזן כותרת למשימה');
+      alert(t('enterTaskTitleAlert', 'אנא הזן כותרת למשימה'));
       return;
     }
     onSave(formData);
   };
 
-  const handleFilesChange = (e) => {
-    const selected = Array.from(e.target.files);
+  const handleFilesSelected = (selected) => {
     setFormData(prev => ({ ...prev, files: [...prev.files, ...selected] }));
-    e.target.value = '';
   };
 
   const removeFile = (index) => {
@@ -53,41 +53,44 @@ const TaskForm = ({
       padding: '20px',
       borderRadius: '8px',
       marginBottom: '20px',
-      border: '2px solid #667eea'
+      border: '2px solid #667eea',
+      textAlign,
     }}>
       <h3 style={{ marginBottom: '15px' }}>
-        {task ? 'עריכת משימה' : 'הוספת משימה חדשה'}
+        {task
+          ? t('editTaskTitle', 'עריכת משימה')
+          : t('addNewTaskTitle', 'הוספת משימה חדשה')}
       </h3>
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: '15px' }}>
           <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-            כותרת המשימה: *
+            {t('taskTitleRequired', 'כותרת המשימה')}: *
           </label>
           <input
             type="text"
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '16px' }}
-            placeholder="הזן כותרת למשימה"
+            placeholder={t('enterTaskTitle', 'הזן כותרת למשימה')}
             required
           />
         </div>
 
         <div style={{ marginBottom: '15px' }}>
           <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-            תיאור:
+            {t('description', 'תיאור')}:
           </label>
           <textarea
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '16px', minHeight: '100px', resize: 'vertical' }}
-            placeholder="הזן תיאור למשימה"
+            placeholder={t('enterTaskDescription', 'הזן תיאור למשימה')}
           />
         </div>
 
         <div style={{ marginBottom: '15px' }}>
           <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-            תאריך יעד:
+            {t('dueDate', 'תאריך יעד')}:
           </label>
           <input
             type="date"
@@ -99,10 +102,9 @@ const TaskForm = ({
 
         <div style={{ marginBottom: '15px' }}>
           <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
-            קבצים מצורפים:
+            {t('attachedFiles', 'קבצים מצורפים')}:
           </label>
 
-          {/* Existing attachments */}
           {formData.existingAttachments.length > 0 && (
             <div style={{ marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {formData.existingAttachments.map((file, idx) => (
@@ -115,28 +117,19 @@ const TaskForm = ({
                     onClick={() => setFormData(prev => ({ ...prev, existingAttachments: prev.existingAttachments.filter((_, i) => i !== idx) }))}
                     style={{ border: '1px solid #cbd5e1', background: 'white', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer', fontSize: '12px' }}
                   >
-                    הסר
+                    {t('remove', 'הסר')}
                   </button>
                 </div>
               ))}
             </div>
           )}
 
-          {/* New files */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            style={{ display: 'none' }}
-            onChange={handleFilesChange}
+          <FileDropZone
+            variant="compact"
+            disabled={loading}
+            label={t('addFiles', 'הוסף קבצים')}
+            onFiles={handleFilesSelected}
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            style={{ background: '#f0f0f0', color: '#333', border: '1px solid #ccc', padding: '7px 14px', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}
-          >
-            📎 הוסף קבצים
-          </button>
 
           {formData.files.length > 0 && (
             <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -148,7 +141,7 @@ const TaskForm = ({
                     onClick={() => removeFile(idx)}
                     style={{ border: '1px solid #cbd5e1', background: 'white', borderRadius: '4px', padding: '2px 8px', cursor: 'pointer', fontSize: '12px' }}
                   >
-                    הסר
+                    {t('remove', 'הסר')}
                   </button>
                 </div>
               ))}
@@ -171,7 +164,9 @@ const TaskForm = ({
               fontWeight: 'bold'
             }}
           >
-            {loading ? 'שומר...' : (task ? 'שמור שינויים' : 'שמור משימה')}
+            {loading
+              ? t('saving', 'שומר...')
+              : (task ? t('saveChanges', 'שמור שינויים') : t('saveTask', 'שמור משימה'))}
           </button>
           {onCancel && (
             <button
@@ -189,7 +184,7 @@ const TaskForm = ({
                 fontWeight: 'bold'
               }}
             >
-              ביטול
+              {t('cancel', 'ביטול')}
             </button>
           )}
         </div>

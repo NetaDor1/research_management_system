@@ -110,7 +110,7 @@
   transition: all 0.3s ease;
   position: relative;
   border: 2px solid transparent;
-  text-align: right;
+  text-align: start;
   display: flex;
   flex-direction: column;
   min-height: 180px;
@@ -155,7 +155,7 @@
 .new-badge {
   position: absolute;
   top: 15px;
-  left: 15px;
+  inset-inline-end: 15px;
   background: #667eea;
   color: white;
   padding: 4px 10px;
@@ -200,6 +200,11 @@
   color: #212529;
 }
 
+.status-draft {
+  background: #94a3b8;
+  color: #fff;
+}
+
 .status-rejected {
   background: #dc3545;
   color: white;
@@ -211,6 +216,28 @@
   background: white;
   border-radius: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.research-grid .no-results-grid-item {
+  text-align: center;
+  padding: 25px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+}
+
+.research-grid .no-results-grid-item p {
+  color: #6c757d;
+  font-size: 18px;
+  margin: 0;
+}
+
+.research-grid:not(:has(.add-research-card)) .no-results-grid-item {
+  grid-column: 1 / -1;
 }
 
 .no-results p {
