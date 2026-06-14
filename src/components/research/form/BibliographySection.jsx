@@ -46,7 +46,6 @@ const BibliographySection = ({
             fields={polishFields}
             fieldLabels={fieldLabels}
             onApply={onPolish}
-            lang={lang}
           />
         )}
       </div>

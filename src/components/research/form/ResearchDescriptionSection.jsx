@@ -43,7 +43,6 @@ const ResearchDescriptionSection = ({ formData, handleChange, onPolish }) => {
             fields={polishFields}
             fieldLabels={fieldLabels}
             onApply={onPolish}
-            lang={lang}
           />
         )}
       </div>

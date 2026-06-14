@@ -420,7 +420,7 @@ ${proposalBlock || '(No draft text in the form yet — use the user message as t
 });
 
 const MAX_POLISH_FIELD = 4000;
-const VALID_POLISH_ACTIONS = new Set(['improve', 'translate']);
+const VALID_POLISH_ACTIONS = new Set(['improve', 'translate', 'fix']);
 
 app.post('/api/polish-text', async (req, res, next) => {
   try {
@@ -451,13 +451,43 @@ app.post('/api/polish-text', async (req, res, next) => {
     }
 
     const actionInstructions = {
-      improve: 'Improve the academic phrasing, clarity, and flow AND fix all spelling, grammar, and punctuation errors. Use precise, professional academic language. Keep the same language as the input. Do not change meaning or add new information.',
-      translate: 'Translate every field to professional academic English. Use formal, precise academic tone suitable for grant submissions. Do not change meaning or add new information.',
+      improve: `Improve phrasing, clarity, and flow for professional academic writing.
+Also fix ALL errors: spelling, grammar, punctuation, AND wrong words in context (valid dictionary words used incorrectly, e.g. Hebrew לטהר→לתאר when describing a problem, עט→את).
+CRITICAL: Do NOT translate. Each output value MUST stay in the SAME language as its input value.
+If a field is in Hebrew, the output for that field MUST be in Hebrew.
+If a field is in English, the output for that field MUST be in English.
+Do not change meaning or add new information.`,
+      fix: `Proofread for ALL errors that make the text wrong or nonsensical in context — not only obvious misspellings.
+
+Fix these error types:
+1. Spelling typos and missing/extra letters.
+2. Grammar and punctuation (including wrong particles: את/עט/עם, agreement, word order).
+3. WRONG-WORD errors: a token may be a valid dictionary word but still be incorrect in context (homophones, one-letter typos, keyboard mistakes). Replace with the word the author almost certainly meant.
+   Hebrew examples (apply the same logic in English):
+   - "לטהר את הבעיה" → "לתאר את הבעיה" (describe, not purify)
+   - "עט הבעיה" → "את הבעיה" (direct object marker)
+   - "מנגנ" → "מנגנון" (truncated word)
+   - "יעו" at end of sentence about goals → likely "יעילות" or complete the intended word from context
+
+For each field: read the full paragraph/list and ask "Does every word make sense in a research proposal?" If not, fix the minimum word(s) needed.
+
+Make the MINIMUM changes needed. Do NOT rephrase for style.
+If a field is already correct, return it unchanged.
+CRITICAL: Do NOT translate. Each output value MUST stay in the SAME language as its input value.
+Do not change meaning or add new information beyond fixing errors.`,
+      translate: `Translate every field to professional academic English.
+Use formal, precise academic tone suitable for grant submissions.
+Do not change meaning or add new information.`,
     };
 
-    const prompt = `You are an expert academic editor and translator.
+    const prompt = `You are an expert academic editor and proofreader, fluent in Hebrew and English research writing.
 
 Task: ${actionInstructions[action]}
+
+Process:
+1. Read each field in full context (research proposal / grant application).
+2. Detect errors including words that are spelled correctly but wrong in meaning (wrong-word / contextual typos).
+3. Apply only the corrections required by the task above.
 
 Return ONLY a valid JSON object with exactly the same keys as the input, and the processed text as values.
 Do NOT add markdown, code fences, explanation, or extra keys.
@@ -466,10 +496,11 @@ Input fields:
 ${JSON.stringify(cleanFields, null, 2)}`;
 
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const temperature = action === 'fix' ? 0.1 : 0.25;
     const model = genAI.getGenerativeModel(
       {
         model: GEMINI_MODEL,
-        generationConfig: { temperature: 0.25, responseMimeType: 'application/json', ...THINKING_OFF },
+        generationConfig: { temperature, responseMimeType: 'application/json', ...THINKING_OFF },
       },
       GEMINI_REQUEST_OPTIONS
     );

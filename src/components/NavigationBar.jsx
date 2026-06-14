@@ -11,7 +11,7 @@ const NavigationBar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { isAdmin, user, userRole } = useAuth();
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
 
@@ -41,7 +41,6 @@ const NavigationBar = () => {
     { path: '/articles', label: t('articles', 'מאמרים') },
     { path: '/statistics', label: t('statistics', 'סטטיסטיקות') },
     { path: '/report-format', label: t('reportsFormat', 'פורמט דו"חות') },
-    { path: '/notifications', label: t('notifications', 'התראות') },
     { path: '/settings', label: t('settings', 'הגדרות') },
   ];
 
@@ -53,7 +52,6 @@ const NavigationBar = () => {
         item.path === '/dashboard' || 
         item.path === '/statistics' || 
         item.path === '/report-format' ||
-        item.path === '/notifications' ||
         item.path === '/settings'
       );
 
@@ -133,20 +131,23 @@ const NavigationBar = () => {
 
   const totalUnread = unreadCount + unreadMessages;
 
+  const bellButton = (extraClass = '') => (
+    <button
+      className={`bell-button ${extraClass}`.trim()}
+      onClick={handleNavigate('/notifications')}
+      aria-label={t('notifications', 'התראות')}
+      type="button"
+    >
+      <span className="bell-icon" aria-hidden="true">🔔</span>
+      {totalUnread > 0 && (
+        <span className="bell-badge">{totalUnread > 99 ? '99+' : totalUnread}</span>
+      )}
+    </button>
+  );
+
   return (
     <>
-      {/* Bell Button */}
-      <button
-        className="bell-button"
-        onClick={handleNavigate('/notifications')}
-        aria-label="התראות"
-        type="button"
-      >
-        <span style={{ fontSize: '22px', lineHeight: 1 }}>🔔</span>
-        {totalUnread > 0 && (
-          <span className="bell-badge">{totalUnread > 99 ? '99+' : totalUnread}</span>
-        )}
-      </button>
+      {!isOpen && bellButton('bell-button--fixed')}
 
       {/* Menu Button */}
       <button 
@@ -168,12 +169,18 @@ const NavigationBar = () => {
       )}
 
       {/* Navigation Sidebar */}
-      <nav className={`navigation-sidebar ${isOpen ? 'open' : ''}`}>
+      <nav
+        className={`navigation-sidebar ${isOpen ? 'open' : ''}`}
+        dir={isRTL ? 'rtl' : 'ltr'}
+      >
         <div className="nav-header">
           <h2>{t('navToolbar', 'סרגל כלים')}</h2>
-          <button className="close-button" onClick={closeNav} aria-label={t('close', 'סגור')} type="button">
-            ✕
-          </button>
+          <div className="nav-header-actions">
+            {isOpen && bellButton('bell-button--header')}
+            <button className="close-button" onClick={closeNav} aria-label={t('close', 'סגור')} type="button">
+              ✕
+            </button>
+          </div>
         </div>
         <div className="nav-user-info">
           <div className="user-role-badge">
