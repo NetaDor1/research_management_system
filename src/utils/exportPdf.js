@@ -8,8 +8,8 @@ export const escapeHtml = (value) => {
     .replace(/'/g, '&#039;');
 };
 
-/** Light blue label band — matches the reference Word template (fill B8CCE4). */
-export const FORM_LABEL_BG = '#B8CCE4';
+/** Light grey label band. */
+export const FORM_LABEL_BG = '#D9D9D9';
 
 const buildPrintStyles = () => `
   @page {
@@ -347,61 +347,42 @@ export const buildPrintableDocumentHtml = ({ title, htmlBody, dir = 'rtl', lang 
 };
 
 /**
- * Loads HTML in a hidden iframe and opens the browser print dialog immediately.
- * No extra tab — only the system print preview (Save as PDF) is shown.
+ * Sends the full HTML document to the Express server which renders it via
+ * Puppeteer (headless Chrome) — identical output to "Print → Save as PDF".
+ * The response is streamed back and saved directly to the user's Downloads.
  */
-const openHtmlForPrint = (fullHtml) => {
-  const iframe = document.createElement('iframe');
-  iframe.setAttribute('aria-hidden', 'true');
-  iframe.setAttribute('title', 'print');
-  iframe.style.cssText =
-    'position:fixed;width:0;height:0;border:0;opacity:0;visibility:hidden;pointer-events:none;left:-9999px;top:0';
+const downloadHtmlAsPdf = async (fullHtml, filename = 'document.pdf') => {
+  const response = await fetch('/api/generate-pdf', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ html: fullHtml, filename }),
+  });
 
-  let cleanedUp = false;
-  const cleanup = () => {
-    if (cleanedUp) return;
-    cleanedUp = true;
-    if (iframe.parentNode) {
-      iframe.parentNode.removeChild(iframe);
-    }
-  };
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || `PDF generation failed (${response.status})`);
+  }
 
-  iframe.onload = () => {
-    const printWindow = iframe.contentWindow;
-    if (!printWindow) {
-      cleanup();
-      return;
-    }
-
-    const onAfterPrint = () => {
-      printWindow.removeEventListener('afterprint', onAfterPrint);
-      cleanup();
-    };
-    printWindow.addEventListener('afterprint', onAfterPrint);
-
-    setTimeout(() => {
-      try {
-        printWindow.focus();
-        printWindow.print();
-      } catch {
-        cleanup();
-      }
-    }, 300);
-  };
-
-  document.body.appendChild(iframe);
-  iframe.srcdoc = fullHtml;
-
-  setTimeout(cleanup, 120_000);
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };
 
 export const exportPrintableHtmlToPdf = (options) => {
-  openHtmlForPrint(buildPrintableDocumentHtml(options));
+  const title = options.title || 'document';
+  const filename = `${title}.pdf`;
+  downloadHtmlAsPdf(buildPrintableDocumentHtml(options), filename);
 };
 
 /** For pages that build a complete HTML document string (e.g. NewResearch). */
-export const exportFullHtmlDocumentToPdf = (fullHtml) => {
-  openHtmlForPrint(fullHtml);
+export const exportFullHtmlDocumentToPdf = (fullHtml, filename = 'document.pdf') => {
+  downloadHtmlAsPdf(fullHtml, filename);
 };
 
 /** Shared print CSS for pages that embed styles inline (e.g. NewResearch). */

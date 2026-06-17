@@ -9,13 +9,17 @@ import { getYear, isIsraeliFund, isInternationalFund } from './utils';
 const AdminStatistics = ({ 
   adminStats, 
   uniqueResearchers, 
-  filteredResearch 
+  filteredResearch,
+  // Controlled from parent so PDF export can reflect current selection
+  selectedResearcherForStats,
+  onResearcherChange,
+  yearFilterType,
+  onYearFilterTypeChange,
+  researcherYearRange,
+  onYearRangeChange,
 }) => {
   const { t } = useLanguage();
-  const [selectedResearcherForStats, setSelectedResearcherForStats] = useState('all');
   const [researcherStatsSearchTerm, setResearcherStatsSearchTerm] = useState('');
-  const [yearFilterType, setYearFilterType] = useState('all');
-  const [researcherYearRange, setResearcherYearRange] = useState({ start: '', end: '' });
 
   const filteredResearchersForStats = useMemo(() => {
     return uniqueResearchers.filter(researcher =>
@@ -110,7 +114,7 @@ const AdminStatistics = ({
           selectedResearcher={selectedResearcherForStats}
           onSearchChange={setResearcherStatsSearchTerm}
           onSelectChange={(value) => {
-            setSelectedResearcherForStats(value);
+            onResearcherChange(value);
             if (value !== 'all') {
               setResearcherStatsSearchTerm(value);
             } else {
@@ -123,8 +127,8 @@ const AdminStatistics = ({
           <YearFilter
             yearFilterType={yearFilterType}
             yearRange={researcherYearRange}
-            onFilterTypeChange={setYearFilterType}
-            onYearRangeChange={setResearcherYearRange}
+            onFilterTypeChange={onYearFilterTypeChange}
+            onYearRangeChange={onYearRangeChange}
           />
         )}
         

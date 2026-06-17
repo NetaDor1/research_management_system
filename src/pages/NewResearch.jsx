@@ -1498,6 +1498,7 @@ const NewResearch = () => {
             formatDateForDisplay={formatDateForDisplay}
             convertDateToISO={convertDateToISO}
             expectedDatePickerRef={expectedDatePickerRef}
+            onPolish={(improved) => setFormData((prev) => ({ ...prev, ...improved }))}
           />
 
           {editId && loadingExisting ? (

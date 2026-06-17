@@ -1,5 +1,9 @@
 import React from 'react';
 import { useLanguage } from '../../../context/LanguageContext';
+import AIPolishButton from '../AIPolishButton';
+
+const NOTES_LABELS_HE = { notes: 'הערות' };
+const NOTES_LABELS_EN = { notes: 'Notes' };
 
 const AdditionalInfoSection = ({ 
   formData, 
@@ -7,12 +11,24 @@ const AdditionalInfoSection = ({
   handleDatePickerChange,
   formatDateForDisplay,
   convertDateToISO,
-  expectedDatePickerRef
+  expectedDatePickerRef,
+  onPolish,
 }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const lang = language === 'en' ? 'en' : 'he';
   return (
     <div className="form-section">
-      <h2>{t('additionalInfoTitle', 'מידע נוסף')}</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '12px', flexWrap: 'wrap' }}>
+        <h2 style={{ margin: 0 }}>{t('additionalInfoTitle', 'מידע נוסף')}</h2>
+        {onPolish && (
+          <AIPolishButton
+            fields={{ notes: formData.notes }}
+            fieldLabels={lang === 'en' ? NOTES_LABELS_EN : NOTES_LABELS_HE}
+            onApply={onPolish}
+            lang={lang}
+          />
+        )}
+      </div>
       
       <div className="form-group">
         <label htmlFor="expectedResponseDate">

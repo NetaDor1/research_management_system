@@ -530,6 +530,51 @@ app.get('/', (req, res) => {
   res.status(200).json({ ok: true, service: 'review-proposal-api' });
 });
 
+// ---------------------------------------------------------------------------
+// POST /api/generate-pdf  — render HTML to PDF via Puppeteer (headless Chrome)
+// ---------------------------------------------------------------------------
+app.post('/api/generate-pdf', async (req, res) => {
+  const { html, filename = 'document.pdf' } = req.body || {};
+  if (!html || typeof html !== 'string') {
+    return res.status(400).json({ error: 'Missing html field' });
+  }
+
+  let browser;
+  try {
+    const puppeteer = require('puppeteer');
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    });
+
+    const page = await browser.newPage();
+
+    // Load the full HTML document (including <style> tags) directly.
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '12mm', right: '14mm', bottom: '12mm', left: '14mm' },
+    });
+
+    await browser.close();
+    browser = null;
+
+    const safeFilename = encodeURIComponent(filename.replace(/[/\\]/g, '_'));
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename*=UTF-8''${safeFilename}`,
+      'Content-Length': pdfBuffer.length,
+    });
+    return res.end(pdfBuffer);
+  } catch (err) {
+    if (browser) await browser.close().catch(() => {});
+    console.error('[generate-pdf]', err);
+    return res.status(500).json({ error: 'PDF generation failed', details: err.message });
+  }
+});
+
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });

@@ -512,6 +512,22 @@ const ArticleDetail = () => {
                   </a>
                 </div>
               )}
+
+              {articleData.notes && (
+                <div style={{ marginTop: '20px' }}>
+                  <label style={{ 
+                    display: 'block', 
+                    fontWeight: 'bold', 
+                    marginBottom: '10px',
+                    color: '#666'
+                  }}>
+                    {t('notesFreeText', 'הערות')}:
+                  </label>
+                  <p style={{ fontSize: '16px', whiteSpace: 'pre-wrap', margin: 0 }}>
+                    {articleData.notes}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -10,12 +10,13 @@ import {
 import ResearcherStatistics from '../components/statistics/ResearcherStatistics';
 import AdminStatistics from '../components/statistics/AdminStatistics';
 import AdminCharts from '../components/statistics/AdminCharts';
+import { exportPrintableHtmlToPdf, escapeHtml } from '../utils/exportPdf';
 import './Page.css';
 import './Research.css';
 
 const Statistics = () => {
   const { isAdmin, user, userRole } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { researchData, loading, error } = useStatisticsData(userRole, user?.id);
   
   // Filters for admin view
@@ -28,6 +29,11 @@ const Statistics = () => {
   // Filter for researcher chart (separate from main filters)
   const [selectedResearcherForChart, setSelectedResearcherForChart] = useState('all');
   const [researcherSearchTerm, setResearcherSearchTerm] = useState('');
+
+  // Admin statistics detail filters — lifted so PDF can reflect current selection
+  const [statsResearcher, setStatsResearcher] = useState('all');
+  const [statsYearFilterType, setStatsYearFilterType] = useState('all');
+  const [statsYearRange, setStatsYearRange] = useState({ start: '', end: '' });
 
   // Filter data based on admin filters
   const filteredResearch = useMemo(() => {
@@ -197,6 +203,237 @@ const Statistics = () => {
     };
   }, [isAdmin, filteredResearch, uniqueResearchers, uniqueDepartments, uniqueFunds, uniqueYears]);
 
+  const buildTableHtml = (headers, rows) => `
+    <table>
+      <thead><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map(cells =>
+        `<tr>${cells.map(c => `<td>${escapeHtml(String(c ?? ''))}</td>`).join('')}</tr>`
+      ).join('')}</tbody>
+    </table>`;
+
+  const handleExportPDF = () => {
+    const dir = language === 'en' ? 'ltr' : 'rtl';
+    const lang = language === 'en' ? 'en' : 'he';
+    const generatedAt = language === 'en'
+      ? `Generated on ${new Date().toLocaleString('en-US')}`
+      : `נוצר ב-${new Date().toLocaleDateString('he-IL')} ${new Date().toLocaleTimeString('he-IL')}`;
+
+    let title, htmlBody;
+
+    if (isAdmin() && adminStats) {
+      title = t('adminStatistics', 'סטטיסטיקות רשות המחקר');
+
+      const hasResearcherFilter = statsResearcher !== 'all';
+      const hasYearFilter = statsYearFilterType === 'range' && statsYearRange.start && statsYearRange.end;
+
+      // ── Researcher-specific section (shown only when a researcher is selected) ──
+      // Mirrors the AdminStatsBoxes that appears in the UI for a selected researcher.
+      let researcherSection = '';
+      if (hasResearcherFilter) {
+        let rResearch = filteredResearch.filter(r => r.researcherName === statsResearcher);
+        if (hasYearFilter) {
+          const startY = parseInt(statsYearRange.start);
+          const endY = parseInt(statsYearRange.end);
+          rResearch = rResearch.filter(r => {
+            const y = getYear(r.submissionDate);
+            return y !== null && y >= startY && y <= endY;
+          });
+        }
+
+        const rTotal = rResearch.length;
+        const rAwards = rResearch.filter(r => r.status === 'awarded').length;
+        const rRej = rResearch.filter(r => r.status === 'rejected').length;
+
+        // Year breakdown for this researcher.
+        // When a year-range filter is active, seed only the years in that range.
+        // Otherwise seed all globally-known years so context is preserved.
+        const rYearMap = {};
+        if (hasYearFilter) {
+          const startY = parseInt(statsYearRange.start);
+          const endY = parseInt(statsYearRange.end);
+          for (let y = startY; y <= endY; y++) rYearMap[y] = [0, 0, 0];
+        } else {
+          adminStats.byYear.forEach(row => { rYearMap[row.year] = [0, 0, 0]; });
+        }
+        rResearch.forEach(r => {
+          const y = getYear(r.submissionDate);
+          if (y === null) return;
+          if (!rYearMap[y]) rYearMap[y] = [0, 0, 0];
+          rYearMap[y][0] += 1;
+          if (r.status === 'awarded') rYearMap[y][1] += 1;
+          if (r.status === 'rejected') rYearMap[y][2] += 1;
+        });
+        const rYearRows = Object.entries(rYearMap)
+          .sort((a, b) => Number(a[0]) - Number(b[0]))
+          .map(([y, [s, a, rej]]) => [y, s, a, rej]);
+
+        // Fund breakdown for this researcher
+        const rFundMap = {};
+        rResearch.forEach(r => {
+          const k = r.fundName || t('notSpecified', 'לא צוין');
+          if (!rFundMap[k]) rFundMap[k] = [0, 0, 0];
+          rFundMap[k][0] += 1;
+          if (r.status === 'awarded') rFundMap[k][1] += 1;
+          if (r.status === 'rejected') rFundMap[k][2] += 1;
+        });
+        const rFundRows = Object.entries(rFundMap)
+          .sort((a, b) => b[1][0] - a[1][0])
+          .map(([f, [s, a, rej]]) => [f, s, a, rej]);
+
+        const yearLabel = hasYearFilter ? ` (${statsYearRange.start}–${statsYearRange.end})` : '';
+        researcherSection = `
+          <div class="section">
+            <h2>${escapeHtml(t('statsDataFor', 'נתונים עבור'))}: ${escapeHtml(statsResearcher)}${escapeHtml(yearLabel)}</h2>
+            <div style="padding:8pt;background:#f0f0f0;border:1pt solid #ccc;margin-bottom:8pt;">
+              <p><strong>${escapeHtml(t('statsTotalSubmissions', 'סה"כ הגשות'))}:</strong> ${rTotal} &nbsp;&nbsp;
+                 <strong>${escapeHtml(t('statsTotalAwards', 'זכיות'))}:</strong> ${rAwards} &nbsp;&nbsp;
+                 <strong>${escapeHtml(t('statsTotalRejections', 'דחיות'))}:</strong> ${rRej}</p>
+            </div>
+            ${rYearRows.length > 0 ? buildTableHtml(
+              [t('statsYear','שנה'), t('statsTotalSubmissions','הגשות'), t('statsTotalAwards','זכיות'), t('statsTotalRejections','דחיות')],
+              rYearRows
+            ) : ''}
+            ${rFundRows.length > 0 ? `<div style="margin-top:8pt;">${buildTableHtml(
+              [t('statsFund','קרן'), t('statsTotalSubmissions','הגשות'), t('statsTotalAwards','זכיות'), t('statsTotalRejections','דחיות')],
+              rFundRows
+            )}</div>` : ''}
+          </div>`;
+      }
+
+      // ── Global tables — always taken directly from adminStats, identical to UI ──
+      const globalResearcherTable = adminStats.byResearcher.length > 0 ? buildTableHtml(
+        [t('researcher','חוקר'), t('statsTotalSubmissions','הגשות'), t('statsTotalAwards','זכיות'), t('statsIsraeliFunds','קרנות בארץ'), t('statsInternationalFunds','קרנות בחו"ל')],
+        adminStats.byResearcher.map(r => [r.researcherName, r.totalSubmissions, r.totalAwards, r.israeliFunds, r.internationalFunds])
+      ) : '';
+
+      const globalDeptTable = adminStats.byDepartment.length > 0 ? buildTableHtml(
+        [t('statsDepartment','מחלקה'), t('statsTotalSubmissions','הגשות'), t('statsTotalAwards','זכיות'), t('statsTotalRejections','דחיות')],
+        adminStats.byDepartment.map(r => [r.department, r.totalSubmissions, r.totalAwards, r.totalRejections])
+      ) : '';
+
+      const globalFundTable = adminStats.byFund.length > 0 ? buildTableHtml(
+        [t('statsFund','קרן'), t('statsTotalSubmissions','הגשות'), t('statsTotalAwards','זכיות'), t('statsTotalRejections','דחיות')],
+        adminStats.byFund.map(r => [r.fundName, r.totalSubmissions, r.totalAwards, r.totalRejections])
+      ) : '';
+
+      const globalYearTable = adminStats.byYear.length > 0 ? buildTableHtml(
+        [t('statsYear','שנה'), t('statsTotalSubmissions','הגשות'), t('statsTotalAwards','זכיות'), t('statsTotalRejections','דחיות')],
+        adminStats.byYear.map(r => [r.year, r.totalSubmissions, r.totalAwards, r.totalRejections])
+      ) : '';
+
+      const divider = `<hr style="border:none;border-top:2pt solid #555;margin:20pt 0 14pt;"/>`;
+
+      htmlBody = `
+        <div class="doc-header">
+          <p class="doc-title-he">${escapeHtml(title)}</p>
+        </div>
+
+        ${researcherSection ? `
+          ${researcherSection}
+          ${divider}
+          <h2 style="margin:0 0 10pt;font-size:13pt;">${escapeHtml(t('globalStats', 'סטטיסטיקות כלליות'))}</h2>
+        ` : ''}
+
+        ${globalResearcherTable ? `
+        <div class="section">
+          <h2>${escapeHtml(t('statsByResearcher', 'סטטיסטיקות לפי חוקר'))}</h2>
+          ${globalResearcherTable}
+        </div>` : ''}
+
+        ${globalDeptTable ? `
+        <div class="section">
+          <h2>${escapeHtml(t('statsByDepartment', 'סטטיסטיקות לפי מחלקה'))}</h2>
+          ${globalDeptTable}
+        </div>` : ''}
+
+        ${globalFundTable ? `
+        <div class="section">
+          <h2>${escapeHtml(t('statsByFund', 'סטטיסטיקות לפי קרן'))}</h2>
+          ${globalFundTable}
+        </div>` : ''}
+
+        ${globalYearTable ? `
+        <div class="section">
+          <h2>${escapeHtml(t('statsByYear', 'סה"כ הגשות/זכיות/דחיות בשנה'))}</h2>
+          ${globalYearTable}
+          <div style="margin-top:12pt;padding:10pt;background:#f0f0f0;border:1pt solid #ccc;">
+            <p><strong>${escapeHtml(t('statsNumberOfYears','מספר שנים'))}:</strong> ${adminStats.totalYears}</p>
+            <p><strong>${escapeHtml(t('statsAvgSubmissionsPerYear','ממוצע הגשות לשנה'))}:</strong> ${adminStats.avgSubmissionsPerYear}</p>
+            <p><strong>${escapeHtml(t('statsAvgAwardsPerYear','ממוצע זכיות לשנה'))}:</strong> ${adminStats.avgAwardsPerYear}</p>
+            <p><strong>${escapeHtml(t('statsAvgRejectionsPerYear','ממוצע דחיות לשנה'))}:</strong> ${adminStats.avgRejectionsPerYear}</p>
+          </div>
+        </div>` : ''}
+
+        <div class="muted">${escapeHtml(generatedAt)}</div>
+      `;
+    } else if (!isAdmin() && researcherStats) {
+      title = t('myStatistics', 'הסטטיסטיקות שלי');
+
+      const summaryTable = buildTableHtml(
+        [t('statistic', 'סטטיסטיקה'), t('value', 'ערך')],
+        [
+          [t('statsTotalSubmissions', 'סה"כ הגשות'), researcherStats.totalSubmissions],
+          [t('statsTotalAwards', 'סה"כ זכיות'), researcherStats.totalAwards],
+          [t('statsTotalRejections', 'סה"כ דחיות'), researcherStats.totalRejections],
+          [t('statsIsraeliFunds', 'קרנות בארץ'), researcherStats.israeliFunds],
+          [t('statsInternationalFunds', 'קרנות בחו"ל'), researcherStats.internationalFunds],
+          [t('statsYearsCount', 'מספר שנים'), researcherStats.allYears.length],
+          [t('statsAllYears', 'שנים פעילות'), researcherStats.allYears.join(', ')],
+        ]
+      );
+
+      // Submissions and awards by year (with rejections)
+      const yearTable = researcherStats.byYear.length > 0 ? buildTableHtml(
+        [t('statsYear', 'שנה'), t('statsTotalSubmissions', 'הגשות'), t('statsTotalAwards', 'זכיות'), t('statsTotalRejections', 'דחיות')],
+        researcherStats.byYear.map(r => [r.year, r.totalSubmissions, r.totalAwards, r.totalRejections])
+      ) : '';
+
+      // Fund breakdown — group filteredResearch by fundName
+      const fundMap = {};
+      filteredResearch.forEach(r => {
+        const fund = r.fundName || t('notSpecified', 'לא צוין');
+        if (!fundMap[fund]) fundMap[fund] = { submissions: 0, awards: 0, rejections: 0 };
+        fundMap[fund].submissions += 1;
+        if (r.status === 'awarded') fundMap[fund].awards += 1;
+        if (r.status === 'rejected') fundMap[fund].rejections += 1;
+      });
+      const fundRows = Object.entries(fundMap).sort((a, b) => b[1].submissions - a[1].submissions);
+      const fundTable = fundRows.length > 0 ? buildTableHtml(
+        [t('statsFund', 'קרן'), t('statsTotalSubmissions', 'הגשות'), t('statsTotalAwards', 'זכיות'), t('statsTotalRejections', 'דחיות')],
+        fundRows.map(([fund, s]) => [fund, s.submissions, s.awards, s.rejections])
+      ) : '';
+
+      htmlBody = `
+        <div class="doc-header">
+          <p class="doc-title-he">${escapeHtml(title)}</p>
+        </div>
+
+        <div class="section">
+          <h2>${escapeHtml(t('statsResearcherSection', 'סטטיסטיקות חוקר'))}</h2>
+          ${summaryTable}
+        </div>
+
+        ${yearTable ? `
+        <div class="section">
+          <h2>${escapeHtml(t('statsByYear', 'הגשות וזכיות לפי שנה'))}</h2>
+          ${yearTable}
+        </div>` : ''}
+
+        ${fundTable ? `
+        <div class="section">
+          <h2>${escapeHtml(t('statsByFund', 'חלוקה לפי קרנות'))}</h2>
+          ${fundTable}
+        </div>` : ''}
+
+        <div class="muted">${escapeHtml(generatedAt)}</div>
+      `;
+    } else {
+      return;
+    }
+
+    exportPrintableHtmlToPdf({ title, htmlBody, dir, lang });
+  };
+
   if (loading) {
     return (
       <div className="page-container">
@@ -220,9 +457,30 @@ const Statistics = () => {
   return (
     <div className="page-container">
       <div className="page-content">
-        <h1>
-          {isAdmin() ? t('adminStatistics', 'סטטיסטיקות רשות המחקר') : t('myStatistics', 'הסטטיסטיקות שלי')}
-        </h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+          <h1 style={{ margin: 0 }}>
+            {isAdmin() ? t('adminStatistics', 'סטטיסטיקות רשות המחקר') : t('myStatistics', 'הסטטיסטיקות שלי')}
+          </h1>
+          {(adminStats || researcherStats) && (
+            <button
+              type="button"
+              onClick={handleExportPDF}
+              style={{
+                padding: '10px 20px',
+                background: '#17a2b8',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '15px',
+                fontWeight: 'bold',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t('exportPdf', 'ייצוא ל-PDF')}
+            </button>
+          )}
+        </div>
         <p className="welcome-text">
           {isAdmin()
             ? t('statsAdminSubtitle', 'סקירה מפורטת של כל המחקרים במכללה עם חיתוכים שונים')
@@ -244,6 +502,12 @@ const Statistics = () => {
               adminStats={adminStats}
               uniqueResearchers={uniqueResearchers}
               filteredResearch={filteredResearch}
+              selectedResearcherForStats={statsResearcher}
+              onResearcherChange={setStatsResearcher}
+              yearFilterType={statsYearFilterType}
+              onYearFilterTypeChange={setStatsYearFilterType}
+              researcherYearRange={statsYearRange}
+              onYearRangeChange={setStatsYearRange}
             />
             <AdminCharts
               adminStats={adminStats}

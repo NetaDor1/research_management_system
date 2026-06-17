@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db, storage } from '../services/firebase';
 import { createNotification } from '../services/notifications';
+import AIPolishButton from '../components/research/AIPolishButton';
 import { navigateBackOrFallback } from '../utils/navigation';
 import DocumentChecklistCard from '../components/research/form/DocumentChecklistCard';
 import { canDeletePatent, getSubmissionStatus } from '../utils/submissionStatus';
@@ -18,7 +19,8 @@ const NewPatent = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, userRole } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const lang = language === 'en' ? 'en' : 'he';
   const editId = searchParams.get('edit');
 
   // Options for dropdowns
@@ -1311,15 +1313,23 @@ const NewPatent = () => {
 
           {/* הערות */}
           <div className="form-section">
-            <h2>הערות</h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '12px', flexWrap: 'wrap' }}>
+              <h2 style={{ margin: 0 }}>{lang === 'en' ? 'Notes' : 'הערות'}</h2>
+              <AIPolishButton
+                fields={{ notes: formData.notes }}
+                fieldLabels={{ notes: lang === 'en' ? 'Notes' : 'הערות' }}
+                onApply={(improved) => setFormData((prev) => ({ ...prev, ...improved }))}
+                lang={lang}
+              />
+            </div>
             <div className="form-group">
-              <label>הערות (כתיבה חופשית)</label>
+              <label>{lang === 'en' ? 'Notes (free text)' : 'הערות (כתיבה חופשית)'}</label>
               <textarea
                 name="notes"
                 value={formData.notes}
                 onChange={handleInputChange}
                 rows={5}
-                placeholder="הכנס הערות נוספות..."
+                placeholder={lang === 'en' ? 'Enter additional notes...' : 'הכנס הערות נוספות...'}
               />
             </div>
           </div>
