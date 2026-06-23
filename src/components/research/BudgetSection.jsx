@@ -11,7 +11,17 @@ const BudgetSection = ({ researchData }) => {
   const formatCurrency = (amount, currency = 'ILS') => {
     if (!amount && amount !== 0) return notSpecified;
     const currencySymbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '₪';
-    return `${currencySymbol} ${Number(amount).toLocaleString(locale)}`;
+    return `${currencySymbol} ${Number(amount).toLocaleString(locale, { style: 'decimal' })}`;
+  };
+
+  const currency = researchData?.currency || 'ILS';
+  const rateToILS = currency === 'USD' ? 3.5 : currency === 'EUR' ? 3.8 : 1;
+  const showILS = currency !== 'ILS';
+
+  const toILS = (amount) => {
+    if (!amount && amount !== 0) return null;
+    const converted = Number(amount) * rateToILS;
+    return `₪ ${converted.toLocaleString(locale, { style: 'decimal' })}`;
   };
 
   if (!researchData) return null;
@@ -83,11 +93,20 @@ const BudgetSection = ({ researchData }) => {
           }}>
             {t('approvedBudget', 'תקציב שאושר')}:
           </label>
-          <span style={{ fontSize: '16px' }}>
-            {researchData.approvedBudget !== undefined && researchData.approvedBudget !== null
-              ? formatCurrency(researchData.approvedBudget, 'ILS')
-              : notSpecified}
-          </span>
+          {researchData.approvedBudget !== undefined && researchData.approvedBudget !== null ? (
+            <>
+              <span style={{ fontSize: '16px' }}>
+                {formatCurrency(researchData.approvedBudget, 'ILS')}
+              </span>
+              {showILS && (
+                <span style={{ fontSize: '13px', color: '#2b6cb0', display: 'block', marginTop: '2px' }}>
+                  {`≈ ${formatCurrency(researchData.approvedBudget / rateToILS, currency)}`}
+                </span>
+              )}
+            </>
+          ) : (
+            <span style={{ fontSize: '16px' }}>{notSpecified}</span>
+          )}
         </div>
       </div>
 
@@ -106,27 +125,46 @@ const BudgetSection = ({ researchData }) => {
                   <th style={{ textAlign, padding: '10px', borderBottom: '1px solid #ddd' }}>
                     {t('requested', 'מבוקש')}
                   </th>
+                  {showILS && (
+                    <th style={{ textAlign, padding: '10px', borderBottom: '1px solid #ddd', color: '#2b6cb0', fontSize: '13px' }}>
+                      {t('convertedILS', 'המרה לשקלים')}
+                    </th>
+                  )}
                   <th style={{ textAlign, padding: '10px', borderBottom: '1px solid #ddd' }}>
                     {t('received', 'התקבל')}
                   </th>
+                  {showILS && (
+                    <th style={{ textAlign, padding: '10px', borderBottom: '1px solid #ddd', color: '#2b6cb0', fontSize: '13px' }}>
+                      {t('convertedILS', 'המרה לשקלים')}
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {Object.entries(researchData.budgetComponents).map(([key, value]) => {
                   const approvedValue = researchData.approvedBudgetComponents?.[key];
+                  const hasApproved = approvedValue !== undefined && approvedValue !== null;
                   return (
                     <tr key={key}>
                       <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9', fontWeight: 'bold', color: '#475569' }}>
                         {getBudgetComponentLabel(key, t)}
                       </td>
                       <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9' }}>
-                        {formatCurrency(value, researchData.currency)}
+                        {formatCurrency(value, currency)}
                       </td>
+                      {showILS && (
+                        <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9', color: '#2b6cb0', fontSize: '14px' }}>
+                          {value ? toILS(value) : '—'}
+                        </td>
+                      )}
                       <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9' }}>
-                        {approvedValue !== undefined && approvedValue !== null
-                          ? formatCurrency(approvedValue, researchData.currency)
-                          : notSpecified}
+                        {hasApproved ? formatCurrency(approvedValue, currency) : notSpecified}
                       </td>
+                      {showILS && (
+                        <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9', color: '#2b6cb0', fontSize: '14px' }}>
+                          {hasApproved ? toILS(approvedValue) : '—'}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

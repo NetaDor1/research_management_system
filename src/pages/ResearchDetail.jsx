@@ -57,6 +57,7 @@ const ResearchDetail = () => {
   const [approvedBudgetInput, setApprovedBudgetInput] = useState('');
   const [approvedBudgetComponentsInput, setApprovedBudgetComponentsInput] = useState({});
   const [savingProposalDecision, setSavingProposalDecision] = useState(false);
+  const [quickDecisionLoading, setQuickDecisionLoading] = useState(false);
 
   useEffect(() => {
     const fetchResearch = async () => {
@@ -240,6 +241,45 @@ const ResearchDetail = () => {
       link,
       eventKey
     });
+  };
+
+  const handleQuickDecision = async (newStatus) => {
+    if (!isAdmin() || !id || !db || !researchData) return;
+    const label = newStatus === 'awarded' ? 'לאשר' : 'לדחות';
+    if (!window.confirm(`האם אתה בטוח שברצונך ${label} את הצעת המחקר הזו?`)) return;
+
+    setQuickDecisionLoading(true);
+    try {
+      await updateDoc(doc(db, 'researchProposals', id), {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+      });
+
+      if (researchData.researcherId) {
+        const notifTitle = newStatus === 'awarded' ? 'הצעת המחקר אושרה' : 'הצעת המחקר נדחתה';
+        const notifMsg = newStatus === 'awarded'
+          ? `הצעת המחקר "${researchData.projectTitle || researchData.title || ''}" אושרה.`
+          : `הצעת המחקר "${researchData.projectTitle || researchData.title || ''}" נדחתה.`;
+        await createNotification({
+          userId: researchData.researcherId,
+          title: notifTitle,
+          message: notifMsg,
+          type: 'research_status',
+          entityType: 'research',
+          entityId: id,
+          link: `/research/${id}`,
+          eventKey: `research_status:${id}:${newStatus}:${Date.now()}`,
+        });
+      }
+
+      setResearchData((prev) => ({ ...prev, status: newStatus }));
+      setProposalStatus(newStatus);
+    } catch (err) {
+      console.error('Error updating research status:', err);
+      alert(`שגיאה בעדכון הסטטוס: ${err.message || 'שגיאה לא ידועה'}`);
+    } finally {
+      setQuickDecisionLoading(false);
+    }
   };
 
   const handleSaveProposalDecision = async () => {
@@ -879,8 +919,13 @@ const ResearchDetail = () => {
               );
             })()}
 
-            <ResearchInfoSection researchData={researchData} />
-            {isAdmin() && !isDraft(researchData) && (
+            <ResearchInfoSection
+              researchData={researchData}
+              onQuickApprove={isAdmin() ? () => handleQuickDecision('awarded') : undefined}
+              onQuickReject={isAdmin() ? () => handleQuickDecision('rejected') : undefined}
+              quickDecisionLoading={quickDecisionLoading}
+            />
+            {isAdmin() && (
               <div
                 style={{
                   background: '#f9f9f9',
@@ -893,17 +938,20 @@ const ResearchDetail = () => {
                 <h2 style={{ marginTop: 0, marginBottom: '16px', color: '#667eea' }}>
                   {t('proposalApprovalTitle', 'אישור הצעת מחקר ומימון')}
                 </h2>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                    gap: '16px',
-                    alignItems: 'end',
-                  }}
-                >
+                {(() => {
+                  const currency = researchData.currency || 'ILS';
+                  const currencySymbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '₪';
+                  const rateToILS = currency === 'USD' ? 3.5 : currency === 'EUR' ? 3.8 : 1;
+                  const approvedRaw = parseFloat(approvedBudgetInput) || 0;
+                  const approvedILS = approvedRaw * rateToILS;
+                  const showILS = currency !== 'ILS';
+                  const cols = showILS ? '1fr 1fr 1fr auto' : '1fr 1fr auto';
+                  return (
+                <>
+                <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '16px', alignItems: 'end' }}>
                   <div>
                     <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '6px', color: '#666' }}>
-                      {t('proposalStatusLabel', 'סטטוס הצעה')}
+                      {t('budgetStatusLabel', 'סטטוס התקציב')}
                     </label>
                     <select
                       value={proposalStatus}
@@ -914,29 +962,59 @@ const ResearchDetail = () => {
                       <option value="awarded">{t('proposalStatusApproved', 'מאושר')}</option>
                       <option value="rejected">{t('proposalStatusRejected', 'נדחה')}</option>
                     </select>
+                    {showILS && <span style={{ display: 'block', height: '17px' }} />}
                   </div>
 
                   <div>
                     <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '6px', color: '#666' }}>
-                      {t('approvedBudgetLabel', 'תקציב שהתקבל (₪)')}
+                      {t('approvedBudgetLabel', 'תקציב שהתקבל')} ({currencySymbol})
                     </label>
                     <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={approvedBudgetInput}
+                      type="text"
+                      dir="ltr"
+                      value={approvedRaw > 0 ? `${currencySymbol} ${approvedRaw.toLocaleString(locale, { style: 'decimal' })}` : ''}
                       readOnly
                       disabled
-                      placeholder={t('autoCalculatedFromComponents', 'מחושב אוטומטית מסכומי הרכיבים')}
+                      placeholder={t('autoCalculatedFromComponents', 'מחושב אוטומטית')}
                       style={{
                         width: '100%',
                         padding: '10px',
                         borderRadius: '6px',
                         border: '1px solid #ddd',
                         background: '#f1f5f9',
+                        boxSizing: 'border-box',
                       }}
                     />
+                    {showILS && <span style={{ display: 'block', height: '17px' }} />}
                   </div>
+
+                  {showILS && (
+                    <div>
+                      <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '6px', color: '#666' }}>
+                        {t('approvedBudgetConvertedILS', 'מומר לשקלים (₪)')}
+                      </label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={approvedRaw > 0 ? `₪ ${approvedILS.toLocaleString(locale, { style: 'decimal' })}` : ''}
+                        readOnly
+                        disabled
+                        placeholder={t('autoCalculatedFromComponents', 'מחושב אוטומטית')}
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          borderRadius: '6px',
+                          border: '1px solid #ddd',
+                          background: '#f1f5f9',
+                          color: '#2b6cb0',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                      <span style={{ fontSize: '11px', color: '#888', marginTop: '3px', display: 'block' }}>
+                        1 {currency} = {rateToILS} ₪
+                      </span>
+                    </div>
+                  )}
 
                   <div>
                     <button
@@ -956,70 +1034,86 @@ const ResearchDetail = () => {
                     >
                       {savingProposalDecision ? t('saving', 'שומר...') : t('saveDecision', 'שמור החלטה')}
                     </button>
+                    {showILS && <span style={{ display: 'block', height: '17px' }} />}
                   </div>
                 </div>
-                {Object.keys(researchData.budgetComponents || {}).length > 0 && (
-                  <div style={{ marginTop: '18px' }}>
+                </>
+                  );
+                })()}
+                <div style={{ marginTop: '18px' }}>
                     <h3 style={{ marginTop: 0, marginBottom: '6px', fontSize: '16px' }}>
                       {t('budgetComponentsRequestedVsApproved', 'רכיבי תקציב: מבוקש מול התקבל')}
                     </h3>
-                    {isAdmin() && (
-                      <p style={{
-                        margin: '0 0 12px',
-                        fontSize: '13px',
-                        borderRadius: '6px',
-                        padding: '7px 12px'
-                      }}>
-                        {t('budgetEditAfterApproval', 'עריכת רכיבי תקציב זמינה רק לאחר שינוי סטטוס ההצעה ל"הצעה מאושרת"')}
-                      </p>
-                    )}
-                    <div style={{ display: 'grid', gap: '10px' }}>
-                      {Object.entries(researchData.budgetComponents || {}).map(([componentKey, requestedValue]) => (
-                        <div
-                          key={componentKey}
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'minmax(150px, 1.5fr) minmax(120px, 1fr) minmax(140px, 1fr)',
-                            gap: '10px',
-                            alignItems: 'center',
-                            background: '#fff',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '8px',
-                            padding: '10px',
-                          }}
-                        >
-                          <div style={{ fontWeight: 'bold', color: '#334155' }}>
-                            {getBudgetComponentLabel(componentKey, t)}
-                          </div>
-                          <div style={{ color: '#334155' }}>
-                            {t('requested', 'מבוקש')}: {Number(requestedValue || 0).toLocaleString(locale)}
-                          </div>
-                          <input
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={approvedBudgetComponentsInput[componentKey] ?? ''}
-                            onChange={(e) =>
-                              setApprovedBudgetComponentsInput((prev) => ({
-                                ...prev,
-                                [componentKey]: e.target.value,
-                              }))
-                            }
-                            placeholder={t('received', 'התקבל')}
-                            style={{
-                              width: '100%',
-                              padding: '8px',
-                              borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              background: proposalStatus === 'awarded' ? '#fff' : '#f8fafc',
-                            }}
-                            disabled={proposalStatus !== 'awarded'}
-                          />
+                    {(() => {
+                      const components = researchData.budgetComponents || {};
+                      const cur = researchData.currency || 'ILS';
+                      const sym = cur === 'USD' ? '$' : cur === 'EUR' ? '€' : '₪';
+                      const rate = cur === 'USD' ? 3.5 : cur === 'EUR' ? 3.8 : 1;
+                      const hasConversion = cur !== 'ILS';
+                      const rowCols = 'minmax(150px, 1.5fr) minmax(120px, 1fr) auto';
+                      if (Object.keys(components).length === 0) {
+                        return (
+                          <p style={{ color: '#888', fontSize: '14px', margin: '6px 0 0' }}>
+                            {t('noBudgetComponents', 'לא הוגשו רכיבי תקציב בהצעה זו')}
+                          </p>
+                        );
+                      }
+                      const headerCols = hasConversion ? '1fr 170px 120px 1fr' : '1fr 170px 140px';
+                      return (
+                        <div style={{ display: 'grid', gridTemplateColumns: headerCols, columnGap: '14px', rowGap: '0', alignItems: 'center' }}>
+                          {/* header row */}
+                          <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('budgetComponent', 'רכיב')}</div>
+                          <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('requested', 'מבוקש')}</div>
+                          <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('received', 'התקבל')} ({sym})</div>
+                          {hasConversion && <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('convertedILS', 'המרה לשקלים')}</div>}
+                          {/* data rows */}
+                          {Object.entries(components).map(([componentKey, requestedValue]) => {
+                            const approvedVal = parseFloat(String(approvedBudgetComponentsInput[componentKey] ?? '').replace(/,/g, '')) || 0;
+                            const convertedVal = approvedVal * rate;
+                            const rowBg = { background: '#fff', padding: '8px 10px', borderBottom: '1px solid #f0f0f0' };
+                            return (
+                              <React.Fragment key={componentKey}>
+                                <div style={{ ...rowBg, fontWeight: 'bold', color: '#334155', fontSize: '14px' }}>
+                                  {getBudgetComponentLabel(componentKey, t)}
+                                </div>
+                                <div style={{ ...rowBg, color: '#334155', fontSize: '14px' }}>
+                                  {`${sym} ${Number(requestedValue || 0).toLocaleString(locale, { style: 'decimal' })}`}
+                                </div>
+                                <div style={{ ...rowBg }}>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    value={approvedBudgetComponentsInput[componentKey] ?? ''}
+                                    onChange={(e) =>
+                                      setApprovedBudgetComponentsInput((prev) => ({
+                                        ...prev,
+                                        [componentKey]: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="0"
+                                    style={{
+                                      width: '100%',
+                                      padding: '6px 8px',
+                                      borderRadius: '6px',
+                                      border: '1px solid #cbd5e1',
+                                      background: '#fff',
+                                      boxSizing: 'border-box',
+                                    }}
+                                  />
+                                </div>
+                                {hasConversion && (
+                                  <div style={{ ...rowBg, color: '#2b6cb0', fontSize: '14px' }}>
+                                    {approvedVal > 0 ? `₪ ${convertedVal.toLocaleString(locale, { style: 'decimal' })}` : '—'}
+                                  </div>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })()}
                   </div>
-                )}
               </div>
             )}
             <ResearchPeriodSection researchData={researchData} />

@@ -27,7 +27,11 @@ const PatentDetail = () => {
   const [error, setError] = useState('');
   const [linkedResearch, setLinkedResearch] = useState(null);
   const [linkedResearchLoading, setLinkedResearchLoading] = useState(false);
-  
+  const [patentDecisionLoading, setPatentDecisionLoading] = useState(false);
+  const [approvedStageBudgetsInput, setApprovedStageBudgetsInput] = useState({});
+  const [approvedPatentBudgetInput, setApprovedPatentBudgetInput] = useState('');
+  const [savingPatentBudget, setSavingPatentBudget] = useState(false);
+
   // Tasks and submissions state
   const [tasks, setTasks] = useState([]);
   const [showAddTask, setShowAddTask] = useState(false);
@@ -128,6 +132,31 @@ const PatentDetail = () => {
   }, [db, patentData?.researchProposalId]);
 
   // Fetch tasks
+  // Sync approved stage budgets from patentData (default to requested value)
+  useEffect(() => {
+    if (!patentData) return;
+    const existing = patentData.approvedStageBudgets || {};
+    const stages = patentData.stageBudgets || {};
+    const next = {};
+    Object.keys(stages).forEach(k => {
+      const saved = existing[k];
+      next[k] = saved !== undefined && saved !== null
+        ? String(saved)
+        : String(stages[k] ?? '');
+    });
+    setApprovedStageBudgetsInput(next);
+  }, [patentData]);
+
+  // Auto-calc total approved from stages
+  useEffect(() => {
+    const stages = patentData?.stageBudgets || {};
+    const total = Object.keys(stages).reduce((sum, k) => {
+      const n = parseFloat(String(approvedStageBudgetsInput[k] ?? '').replace(/,/g, '')) || 0;
+      return sum + n;
+    }, 0);
+    setApprovedPatentBudgetInput(String(total));
+  }, [approvedStageBudgetsInput, patentData]);
+
   useEffect(() => {
     if (!id || !db) return;
 
@@ -491,6 +520,70 @@ const PatentDetail = () => {
     }
   };
 
+  const handlePatentDecision = async (newStatus) => {
+    if (!isAdmin() || !id || !db || !patentData) return;
+    const label = newStatus === 'approved' ? 'לאשר' : 'לדחות';
+    if (!window.confirm(`האם אתה בטוח שברצונך ${label} את הפטנט הזה?`)) return;
+
+    setPatentDecisionLoading(true);
+    try {
+      await updateDoc(doc(db, 'patents', id), {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+      });
+
+      if (patentData.researcherId) {
+        const notifTitle = newStatus === 'approved' ? 'הפטנט אושר' : 'הפטנט נדחה';
+        const notifMsg = newStatus === 'approved'
+          ? `הפטנט "${patentData.projectTitle || patentData.title || ''}" אושר.`
+          : `הפטנט "${patentData.projectTitle || patentData.title || ''}" נדחה.`;
+        await createNotification({
+          userId: patentData.researcherId,
+          title: notifTitle,
+          message: notifMsg,
+          type: 'patent_status',
+          entityType: 'patent',
+          entityId: id,
+          link: `/patents/${id}`,
+          eventKey: `patent_status:${id}:${newStatus}:${Date.now()}`,
+        });
+      }
+
+      setPatentData((prev) => ({ ...prev, status: newStatus }));
+    } catch (err) {
+      console.error('Error updating patent status:', err);
+      alert(`שגיאה בעדכון הסטטוס: ${err.message || 'שגיאה לא ידועה'}`);
+    } finally {
+      setPatentDecisionLoading(false);
+    }
+  };
+
+  const handleSavePatentBudget = async () => {
+    if (!isAdmin() || !id || !db || !patentData) return;
+    const stages = patentData.stageBudgets || {};
+    const approvedPayload = {};
+    let total = 0;
+    for (const k of Object.keys(stages)) {
+      const raw = parseFloat(String(approvedStageBudgetsInput[k] ?? '').replace(/,/g, '')) || 0;
+      approvedPayload[k] = raw;
+      total += raw;
+    }
+    setSavingPatentBudget(true);
+    try {
+      await updateDoc(doc(db, 'patents', id), {
+        approvedStageBudgets: approvedPayload,
+        approvedBudget: total,
+        updatedAt: serverTimestamp(),
+      });
+      setPatentData(prev => ({ ...prev, approvedStageBudgets: approvedPayload, approvedBudget: total }));
+      alert(t('patentBudgetSaved', 'תקציב הפטנט עודכן בהצלחה'));
+    } catch (err) {
+      alert(`שגיאה: ${err.message}`);
+    } finally {
+      setSavingPatentBudget(false);
+    }
+  };
+
   const handleExportPDF = () => {
     if (!patentData) return;
 
@@ -848,6 +941,42 @@ const PatentDetail = () => {
                   >
                     {getStatusLabel(patentData.status)}
                   </span>
+                  {isAdmin() && patentData.status === 'in-process' && (
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      <button
+                        type="button"
+                        disabled={patentDecisionLoading}
+                        onClick={() => handlePatentDecision('approved')}
+                        style={{
+                          padding: '5px 12px',
+                          background: 'transparent',
+                          color: patentDecisionLoading ? '#aaa' : '#3d8c5c',
+                          border: `1px solid ${patentDecisionLoading ? '#aaa' : '#3d8c5c'}`,
+                          borderRadius: '6px',
+                          cursor: patentDecisionLoading ? 'not-allowed' : 'pointer',
+                          fontSize: '13px',
+                        }}
+                      >
+                        ✔ {t('approvePatent', 'אשר')}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={patentDecisionLoading}
+                        onClick={() => handlePatentDecision('rejected')}
+                        style={{
+                          padding: '5px 12px',
+                          background: 'transparent',
+                          color: patentDecisionLoading ? '#aaa' : '#b84f5a',
+                          border: `1px solid ${patentDecisionLoading ? '#aaa' : '#b84f5a'}`,
+                          borderRadius: '6px',
+                          cursor: patentDecisionLoading ? 'not-allowed' : 'pointer',
+                          fontSize: '13px',
+                        }}
+                      >
+                        ✖ {t('rejectPatent', 'דחה')}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1134,31 +1263,158 @@ const PatentDetail = () => {
                 </div>
               </div>
 
-              {patentData.stageBudgets && Object.keys(patentData.stageBudgets).length > 0 && (
-                <div style={{ marginTop: '20px' }}>
-                  <h3 style={{ marginBottom: '15px', color: '#666' }}>{t('stageBudgetByStage', 'תקציב לפי שלבים')}:</h3>
-                  <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-                    gap: '15px'
-                  }}>
-                    {Object.entries(patentData.stageBudgets).map(([key, value]) => (
-                      <div key={key} style={{
-                        padding: '15px',
-                        background: '#fff',
-                        borderRadius: '4px',
-                        border: '1px solid #ddd'
-                      }}>
-                        <span style={{ fontWeight: 'bold', color: '#666' }}>{key}:</span>
-                        <span style={{ marginRight: '10px' }}>
-                          {formatCurrency(value, patentData.currency)}
-                        </span>
-                      </div>
-                    ))}
+              {(() => {
+                const cur = patentData.currency || 'ILS';
+                const sym = cur === 'USD' ? '$' : cur === 'EUR' ? '€' : '₪';
+                const rate = cur === 'USD' ? 3.5 : cur === 'EUR' ? 3.8 : 1;
+                const showILSCol = cur !== 'ILS';
+                const toILS = (v) => v ? `₪ ${(Number(v) * rate).toLocaleString(locale, { style: 'decimal' })}` : '—';
+                const notSpec = t('notSpecified', 'לא צוין');
+                const approvedStages = patentData.approvedStageBudgets || {};
+                const stages = patentData.stageBudgets || {};
+                const stageEntries = Object.entries(stages);
+                return (
+                  <div style={{ marginTop: '20px', overflowX: 'auto' }}>
+                    <h3 style={{ marginBottom: '10px', color: '#666' }}>{t('stageBudgetByStage', 'תקציב לפי שלבים: מבוקש / התקבל')}:</h3>
+                    {stageEntries.length === 0 ? (
+                      <p style={{ color: '#999', fontStyle: 'italic' }}>{t('noStageBudgets', 'לא הוגשו שלבי תקציב')}</p>
+                    ) : (
+                      <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff' }}>
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign, padding: '10px', borderBottom: '1px solid #ddd' }}>{t('stage', 'שלב')}</th>
+                            <th style={{ textAlign, padding: '10px', borderBottom: '1px solid #ddd' }}>{t('requested', 'מבוקש')}</th>
+                            {showILSCol && <th style={{ textAlign, padding: '10px', borderBottom: '1px solid #ddd', color: '#2b6cb0', fontSize: '13px' }}>{t('convertedILS', 'המרה לשקלים')}</th>}
+                            <th style={{ textAlign, padding: '10px', borderBottom: '1px solid #ddd' }}>{t('received', 'התקבל')}</th>
+                            {showILSCol && <th style={{ textAlign, padding: '10px', borderBottom: '1px solid #ddd', color: '#2b6cb0', fontSize: '13px' }}>{t('convertedILS', 'המרה לשקלים')}</th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stageEntries.map(([key, value]) => {
+                            const approved = approvedStages[key];
+                            const hasApproved = approved !== undefined && approved !== null;
+                            return (
+                              <tr key={key}>
+                                <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9', fontWeight: 'bold', color: '#475569' }}>{key}</td>
+                                <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9' }}>
+                                  {`${sym} ${Number(value || 0).toLocaleString(locale, { style: 'decimal' })}`}
+                                </td>
+                                {showILSCol && <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9', color: '#2b6cb0', fontSize: '14px' }}>{toILS(value)}</td>}
+                                <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9' }}>
+                                  {hasApproved ? `${sym} ${Number(approved).toLocaleString(locale, { style: 'decimal' })}` : notSpec}
+                                </td>
+                                {showILSCol && <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9', color: '#2b6cb0', fontSize: '14px' }}>{hasApproved ? toILS(approved) : '—'}</td>}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
+
+            {/* אישור תקציב פטנט - רשות בלבד */}
+            {isAdmin() && (
+              <div style={{ background: '#f9f9f9', padding: '24px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
+                <h2 style={{ marginTop: 0, marginBottom: '16px', color: '#667eea' }}>
+                  {t('patentBudgetApprovalTitle', 'אישור תקציב פטנט')}
+                </h2>
+                {(() => {
+                  const currency = patentData.currency || 'ILS';
+                  const sym = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : '₪';
+                  const rate = currency === 'USD' ? 3.5 : currency === 'EUR' ? 3.8 : 1;
+                  const showILS = currency !== 'ILS';
+                  const approvedRaw = parseFloat(approvedPatentBudgetInput) || 0;
+                  const approvedILS = approvedRaw * rate;
+                  const cols = showILS ? '1fr 1fr 1fr auto' : '1fr 1fr auto';
+                  const stages = patentData.stageBudgets || {};
+                  const hasStages = Object.keys(stages).length > 0;
+                  const stageCols = showILS ? '1fr 170px 120px 1fr' : '1fr 170px 140px';
+                  return (
+                    <>
+                      {/* שורת סיכום */}
+                      <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '16px', alignItems: 'end', marginBottom: '16px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '6px', color: '#666' }}>
+                            {t('approvedBudgetLabel', 'תקציב שהתקבל')} ({sym})
+                          </label>
+                          <input type="text" dir="ltr" readOnly disabled
+                            value={approvedRaw > 0 ? `${sym} ${approvedRaw.toLocaleString(locale, { style: 'decimal' })}` : ''}
+                            placeholder={t('autoCalculatedFromComponents', 'מחושב אוטומטית')}
+                            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd', background: '#f1f5f9', boxSizing: 'border-box' }}
+                          />
+                          {showILS && <span style={{ display: 'block', height: '17px' }} />}
+                        </div>
+                        {showILS && (
+                          <div>
+                            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '6px', color: '#666' }}>
+                              {t('approvedBudgetConvertedILS', 'מומר לשקלים (₪)')}
+                            </label>
+                            <input type="text" dir="ltr" readOnly disabled
+                              value={approvedRaw > 0 ? `₪ ${approvedILS.toLocaleString(locale, { style: 'decimal' })}` : ''}
+                              placeholder={t('autoCalculatedFromComponents', 'מחושב אוטומטית')}
+                              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd', background: '#f1f5f9', color: '#2b6cb0', boxSizing: 'border-box' }}
+                            />
+                            <span style={{ fontSize: '11px', color: '#888', marginTop: '3px', display: 'block' }}>
+                              1 {currency} = {rate} ₪
+                            </span>
+                          </div>
+                        )}
+                        <div>
+                          <button type="button" onClick={handleSavePatentBudget} disabled={savingPatentBudget}
+                            style={{ width: '100%', padding: '10px 14px', background: savingPatentBudget ? '#94a3b8' : '#2b6cb0', color: 'white', border: 'none', borderRadius: '6px', cursor: savingPatentBudget ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}>
+                            {savingPatentBudget ? t('saving', 'שומר...') : t('saveDecision', 'שמור החלטה')}
+                          </button>
+                          {showILS && <span style={{ display: 'block', height: '17px' }} />}
+                        </div>
+                      </div>
+                      {/* טבלת שלבים */}
+                      <h3 style={{ marginTop: 0, marginBottom: '8px', fontSize: '16px' }}>
+                        {t('stageBudgetRequestedVsApproved', 'תקציב לפי שלבים: מבוקש מול התקבל')}
+                      </h3>
+                      {!hasStages ? (
+                        <p style={{ color: '#888', fontSize: '14px' }}>{t('noStageBudgets', 'לא הוגש תקציב לפי שלבים')}</p>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: stageCols, columnGap: '14px', rowGap: 0, alignItems: 'center' }}>
+                          <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('stage', 'שלב')}</div>
+                          <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('requested', 'מבוקש')}</div>
+                          <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('received', 'התקבל')} ({sym})</div>
+                          {showILS && <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('convertedILS', 'המרה לשקלים')}</div>}
+                          {Object.entries(stages).map(([stageKey, requestedVal]) => {
+                            const approvedVal = parseFloat(String(approvedStageBudgetsInput[stageKey] ?? '').replace(/,/g, '')) || 0;
+                            const convertedVal = approvedVal * rate;
+                            const rowBg = { background: '#fff', padding: '8px 10px', borderBottom: '1px solid #f0f0f0' };
+                            return (
+                              <React.Fragment key={stageKey}>
+                                <div style={{ ...rowBg, fontWeight: 'bold', color: '#334155', fontSize: '14px' }}>{stageKey}</div>
+                                <div style={{ ...rowBg, color: '#334155', fontSize: '14px' }}>
+                                  {`${sym} ${Number(requestedVal || 0).toLocaleString(locale, { style: 'decimal' })}`}
+                                </div>
+                                <div style={{ ...rowBg }}>
+                                  <input type="number" min="0" step="1"
+                                    value={approvedStageBudgetsInput[stageKey] ?? ''}
+                                    onChange={e => setApprovedStageBudgetsInput(prev => ({ ...prev, [stageKey]: e.target.value }))}
+                                    placeholder="0"
+                                    style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', boxSizing: 'border-box' }}
+                                  />
+                                </div>
+                                {showILS && (
+                                  <div style={{ ...rowBg, color: '#2b6cb0', fontSize: '14px' }}>
+                                    {approvedVal > 0 ? `₪ ${convertedVal.toLocaleString(locale, { style: 'decimal' })}` : '—'}
+                                  </div>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
 
             {/* שותפים */}
             {patentData.partners && patentData.partners.length > 0 && (

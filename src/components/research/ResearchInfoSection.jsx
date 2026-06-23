@@ -32,7 +32,7 @@ const fundLinks = {
   'מרכז לדאטה ובינה מלאכותית - אונ\' תל אביב': 'https://datascience.tau.ac.il/'
 };
 
-const ResearchInfoSection = ({ researchData }) => {
+const ResearchInfoSection = ({ researchData, onQuickApprove, onQuickReject, quickDecisionLoading }) => {
   const { t, isRTL } = useLanguage();
   const textAlign = isRTL ? 'right' : 'left';
   const notSpecified = t('notSpecified', 'לא צוין');
@@ -222,6 +222,42 @@ const ResearchInfoSection = ({ researchData }) => {
           >
             {getStatusLabel(researchData.status)}
           </span>
+          {researchData.status === 'pending' && onQuickApprove && onQuickReject && (
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <button
+                type="button"
+                disabled={quickDecisionLoading}
+                onClick={onQuickApprove}
+                style={{
+                  padding: '4px 14px',
+                  background: 'transparent',
+                  color: quickDecisionLoading ? '#aaa' : '#3d8c5c',
+                  border: `1px solid ${quickDecisionLoading ? '#aaa' : '#3d8c5c'}`,
+                  borderRadius: '6px',
+                  cursor: quickDecisionLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '13px',
+                }}
+              >
+                ✔ {t('approveProposal', 'אשר הצעה')}
+              </button>
+              <button
+                type="button"
+                disabled={quickDecisionLoading}
+                onClick={onQuickReject}
+                style={{
+                  padding: '4px 14px',
+                  background: 'transparent',
+                  color: quickDecisionLoading ? '#aaa' : '#b84f5a',
+                  border: `1px solid ${quickDecisionLoading ? '#aaa' : '#b84f5a'}`,
+                  borderRadius: '6px',
+                  cursor: quickDecisionLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '13px',
+                }}
+              >
+                ✖ {t('rejectProposal', ' דחה הצעה')}
+              </button>
+            </div>
+          )}
         </div>
 
         <div>
