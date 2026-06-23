@@ -1,0 +1,69 @@
+.proposal-docx-upload {
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.proposal-docx-upload-header h2 {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+}
+
+.proposal-docx-upload-desc {
+  margin: 0;
+  color: #475569;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.proposal-docx-upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.proposal-docx-upload-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  background: #1d4ed8;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.proposal-docx-upload-btn:hover:not(:disabled) {
+  background: #1e40af;
+}
+
+.proposal-docx-upload-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.proposal-docx-template-link {
+  color: #1d4ed8;
+  text-decoration: underline;
+  font-size: 0.95rem;
+}
+
+.proposal-docx-hidden-input {
+  display: none;
+}
+
+.proposal-docx-message {
+  margin: 12px 0 0;
+  font-size: 0.92rem;
+}
+
+.proposal-docx-error {
+  color: #b91c1c;
+}
+
+.proposal-docx-success {
+  color: #15803d;
+}

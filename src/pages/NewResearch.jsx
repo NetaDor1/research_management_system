@@ -18,6 +18,7 @@ import AdditionalInfoSection from '../components/research/form/AdditionalInfoSec
 import ResearchProposalReviewAssistant from '../components/research/ResearchProposalReviewAssistant';
 import FormEditToolbar from '../components/FormEditToolbar';
 import WorkPlanSection from '../components/research/WorkPlanSection';
+import ProposalDocxUpload from '../components/research/ProposalDocxUpload';
 import { getHebrewAcademicYearFromDate, normalizeAcademicYear } from '../utils/academicYear';
 import { canDeleteResearch, getSubmissionStatus } from '../utils/submissionStatus';
 import { navigateBackOrFallback } from '../utils/navigation';
@@ -186,6 +187,7 @@ const NewResearch = () => {
   const expectedDatePickerRef = useRef(null);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [workPlanKey, setWorkPlanKey] = useState(0);
 
   // Normalize work-plan tasks so edit mode can load both old/new schemas.
   const normalizeWorkPlanTasks = (tasks) => {
@@ -1412,6 +1414,45 @@ const NewResearch = () => {
     });
   }, []);
 
+  const handleProposalDocxParsed = useCallback((parsed) => {
+    if (!parsed || typeof parsed !== 'object') return;
+
+    setFormData((prev) => ({
+      ...prev,
+      projectTitle: parsed.projectTitle || prev.projectTitle,
+      abstract: parsed.abstract || prev.abstract,
+      scientificBackground: parsed.scientificBackground || prev.scientificBackground,
+      researchObjectives: parsed.researchObjectives || prev.researchObjectives,
+      detailedDescription: parsed.detailedDescription || prev.detailedDescription,
+      significanceInnovation: parsed.significanceInnovation || prev.significanceInnovation,
+      applicability: parsed.applicability || prev.applicability,
+      principalInvestigatorName: parsed.principalInvestigatorName || prev.principalInvestigatorName,
+      biographicalSummaryName: parsed.biographicalSummaryName || prev.biographicalSummaryName,
+      biographicalSummaryPositionTitle:
+        parsed.biographicalSummaryPositionTitle || prev.biographicalSummaryPositionTitle,
+      bibliographyEducationTraining:
+        Array.isArray(parsed.bibliographyEducationTraining) && parsed.bibliographyEducationTraining.length > 0
+          ? parsed.bibliographyEducationTraining
+          : prev.bibliographyEducationTraining,
+      bibliographyPersonalStatement:
+        parsed.bibliographyPersonalStatement || prev.bibliographyPersonalStatement,
+      bibliographyPositionsAndHonors:
+        parsed.bibliographyPositionsAndHonors || prev.bibliographyPositionsAndHonors,
+      bibliographySelectedPublications:
+        parsed.bibliographySelectedPublications || prev.bibliographySelectedPublications,
+      bibliographyResearchSupport:
+        parsed.bibliographyResearchSupport || prev.bibliographyResearchSupport,
+      workPlanTasks:
+        Array.isArray(parsed.workPlanTasks) && parsed.workPlanTasks.length > 0
+          ? parsed.workPlanTasks
+          : prev.workPlanTasks,
+    }));
+
+    if (Array.isArray(parsed.workPlanTasks) && parsed.workPlanTasks.length > 0) {
+      setWorkPlanKey((key) => key + 1);
+    }
+  }, []);
+
   return (
     <div className="page-container">
       <div className="page-content">
@@ -1464,6 +1505,8 @@ const NewResearch = () => {
             currencyOptions={currencyOptions}
           />
 
+          <ProposalDocxUpload onParsed={handleProposalDocxParsed} disabled={deleting} />
+
           <ResearchDescriptionSection
             formData={formData}
             handleChange={handleChange}
@@ -1508,6 +1551,7 @@ const NewResearch = () => {
             </div>
           ) : (
             <WorkPlanSection
+              key={workPlanKey}
               initialTasks={formData.workPlanTasks || []}
               onTasksChange={handleWorkPlanTasksChange}
               readOnly={false}
