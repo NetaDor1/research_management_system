@@ -303,3 +303,27 @@ html[dir="rtl"] .filter-group label,
 html[dir="rtl"] .sort-group label {
   text-align: right;
 }
+
+/* Research submission form — tighter heading spacing */
+.research-submit-page .form-page-header {
+  margin-bottom: 4px;
+}
+
+.research-submit-page .welcome-text {
+  margin: 0 0 10px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.research-submit-page .research-form {
+  margin-top: 0;
+}
+
+.research-submit-page .form-section h2 {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.research-submit-page .form-section:first-of-type {
+  padding-top: 0;
+}

@@ -1455,18 +1455,21 @@ const NewResearch = () => {
 
   return (
     <div className="page-container">
-      <div className="page-content">
+      <div className="page-content research-submit-page">
         <div className="form-page-header">
           <h1>{t('submitResearchTitle', 'הגשה לקרנות מחקר')}</h1>
-          <FormEditToolbar
-            visible={Boolean(editId)}
-            onCancelEdit={handleCancel}
-            onDelete={handleDeleteResearch}
-            showDelete={showDeleteButton}
-            deleting={deleting}
-            deleteLabel={t('deleteResearch', 'מחק הצעה')}
-            t={t}
-          />
+          <div className="form-page-header-aside">
+            <ProposalDocxUpload onParsed={handleProposalDocxParsed} disabled={deleting} />
+            <FormEditToolbar
+              visible={Boolean(editId)}
+              onCancelEdit={handleCancel}
+              onDelete={handleDeleteResearch}
+              showDelete={showDeleteButton}
+              deleting={deleting}
+              deleteLabel={t('deleteResearch', 'מחק הצעה')}
+              t={t}
+            />
+          </div>
         </div>
         <p className="welcome-text">
           {t('submitResearchSubtitle', 'מלאו את הפרטים הבאים כדי להגיש הצעת מחקר חדשה')}
@@ -1504,8 +1507,6 @@ const NewResearch = () => {
             budgetComponents={budgetComponents}
             currencyOptions={currencyOptions}
           />
-
-          <ProposalDocxUpload onParsed={handleProposalDocxParsed} disabled={deleting} />
 
           <ResearchDescriptionSection
             formData={formData}

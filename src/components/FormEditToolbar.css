@@ -12,13 +12,25 @@
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  margin-bottom: 4px;
 }
 
 .form-page-header h1 {
   margin: 0;
   flex: 1;
   min-width: 200px;
+}
+
+.form-page-header-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.form-page-header .proposal-docx-upload {
+  margin: 0;
 }
 
 .btn-cancel-edit {
@@ -59,6 +71,16 @@
 
   .form-page-header h1 {
     min-width: 0;
+  }
+
+  .form-page-header-aside {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .form-page-header-aside .proposal-docx-upload {
+    max-width: 100%;
+    width: 100%;
   }
 
   .form-edit-toolbar {
