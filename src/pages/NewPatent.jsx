@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { collection, addDoc, doc, getDoc, getDocs, updateDoc, writeBatch, serverTimestamp, Timestamp, query, where, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -11,9 +11,38 @@ import { navigateBackOrFallback } from '../utils/navigation';
 import DocumentChecklistCard from '../components/research/form/DocumentChecklistCard';
 import { canDeletePatent, getSubmissionStatus } from '../utils/submissionStatus';
 import FormEditToolbar from '../components/FormEditToolbar';
+import PatentDisclosureSection, {
+  EMPTY_INVENTOR,
+  EMPTY_FUNDING,
+  EMPTY_PRIOR_PATENT,
+  EMPTY_PRIOR_PUBLICATION,
+} from '../components/research/form/PatentDisclosureSection';
 import '../components/research/form/DocumentChecklistCard.css';
 import './Page.css';
 import './Research.css';
+
+const INSTITUTION_PERCENTAGE_OPTIONS = ['10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%'];
+
+const PATENT_REQUIRED_DOCUMENT_DEFS = [
+  { key: 'מסמך הבקשה לפטנט', labelKey: 'patentDocApplication' },
+  { key: 'אישור מוסדי', labelKey: 'patentDocInstitutional' },
+  { key: 'הסכם שותפים', labelKey: 'patentDocPartnersAgreement' },
+  { key: 'תקציב מפורט', labelKey: 'patentDocDetailedBudget' },
+  { key: 'מסמכי רישום', labelKey: 'patentDocRegistration' },
+  { key: 'אישורי תשלום', labelKey: 'patentDocPayment' },
+];
+
+const SUBMISSION_PATH_DEFS = [
+  { value: 'מסלול רגיל', labelKey: 'patentPathRegular' },
+  { value: 'מסלול מהיר', labelKey: 'patentPathFast' },
+  { value: 'מסלול בינלאומי', labelKey: 'patentPathInternational' },
+  { value: 'מסלול מיוחד', labelKey: 'patentPathSpecial' },
+];
+
+const RESEARCHER_ROLE_DEFS = [
+  { value: 'חוקר ראשי', labelKey: 'patentRolePrincipal' },
+  { value: 'חוקר משנה', labelKey: 'patentRoleSecondary' },
+];
 
 const NewPatent = () => {
   const navigate = useNavigate();
@@ -23,76 +52,54 @@ const NewPatent = () => {
   const lang = language === 'en' ? 'en' : 'he';
   const editId = searchParams.get('edit');
 
-  // Options for dropdowns
-  const institutionPercentageOptions = [
-    '10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%'
-  ];
+  const commercializationUnitOptions = useMemo(
+    () => Array.from({ length: 10 }, (_, i) => ({
+      value: `יחידת מסחור ${i + 1}`,
+      label: t(`commercializationUnit${i + 1}`, `יחידת מסחור ${i + 1}`),
+    })),
+    [t]
+  );
 
-  const commercializationUnitOptions = [
-    'יחידת מסחור 1',
-    'יחידת מסחור 2',
-    'יחידת מסחור 3',
-    'יחידת מסחור 4',
-    'יחידת מסחור 5',
-    'יחידת מסחור 6',
-    'יחידת מסחור 7',
-    'יחידת מסחור 8',
-    'יחידת מסחור 9',
-    'יחידת מסחור 10'
-  ];
+  const submissionPathOptions = useMemo(
+    () => SUBMISSION_PATH_DEFS.map((item) => ({ ...item, label: t(item.labelKey) })),
+    [t]
+  );
 
-  const submissionPathOptions = [
-    'מסלול רגיל',
-    'מסלול מהיר',
-    'מסלול בינלאומי',
-    'מסלול מיוחד'
-  ];
+  const researcherRoleOptions = useMemo(
+    () => RESEARCHER_ROLE_DEFS.map((item) => ({ ...item, label: t(item.labelKey) })),
+    [t]
+  );
 
-  const researcherRoleOptions = [
-    'חוקר ראשי',
-    'חוקר משנה'
-  ];
+  const patentStatusOptions = useMemo(() => [
+    { value: 'in-process', label: t('inProcess', 'בהליך') },
+    { value: 'registered', label: t('registered', 'רשום') },
+    { value: 'approved', label: t('approved', 'אושר') },
+  ], [t]);
 
-  const patentStatusOptions = [
-    { value: 'in-process', label: 'בהליך' },
-    { value: 'registered', label: 'רשום' },
-    { value: 'approved', label: 'אושר' }
-  ];
+  const patentStageOptions = useMemo(() => [
+    { value: 'stage1', label: t('patentStage1') },
+    { value: 'stage2', label: t('patentStage2') },
+    { value: 'stage3', label: t('patentStage3') },
+    { value: 'stage4', label: t('patentStage4') },
+    { value: 'stage5', label: t('patentStage5') },
+  ], [t]);
 
-  const patentStageOptions = [
-    { value: 'stage1', label: 'שלב 1: הגשת בקשה' },
-    { value: 'stage2', label: 'שלב 2: בדיקה ראשונית' },
-    { value: 'stage3', label: 'שלב 3: בחינה' },
-    { value: 'stage4', label: 'שלב 4: אישור' },
-    { value: 'stage5', label: 'שלב 5: רישום' }
-  ];
+  const currencyOptions = useMemo(() => [
+    { value: 'ILS', label: t('currencyILS') },
+    { value: 'USD', label: t('currencyUSD') },
+    { value: 'EUR', label: t('currencyEUR') },
+  ], [t]);
 
-  const currencyOptions = [
-    { value: 'ILS', label: '₪ (שקל)' },
-    { value: 'USD', label: '$ (דולר)' },
-    { value: 'EUR', label: '€ (אירו)' }
-  ];
-
-  const requiredDocuments = [
-    'מסמך הבקשה לפטנט',
-    'אישור מוסדי',
-    'הסכם שותפים',
-    'תקציב מפורט',
-    'מסמכי רישום',
-    'אישורי תשלום'
-  ];
-
-  // Date fields for patent timeline (8 dates)
-  const dateFields = [
-    { key: 'submissionDate', label: 'תאריך הגשת הבקשה לפטנט' },
-    { key: 'initialReviewDate', label: 'תאריך בדיקה ראשונית' },
-    { key: 'examinationDate', label: 'תאריך בחינה' },
-    { key: 'approvalDate', label: 'תאריך אישור' },
-    { key: 'registrationDate', label: 'תאריך רישום' },
-    { key: 'publicationDate', label: 'תאריך פרסום' },
-    { key: 'renewalDate', label: 'תאריך חידוש' },
-    { key: 'expiryDate', label: 'תאריך תפוגה' }
-  ];
+  const dateFields = useMemo(() => [
+    { key: 'submissionDate', label: t('patentDateSubmissionFull') },
+    { key: 'initialReviewDate', label: t('patentDateInitialReview') },
+    { key: 'examinationDate', label: t('patentDateExamination') },
+    { key: 'approvalDate', label: t('patentDateApproval') },
+    { key: 'registrationDate', label: t('patentDateRegistration') },
+    { key: 'publicationDate', label: t('patentDatePublication') },
+    { key: 'renewalDate', label: t('patentDateRenewal') },
+    { key: 'expiryDate', label: t('patentDateExpiry') },
+  ], [t]);
 
   const [formData, setFormData] = useState({
     projectTitle: '',
@@ -125,19 +132,52 @@ const NewPatent = () => {
     requiredDocumentsChecklist: {},
     requiredDocumentsFiles: {},
     digitalSignature: { signed: false, date: '', signer: '' },
-    notes: ''
+    notes: '',
+    inventionTitleEnglish: '',
+    inventionTitleHebrew: '',
+    shortDescription: '',
+    inventionTypeElaboration: '',
+    potentialCustomers: '',
+    commercialEntityContacts: '',
+    inventors: [{ ...EMPTY_INVENTOR }],
+    inventionFirstDate: '',
+    inventionTimeFrame: '',
+    inventionWorkType: '',
+    fundingSupportType: '',
+    fundingSources: [{ ...EMPTY_FUNDING }],
+    nonJceMaterialsUsed: '',
+    nonJceMaterialsDetails: '',
+    hasBeenPublished: '',
+    publicationDetails: '',
+    futurePublicationPlans: '',
+    priorPatentFiled: '',
+    priorPatentDetails: '',
+    literatureSurveyPerformed: '',
+    literatureSurveyNotes: '',
+    priorArtPatents: [{ ...EMPTY_PRIOR_PATENT }],
+    priorArtPublications: [{ ...EMPTY_PRIOR_PUBLICATION }],
+    scientificBackground: '',
+    detailedDescription: '',
+    advantagesOverExisting: '',
+    potentialUsesAndImplementation: '',
+    additionalResearchProgram: '',
+    referenceList: '',
+    developmentBudgetEstimate: '',
+    developmentTimeEstimate: '',
   });
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [hasPartners, setHasPartners] = useState(false);
+  const [hasInventors, setHasInventors] = useState(false);
   const [researchOptions, setResearchOptions] = useState([]);
   const [researchLoading, setResearchLoading] = useState(true);
   const [researchLoadError, setResearchLoadError] = useState('');
   const [existingResearcherId, setExistingResearcherId] = useState('');
   const isEdit = Boolean(editId);
   const datePickerRefs = useRef({});
+  const inventionDatePickerRef = useRef(null);
   const previousPatentRef = useRef(null);
 
   const convertDateToISO = (dateValue) => {
@@ -165,10 +205,11 @@ const NewPatent = () => {
         converted = budget * 3.8; // ILS to EUR
       }
       
-      setFormData(prev => ({
-        ...prev,
-        convertedBudget: converted.toFixed(2)
-      }));
+      setFormData(prev => {
+        const nextConverted = converted.toFixed(2);
+        if (prev.convertedBudget === nextConverted) return prev;
+        return { ...prev, convertedBudget: nextConverted };
+      });
     }
   }, [formData.totalBudget, formData.currency]);
 
@@ -179,10 +220,11 @@ const NewPatent = () => {
       return sum + numAmount;
     }, 0);
 
-    setFormData((prev) => ({
-      ...prev,
-      totalBudget: total > 0 ? total.toString() : '',
-    }));
+    setFormData((prev) => {
+      const nextTotal = total > 0 ? total.toString() : '';
+      if (prev.totalBudget === nextTotal) return prev;
+      return { ...prev, totalBudget: nextTotal };
+    });
   }, [formData.stageBudgets]);
 
   useEffect(() => {
@@ -214,15 +256,15 @@ const NewPatent = () => {
           const data = docItem.data();
           return {
             id: docItem.id,
-            title: data.projectTitle || data.title || 'ללא כותרת',
-            researcherName: data.researcherName || data.researcher || 'חוקר'
+            title: data.projectTitle || data.title || t('noTitle', 'ללא כותרת'),
+            researcherName: data.researcherName || data.researcher || t('researcher', 'חוקר')
           };
         });
 
         setResearchOptions(options);
       } catch (err) {
         console.error('Error loading research options:', err);
-        setResearchLoadError('שגיאה בטעינת רשימת מחקרים');
+        setResearchLoadError(t('loadingResearchListError'));
         setResearchOptions([]);
       } finally {
         setResearchLoading(false);
@@ -313,10 +355,47 @@ const NewPatent = () => {
           requiredDocumentsChecklist: data.requiredDocumentsChecklist || {},
           requiredDocumentsFiles: data.requiredDocumentsFiles || {},
           digitalSignature: data.digitalSignature || { signed: false, date: '', signer: '' },
-          notes: data.notes || ''
+          notes: data.notes || '',
+          inventionTitleEnglish: data.inventionTitleEnglish || '',
+          inventionTitleHebrew: data.inventionTitleHebrew || '',
+          shortDescription: data.shortDescription || '',
+          inventionTypeElaboration: data.inventionTypeElaboration || '',
+          potentialCustomers: data.potentialCustomers || '',
+          commercialEntityContacts: data.commercialEntityContacts || '',
+          inventors: (data.inventors && data.inventors.length > 0) ? data.inventors : [{ ...EMPTY_INVENTOR }],
+          inventionFirstDate: convertToInputDate(data.inventionFirstDate),
+          inventionTimeFrame: data.inventionTimeFrame || '',
+          inventionWorkType: data.inventionWorkType || '',
+          fundingSupportType: data.fundingSupportType || '',
+          fundingSources: (data.fundingSources && data.fundingSources.length > 0) ? data.fundingSources : [{ ...EMPTY_FUNDING }],
+          nonJceMaterialsUsed: data.nonJceMaterialsUsed || '',
+          nonJceMaterialsDetails: data.nonJceMaterialsDetails || '',
+          hasBeenPublished: data.hasBeenPublished || '',
+          publicationDetails: data.publicationDetails || '',
+          futurePublicationPlans: data.futurePublicationPlans || '',
+          priorPatentFiled: data.priorPatentFiled || '',
+          priorPatentDetails: data.priorPatentDetails || '',
+          literatureSurveyPerformed: data.literatureSurveyPerformed || '',
+          literatureSurveyNotes: data.literatureSurveyNotes || '',
+          priorArtPatents: (data.priorArtPatents && data.priorArtPatents.length > 0) ? data.priorArtPatents : [{ ...EMPTY_PRIOR_PATENT }],
+          priorArtPublications: (data.priorArtPublications && data.priorArtPublications.length > 0) ? data.priorArtPublications : [{ ...EMPTY_PRIOR_PUBLICATION }],
+          scientificBackground: data.scientificBackground || '',
+          detailedDescription: data.detailedDescription || '',
+          advantagesOverExisting: data.advantagesOverExisting || '',
+          potentialUsesAndImplementation: data.potentialUsesAndImplementation || '',
+          additionalResearchProgram: data.additionalResearchProgram || '',
+          referenceList: data.referenceList || '',
+          developmentBudgetEstimate: data.developmentBudgetEstimate || '',
+          developmentTimeEstimate: data.developmentTimeEstimate || '',
         }));
 
         setHasPartners(Boolean(data.partners && data.partners.length > 0));
+        setHasInventors(
+          Boolean(
+            data.inventors?.length > 0
+            && data.inventors.some((inv) => inv.name || inv.title || inv.nationalId || inv.department)
+          )
+        );
       } catch (err) {
         console.error('Error loading patent for edit:', err);
       }
@@ -379,6 +458,45 @@ const NewPatent = () => {
     }));
   };
 
+  const handleArrayFieldChange = (arrayKey, index, field, value) => {
+    setFormData((prev) => {
+      const next = [...(prev[arrayKey] || [])];
+      next[index] = { ...next[index], [field]: value };
+      return { ...prev, [arrayKey]: next };
+    });
+  };
+
+  const addArrayRow = (arrayKey, emptyRow) => {
+    setFormData((prev) => ({
+      ...prev,
+      [arrayKey]: [...(prev[arrayKey] || []), { ...emptyRow }],
+    }));
+  };
+
+  const removeArrayRow = (arrayKey, index) => {
+    setFormData((prev) => ({
+      ...prev,
+      [arrayKey]: (prev[arrayKey] || []).filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleInventionDateChange = (value) => {
+    setFormData((prev) => ({ ...prev, inventionFirstDate: value }));
+  };
+
+  const handleInventionDatePickerChange = (isoDate) => {
+    if (!isoDate) {
+      handleInventionDateChange('');
+      return;
+    }
+    const [year, month, day] = isoDate.split('-');
+    if (!year || !month || !day) {
+      handleInventionDateChange('');
+      return;
+    }
+    handleInventionDateChange(`${day}/${month}/${year}`);
+  };
+
   const handleStageBudgetChange = (stage, value) => {
     setFormData(prev => ({
       ...prev,
@@ -431,7 +549,7 @@ const NewPatent = () => {
       digitalSignature: {
         signed: true,
         date: new Date().toISOString().split('T')[0],
-        signer: user?.name || 'חתימה דיגיטלית',
+        signer: user?.name || t('digitalSignatureDefault', 'חתימה דיגיטלית'),
       },
     }));
   };
@@ -441,7 +559,7 @@ const NewPatent = () => {
     const isoDate = convertDateToISO(date);
     if (!isoDate) return '';
     const dateStr = new Date(isoDate).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-    const encodedTitle = encodeURIComponent(title || 'תאריך פטנט');
+    const encodedTitle = encodeURIComponent(title || t('patentCalendarEvent', 'תאריך פטנט'));
     return `https://outlook.live.com/calendar/0/deeplink/compose?subject=${encodedTitle}&startdt=${dateStr}&enddt=${dateStr}`;
   };
 
@@ -449,40 +567,40 @@ const NewPatent = () => {
     const newErrors = {};
     
     if (!formData.projectTitle.trim()) {
-      newErrors.projectTitle = 'כותרת הפרוייקט חובה';
+      newErrors.projectTitle = t('errPatentProjectTitleRequired');
     }
     if (!formData.institutionPercentage) {
-      newErrors.institutionPercentage = 'אחוזי המוסד חובה';
+      newErrors.institutionPercentage = t('errPatentInstitutionPercentage');
     }
     if (!formData.commercializationUnit) {
-      newErrors.commercializationUnit = 'יחידת המסחור חובה';
+      newErrors.commercializationUnit = t('errPatentCommercializationUnit');
     }
     if (!formData.submissionPath) {
-      newErrors.submissionPath = 'מסלול ההגשה חובה';
+      newErrors.submissionPath = t('errPatentSubmissionPath');
     }
     if (!formData.researcherRole) {
-      newErrors.researcherRole = 'תפקיד החוקר חובה';
+      newErrors.researcherRole = t('errPatentResearcherRole');
     }
     if (!formData.patentStatus) {
-      newErrors.patentStatus = 'סטטוס הפטנט חובה';
+      newErrors.patentStatus = t('errPatentStatus');
     }
     if (!formData.patentStage) {
-      newErrors.patentStage = 'שלב הפטנט חובה';
+      newErrors.patentStage = t('errPatentStage');
     }
     const datePattern = /^(\d{2})\/(\d{2})\/(\d{4})$/;
     if (!formData.dates.submissionDate) {
-      newErrors.submissionDate = 'תאריך הגשת הבקשה חובה';
+      newErrors.submissionDate = t('errPatentSubmissionDateRequired');
     } else if (!datePattern.test(formData.dates.submissionDate)) {
-      newErrors.submissionDate = 'תאריך לא תקין. נא להזין בפורמט dd/mm/yyyy';
+      newErrors.submissionDate = t('errInvalidDateFormat');
     } else if (!convertDateToISO(formData.dates.submissionDate)) {
-      newErrors.submissionDate = 'תאריך לא תקין';
+      newErrors.submissionDate = t('errInvalidDate');
     }
     const hasStageBudget = Object.values(formData.stageBudgets || {}).some((amount) => {
       const numAmount = parseFloat(amount) || 0;
       return numAmount > 0;
     });
     if (!hasStageBudget) {
-      newErrors.totalBudget = 'יש למלא לפחות רכיב תקציב אחד';
+      newErrors.totalBudget = t('errPatentBudgetRequired');
     }
 
     setErrors(newErrors);
@@ -505,7 +623,7 @@ const NewPatent = () => {
         return;
       }
     } else if (!validateForm()) {
-      alert('יש למלא את כל השדות החובה');
+      alert(t('fillRequiredFields', 'יש למלא את כל השדות החובה'));
       return;
     }
 
@@ -514,7 +632,7 @@ const NewPatent = () => {
     try {
       const wasDraft = getSubmissionStatus(previousPatentRef.current) === 'draft';
       const researcherId = user?.id || 'temp-user-id';
-      const researcherName = user?.name || 'חוקר';
+      const researcherName = user?.name || t('researcher', 'חוקר');
 
       console.log('Starting to save patent...');
 
@@ -534,7 +652,7 @@ const NewPatent = () => {
         ? researchOptions.find(option => option.id === formData.researchProposalId)
         : null;
 
-      const requiredDocumentsChecklistFromFiles = requiredDocuments.reduce((acc, docName) => {
+      const requiredDocumentsChecklistFromFiles = PATENT_REQUIRED_DOCUMENT_DEFS.reduce((acc, { key: docName }) => {
         const filesForDoc = formData.requiredDocumentsFiles?.[docName] || [];
         acc[docName] = filesForDoc.length > 0;
         return acc;
@@ -589,6 +707,46 @@ const NewPatent = () => {
         
         // הערות
         notes: formData.notes || '',
+
+        // טופס גילוי המצאה (DOI)
+        inventionTitleEnglish: formData.inventionTitleEnglish || '',
+        inventionTitleHebrew: formData.inventionTitleHebrew || '',
+        shortDescription: formData.shortDescription || '',
+        inventionTypeElaboration: formData.inventionTypeElaboration || '',
+        potentialCustomers: formData.potentialCustomers || '',
+        commercialEntityContacts: formData.commercialEntityContacts || '',
+        inventors: hasInventors
+          ? (formData.inventors || []).filter((inv) => inv.name || inv.title || inv.nationalId || inv.department)
+          : [],
+        inventionFirstDate: formData.inventionFirstDate
+          ? (() => {
+              const iso = convertDateToISO(formData.inventionFirstDate);
+              return iso ? Timestamp.fromDate(new Date(iso)) : null;
+            })()
+          : null,
+        inventionTimeFrame: formData.inventionTimeFrame || '',
+        inventionWorkType: formData.inventionWorkType || '',
+        fundingSupportType: formData.fundingSupportType || '',
+        fundingSources: (formData.fundingSources || []).filter((row) => row.source || row.grantNumber || row.supportPeriod),
+        nonJceMaterialsUsed: formData.nonJceMaterialsUsed || '',
+        nonJceMaterialsDetails: formData.nonJceMaterialsDetails || '',
+        hasBeenPublished: formData.hasBeenPublished || '',
+        publicationDetails: formData.publicationDetails || '',
+        futurePublicationPlans: formData.futurePublicationPlans || '',
+        priorPatentFiled: formData.priorPatentFiled || '',
+        priorPatentDetails: formData.priorPatentDetails || '',
+        literatureSurveyPerformed: formData.literatureSurveyPerformed || '',
+        literatureSurveyNotes: formData.literatureSurveyNotes || '',
+        priorArtPatents: (formData.priorArtPatents || []).filter((row) => row.title || row.publicationNumber || row.country),
+        priorArtPublications: (formData.priorArtPublications || []).filter((row) => row.title || row.authors),
+        scientificBackground: formData.scientificBackground || '',
+        detailedDescription: formData.detailedDescription || '',
+        advantagesOverExisting: formData.advantagesOverExisting || '',
+        potentialUsesAndImplementation: formData.potentialUsesAndImplementation || '',
+        additionalResearchProgram: formData.additionalResearchProgram || '',
+        referenceList: formData.referenceList || '',
+        developmentBudgetEstimate: formData.developmentBudgetEstimate || '',
+        developmentTimeEstimate: formData.developmentTimeEstimate || '',
         
         // פרטי החוקר
         researcherId: researcherId,
@@ -625,7 +783,7 @@ const NewPatent = () => {
       if (docId) {
         try {
           const nextRequiredDocumentsFiles = {};
-          for (const docName of requiredDocuments) {
+          for (const { key: docName } of PATENT_REQUIRED_DOCUMENT_DEFS) {
             const docFiles = formData.requiredDocumentsFiles?.[docName] || [];
             const uploadedOrExisting = [];
 
@@ -665,7 +823,7 @@ const NewPatent = () => {
       // Update document with file URLs if any files were uploaded
       if (docId && Object.keys(requiredDocumentsFilesUrls).length > 0) {
         try {
-          const nextRequiredChecklist = requiredDocuments.reduce((acc, docName) => {
+          const nextRequiredChecklist = PATENT_REQUIRED_DOCUMENT_DEFS.reduce((acc, { key: docName }) => {
             acc[docName] = (requiredDocumentsFilesUrls[docName] || []).length > 0;
             return acc;
           }, {});
@@ -741,11 +899,11 @@ const NewPatent = () => {
         }
         return;
       }
-      alert('הפטנט נשמר בהצלחה!');
+      alert(t('savePatentSuccess'));
       navigate(userRole === 'RESEARCHER' ? '/' : '/patents');
     } catch (error) {
       console.error('Error saving patent:', error);
-      alert('שגיאה בשמירת הפטנט: ' + (error.message || 'שגיאה לא ידועה'));
+      alert(`${t('savePatentError')}: ${error.message || t('loadPatentError', 'שגיאה לא ידועה')}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -828,6 +986,22 @@ const NewPatent = () => {
     navigateBackOrFallback(navigate, getCancelTarget());
   };
 
+  const handleHasInventorsYes = () => {
+    setHasInventors(true);
+    setFormData((prev) => {
+      if (prev.inventors?.length > 0) return prev;
+      return { ...prev, inventors: [{ ...EMPTY_INVENTOR }] };
+    });
+  };
+
+  const handleHasPartnersYes = () => {
+    setHasPartners(true);
+    setFormData((prev) => {
+      if (prev.partners?.length > 0) return prev;
+      return { ...prev, partners: [{ name: '', email: '', institution: '', percentage: '' }] };
+    });
+  };
+
   const isBusy = isSubmitting || deleting;
 
   return (
@@ -850,9 +1024,9 @@ const NewPatent = () => {
         <form onSubmit={handleSubmit} className="research-form">
           {/* כותרת הפרוייקט */}
           <div className="form-section">
-            <h2>פרטים כלליים</h2>
+            <h2>{t('generalDetails', 'פרטים כלליים')}</h2>
             <div className="form-group">
-              <label>כותרת הפרוייקט שהוגש לפטנט *</label>
+              <label>{t('patentProjectTitleLabel')} *</label>
               <input
                 type="text"
                 name="projectTitle"
@@ -865,7 +1039,7 @@ const NewPatent = () => {
             </div>
 
             <div className="form-group">
-              <label>אחוזי המוסד לפי ההסכם *</label>
+              <label>{t('patentInstitutionPercentageLabel')} *</label>
               <select
                 name="institutionPercentage"
                 value={formData.institutionPercentage}
@@ -873,8 +1047,8 @@ const NewPatent = () => {
                 className={errors.institutionPercentage ? 'error' : ''}
                 required
               >
-                <option value="">בחר אחוז</option>
-                {institutionPercentageOptions.map(option => (
+                <option value="">{t('selectPercentage')}</option>
+                {INSTITUTION_PERCENTAGE_OPTIONS.map(option => (
                   <option key={option} value={option}>{option}</option>
                 ))}
               </select>
@@ -882,14 +1056,14 @@ const NewPatent = () => {
             </div>
 
             <div className="form-group">
-              <label>קישור למחקר קיים</label>
+              <label>{t('linkExistingResearch', 'קישור למחקר קיים')}</label>
               <select
                 name="researchProposalId"
                 value={formData.researchProposalId}
                 onChange={handleInputChange}
                 disabled={researchLoading}
               >
-                <option value="">בחר מחקר מהרשימה</option>
+                <option value="">{t('selectResearchFromList', 'בחר מחקר מהרשימה')}</option>
                 {researchOptions.map(option => (
                   <option key={option.id} value={option.id}>
                     {option.title}{userRole === 'ADMIN' ? ` - ${option.researcherName}` : ''}
@@ -900,28 +1074,45 @@ const NewPatent = () => {
             </div>
           </div>
 
+          <PatentDisclosureSection
+            formData={formData}
+            handleChange={handleInputChange}
+            hasInventors={hasInventors}
+            setHasInventors={setHasInventors}
+            onHasInventorsYes={handleHasInventorsYes}
+            handleInventorChange={(index, field, value) => handleArrayFieldChange('inventors', index, field, value)}
+            addInventor={() => addArrayRow('inventors', EMPTY_INVENTOR)}
+            removeInventor={(index) => removeArrayRow('inventors', index)}
+            handleFundingSourceChange={(index, field, value) => handleArrayFieldChange('fundingSources', index, field, value)}
+            addFundingSource={() => addArrayRow('fundingSources', EMPTY_FUNDING)}
+            removeFundingSource={(index) => removeArrayRow('fundingSources', index)}
+            handlePriorArtPatentChange={(index, field, value) => handleArrayFieldChange('priorArtPatents', index, field, value)}
+            addPriorArtPatent={() => addArrayRow('priorArtPatents', EMPTY_PRIOR_PATENT)}
+            removePriorArtPatent={(index) => removeArrayRow('priorArtPatents', index)}
+            handlePriorArtPublicationChange={(index, field, value) => handleArrayFieldChange('priorArtPublications', index, field, value)}
+            addPriorArtPublication={() => addArrayRow('priorArtPublications', EMPTY_PRIOR_PUBLICATION)}
+            removePriorArtPublication={(index) => removeArrayRow('priorArtPublications', index)}
+            handleInventionDateChange={handleInventionDateChange}
+            handleInventionDatePickerChange={handleInventionDatePickerChange}
+            convertDateToISO={convertDateToISO}
+            inventionDatePickerRef={inventionDatePickerRef}
+            onPolish={(improved) => setFormData((prev) => ({ ...prev, ...improved }))}
+          />
+
           {/* שותפים */}
           <div className="form-section">
-            <h2>שותפים לפטנט</h2>
+            <h2>{t('patentPartnersTitle')}</h2>
             <div className="form-group">
-              <label>האם קיימים שותפים לפטנט?</label>
+              <label>{t('patentHasPartnersQuestion')}</label>
               <div style={{ display: 'flex', gap: '20px', marginTop: '8px' }}>
                 <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <input
                     type="radio"
                     name="hasPartners"
                     checked={hasPartners === true}
-                    onChange={() => {
-                      setHasPartners(true);
-                      if (!formData.partners || formData.partners.length === 0) {
-                        setFormData((prev) => ({
-                          ...prev,
-                          partners: [{ name: '', email: '', institution: '', percentage: '' }],
-                        }));
-                      }
-                    }}
+                    onChange={handleHasPartnersYes}
                   />
-                  כן
+                  {t('yes', 'כן')}
                 </label>
                 <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <input
@@ -930,17 +1121,17 @@ const NewPatent = () => {
                     checked={hasPartners === false}
                     onChange={() => setHasPartners(false)}
                   />
-                  לא
+                  {t('no', 'לא')}
                 </label>
               </div>
             </div>
 
             {hasPartners && formData.partners.map((partner, index) => (
               <div key={index} className="partner-group">
-                <h3>שותף {index + 1}</h3>
+                <h3>{t('partner', 'שותף')} {index + 1}</h3>
                 <div className="form-row">
                   <div className="form-group">
-                    <label>שם השותף</label>
+                    <label>{t('partnerName', 'שם השותף')}</label>
                     <input
                       type="text"
                       value={partner.name}
@@ -948,7 +1139,7 @@ const NewPatent = () => {
                     />
                   </div>
                   <div className="form-group">
-                    <label>אימייל של השותף</label>
+                    <label>{t('partnerEmail', 'אימייל של השותף')}</label>
                     <input
                       type="email"
                       value={partner.email}
@@ -958,7 +1149,7 @@ const NewPatent = () => {
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label>המוסד של השותף</label>
+                    <label>{t('partnerInstitution', 'המוסד של השותף')}</label>
                     <input
                       type="text"
                       value={partner.institution}
@@ -966,13 +1157,13 @@ const NewPatent = () => {
                     />
                   </div>
                   <div className="form-group">
-                    <label>אחוזים מוסכמים לפי ההסכם</label>
+                    <label>{t('patentPartnerPercentage')}</label>
                     <select
                       value={partner.percentage}
                       onChange={(e) => handlePartnerChange(index, 'percentage', e.target.value)}
                     >
-                      <option value="">בחר אחוז</option>
-                      {institutionPercentageOptions.map(option => (
+                      <option value="">{t('selectPercentage')}</option>
+                      {INSTITUTION_PERCENTAGE_OPTIONS.map(option => (
                         <option key={option} value={option}>{option}</option>
                       ))}
                     </select>
@@ -980,23 +1171,22 @@ const NewPatent = () => {
                 </div>
                 {formData.partners.length > 1 && (
                   <button type="button" onClick={() => removePartner(index)} className="remove-btn">
-                    הסר שותף
+                    {t('removePartner')}
                   </button>
                 )}
               </div>
             ))}
             {hasPartners && (
               <button type="button" onClick={addPartner} className="add-btn">
-                + הוסף שותף
+                + {t('addPartner', 'הוסף שותף')}
               </button>
             )}
           </div>
 
-          {/* יחידת מסחור */}
           <div className="form-section">
-            <h2>יחידת מסחור</h2>
+            <h2>{t('commercializationUnitTitle')}</h2>
             <div className="form-group">
-              <label>שם יח' המסחור דרכה הוגשה הבקשה *</label>
+              <label>{t('commercializationUnitSelectLabel')} *</label>
               <select
                 name="commercializationUnit"
                 value={formData.commercializationUnit}
@@ -1004,9 +1194,9 @@ const NewPatent = () => {
                 className={errors.commercializationUnit ? 'error' : ''}
                 required
               >
-                <option value="">בחר יחידת מסחור</option>
+                <option value="">{t('selectCommercializationUnit')}</option>
                 {commercializationUnitOptions.map(option => (
-                  <option key={option} value={option}>{option}</option>
+                  <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
               {errors.commercializationUnit && <span className="error-message">{errors.commercializationUnit}</span>}
@@ -1014,7 +1204,7 @@ const NewPatent = () => {
 
             <div className="form-row">
               <div className="form-group">
-                <label>איש קשר של יח' המסחור 1</label>
+                <label>{t('commercializationContact1Label')}</label>
                 <input
                   type="text"
                   name="commercializationContact1"
@@ -1023,7 +1213,7 @@ const NewPatent = () => {
                 />
               </div>
               <div className="form-group">
-                <label>אימייל של איש הקשר 1</label>
+                <label>{t('commercializationEmail1Label')}</label>
                 <input
                   type="email"
                   name="commercializationEmail1"
@@ -1035,7 +1225,7 @@ const NewPatent = () => {
 
             <div className="form-row">
               <div className="form-group">
-                <label>איש קשר של יח' המסחור 2</label>
+                <label>{t('commercializationContact2Label')}</label>
                 <input
                   type="text"
                   name="commercializationContact2"
@@ -1044,7 +1234,7 @@ const NewPatent = () => {
                 />
               </div>
               <div className="form-group">
-                <label>אימייל של איש הקשר 2</label>
+                <label>{t('commercializationEmail2Label')}</label>
                 <input
                   type="email"
                   name="commercializationEmail2"
@@ -1055,12 +1245,11 @@ const NewPatent = () => {
             </div>
           </div>
 
-          {/* מסלול ותפקיד */}
           <div className="form-section">
-            <h2>מסלול ותפקיד</h2>
+            <h2>{t('patentPathAndRoleTitle')}</h2>
             <div className="form-row">
               <div className="form-group">
-                <label>מסלול ההגשה לקרן *</label>
+                <label>{t('patentSubmissionPathLabel')} *</label>
                 <select
                   name="submissionPath"
                   value={formData.submissionPath}
@@ -1068,15 +1257,15 @@ const NewPatent = () => {
                   className={errors.submissionPath ? 'error' : ''}
                   required
                 >
-                  <option value="">בחר מסלול</option>
+                  <option value="">{t('selectPath', 'בחרו מסלול')}</option>
                   {submissionPathOptions.map(option => (
-                    <option key={option} value={option}>{option}</option>
+                    <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
                 {errors.submissionPath && <span className="error-message">{errors.submissionPath}</span>}
               </div>
               <div className="form-group">
-                <label>תפקיד החוקר בהגשת הפטנט *</label>
+                <label>{t('patentResearcherRoleLabel')} *</label>
                 <select
                   name="researcherRole"
                   value={formData.researcherRole}
@@ -1084,9 +1273,9 @@ const NewPatent = () => {
                   className={errors.researcherRole ? 'error' : ''}
                   required
                 >
-                  <option value="">בחר תפקיד</option>
+                  <option value="">{t('selectRole', 'בחרו תפקיד')}</option>
                   {researcherRoleOptions.map(option => (
-                    <option key={option} value={option}>{option}</option>
+                    <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
                 {errors.researcherRole && <span className="error-message">{errors.researcherRole}</span>}
@@ -1094,12 +1283,11 @@ const NewPatent = () => {
             </div>
           </div>
 
-          {/* סטטוס ושלב */}
           <div className="form-section">
-            <h2>סטטוס ושלב</h2>
+            <h2>{t('patentStatusAndStageTitle')}</h2>
             <div className="form-row">
               <div className="form-group">
-                <label>סטטוס הפטנט *</label>
+                <label>{t('patentStatusLabel')} *</label>
                 <select
                   name="patentStatus"
                   value={formData.patentStatus}
@@ -1107,7 +1295,7 @@ const NewPatent = () => {
                   className={errors.patentStatus ? 'error' : ''}
                   required
                 >
-                  <option value="">בחר סטטוס</option>
+                  <option value="">{t('selectStatus')}</option>
                   {patentStatusOptions.map(option => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
@@ -1115,7 +1303,7 @@ const NewPatent = () => {
                 {errors.patentStatus && <span className="error-message">{errors.patentStatus}</span>}
               </div>
               <div className="form-group">
-                <label>שלב הפטנט *</label>
+                <label>{t('patentStage', 'שלב הפטנט')} *</label>
                 <select
                   name="patentStage"
                   value={formData.patentStage}
@@ -1123,7 +1311,7 @@ const NewPatent = () => {
                   className={errors.patentStage ? 'error' : ''}
                   required
                 >
-                  <option value="">בחר שלב</option>
+                  <option value="">{t('selectStage')}</option>
                   {patentStageOptions.map(option => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
@@ -1133,9 +1321,8 @@ const NewPatent = () => {
             </div>
           </div>
 
-          {/* זמני ביצוע - תאריכים */}
           <div className="form-section">
-            <h2>זמני ביצוע - תאריכים</h2>
+            <h2>{t('patentTimelineTitle')}</h2>
             <div className="dates-grid">
               {dateFields.map(({ key, label }) => (
                 <div key={key} className="form-group">
@@ -1168,7 +1355,7 @@ const NewPatent = () => {
                           cursor: 'pointer',
                           zIndex: 2
                         }}
-                        title="בחר תאריך מלוח שנה"
+                        title={t('chooseDate', 'בחר תאריך מלוח שנה')}
                       />
                       <div
                         style={{
@@ -1197,7 +1384,7 @@ const NewPatent = () => {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="calendar-link"
-                        title="הוסף ל-Outlook Calendar"
+                        title={t('addToOutlookCalendar')}
                       >
                         📅
                       </a>
@@ -1211,13 +1398,11 @@ const NewPatent = () => {
             </div>
           </div>
 
-          {/* תקציב */}
           <div className="form-section">
-            <h2>תקציב</h2>
+            <h2>{t('patentBudgetTitle')}</h2>
 
-            {/* תקציב משוער לכל שלב */}
             <div className="form-group">
-              <label>תקציב משוער לכל שלב</label>
+              <label>{t('patentBudgetPerStage')}</label>
               {patentStageOptions.map(stage => (
                 <div key={stage.value} className="form-row" style={{ marginBottom: '10px' }}>
                   <label style={{ width: '200px', marginTop: '8px' }}>{stage.label}:</label>
@@ -1225,7 +1410,7 @@ const NewPatent = () => {
                     type="number"
                     value={formData.stageBudgets[stage.value] || ''}
                     onChange={(e) => handleStageBudgetChange(stage.value, e.target.value)}
-                    placeholder="הכנס תקציב"
+                    placeholder={t('enterBudget')}
                     style={{ flex: 1 }}
                   />
                 </div>
@@ -1235,7 +1420,7 @@ const NewPatent = () => {
 
             <div className="form-row">
               <div className="form-group">
-                <label>סה"כ תקציב (חישוב אוטומטי)</label>
+                <label>{t('patentTotalBudget')}</label>
                 <input
                   type="number"
                   name="totalBudget"
@@ -1245,7 +1430,7 @@ const NewPatent = () => {
                 />
               </div>
               <div className="form-group">
-                <label>מטבע</label>
+                <label>{t('budgetCurrency', 'מטבע התקציב')}</label>
                 <select
                   name="currency"
                   value={formData.currency}
@@ -1257,7 +1442,7 @@ const NewPatent = () => {
                 </select>
               </div>
               <div className="form-group">
-                <label>תקציב מתורגם (שקלים, חישוב אוטומטי)</label>
+                <label>{t('patentConvertedBudget')}</label>
                 <input
                   type="number"
                   name="convertedBudget"
@@ -1269,19 +1454,19 @@ const NewPatent = () => {
             </div>
           </div>
 
-          {/* מסמכים */}
           <div className="form-section">
-            <h2>מסמכים</h2>
+            <h2>{t('patentDocumentsTitle')}</h2>
             <div className="form-group">
-              <label>צ'קליסט מסמכים להגשה</label>
+              <label>{t('patentDocumentsChecklist')}</label>
               <div className="documents-checklist-grid">
-                {requiredDocuments.map((docName) => (
+                {PATENT_REQUIRED_DOCUMENT_DEFS.map(({ key, labelKey }) => (
                   <DocumentChecklistCard
-                    key={docName}
-                    docName={docName}
-                    files={formData.requiredDocumentsFiles?.[docName] || []}
-                    onUpload={(files) => handleRequiredDocumentUpload(docName, files)}
-                    onRemove={(fileIndex) => handleRemoveRequiredDocumentFile(docName, fileIndex)}
+                    key={key}
+                    docName={key}
+                    displayLabel={t(labelKey)}
+                    files={formData.requiredDocumentsFiles?.[key] || []}
+                    onUpload={(files) => handleRequiredDocumentUpload(key, files)}
+                    onRemove={(fileIndex) => handleRemoveRequiredDocumentFile(key, fileIndex)}
                   />
                 ))}
               </div>
@@ -1289,47 +1474,45 @@ const NewPatent = () => {
 
           </div>
 
-          {/* חתימה דיגיטלית */}
           <div className="form-section">
-            <h2>חתימה דיגיטלית</h2>
+            <h2>{t('digitalSignatureTitle', 'חתימה דיגיטלית')}</h2>
             <div className="form-group">
-              <label>חתימת מורשי חתימה מוסדיים</label>
+              <label>{t('institutionalSignatures', 'חתימת מורשי חתימה מוסדיים')}</label>
               {!formData.digitalSignature.signed ? (
                 <button
                   type="button"
                   className="btn-signature"
                   onClick={handleDigitalSignature}
                 >
-                  חתימה דיגיטלית
+                  {t('digitalSignButton', 'חתימה דיגיטלית')}
                 </button>
               ) : (
                 <div className="signature-info">
-                  <p>✓ חתום על ידי: {formData.digitalSignature.signer}</p>
-                  <p>תאריך חתימה: {formData.digitalSignature.date}</p>
+                  <p>✓ {t('signedBy', 'חתום על ידי')}: {formData.digitalSignature.signer}</p>
+                  <p>{t('signatureDate', 'תאריך חתימה')}: {formData.digitalSignature.date}</p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* הערות */}
           <div className="form-section">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '12px', flexWrap: 'wrap' }}>
-              <h2 style={{ margin: 0 }}>{lang === 'en' ? 'Notes' : 'הערות'}</h2>
+              <h2 style={{ margin: 0 }}>{t('notesTitle')}</h2>
               <AIPolishButton
                 fields={{ notes: formData.notes }}
-                fieldLabels={{ notes: lang === 'en' ? 'Notes' : 'הערות' }}
+                fieldLabels={{ notes: t('notesFreeText', 'הערות (כתיבה חופשית)') }}
                 onApply={(improved) => setFormData((prev) => ({ ...prev, ...improved }))}
                 lang={lang}
               />
             </div>
             <div className="form-group">
-              <label>{lang === 'en' ? 'Notes (free text)' : 'הערות (כתיבה חופשית)'}</label>
+              <label>{t('notesFreeText', 'הערות (כתיבה חופשית)')}</label>
               <textarea
                 name="notes"
                 value={formData.notes}
                 onChange={handleInputChange}
                 rows={5}
-                placeholder={lang === 'en' ? 'Enter additional notes...' : 'הכנס הערות נוספות...'}
+                placeholder={t('enterAdditionalNotes')}
               />
             </div>
           </div>

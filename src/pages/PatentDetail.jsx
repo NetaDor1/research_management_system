@@ -13,6 +13,7 @@ import './Page.css';
 import './Research.css';
 import { exportPrintableHtmlToPdf, escapeHtml } from '../utils/exportPdf';
 import { navigateBackOrFallback } from '../utils/navigation';
+import PatentDisclosureDisplay from '../components/research/PatentDisclosureDisplay';
 
 const PatentDetail = () => {
   const { id } = useParams();
@@ -992,6 +993,13 @@ const PatentDetail = () => {
                 </div>
               </div>
             </div>
+
+            <PatentDisclosureDisplay
+              patentData={patentData}
+              t={t}
+              formatDate={formatDate}
+              notSpecified={notSpecified}
+            />
 
             {/* יחידת מסחור */}
             <div style={{ 

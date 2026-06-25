@@ -5,12 +5,14 @@ import './DocumentChecklistCard.css';
 
 const DocumentChecklistCard = ({
   docName,
+  displayLabel,
   files = [],
   onUpload,
   onRemove,
 }) => {
   const { t } = useLanguage();
   const hasFiles = files.length > 0;
+  const label = displayLabel || docName;
 
   const getFileName = (fileItem) => {
     if (!fileItem) return '';
@@ -42,7 +44,7 @@ const DocumentChecklistCard = ({
             className="document-checklist-card__checkbox"
             aria-hidden="true"
           />
-          <span className="document-checklist-card__name">{docName}</span>
+          <span className="document-checklist-card__name">{label}</span>
         </div>
 
         <div className="document-checklist-card__drop-hint" aria-hidden="true">

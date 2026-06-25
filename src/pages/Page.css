@@ -387,7 +387,7 @@ html[dir="rtl"] .statistics-section h2 {
   color: #dc3545;
 }
 
-.form-group input,
+.form-group input:not([type="radio"]):not([type="checkbox"]),
 .form-group textarea,
 .form-group select {
   width: 100%;
@@ -396,11 +396,11 @@ html[dir="rtl"] .statistics-section h2 {
   border-radius: 8px;
   font-size: 16px;
   font-family: inherit;
-  transition: all 0.3s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   box-sizing: border-box;
 }
 
-.form-group input:focus,
+.form-group input:not([type="radio"]):not([type="checkbox"]):focus,
 .form-group textarea:focus,
 .form-group select:focus {
   outline: none;
@@ -413,7 +413,7 @@ html[dir="rtl"] .statistics-section h2 {
   min-height: 100px;
 }
 
-.form-group input.error,
+.form-group input:not([type="radio"]):not([type="checkbox"]).error,
 .form-group textarea.error,
 .form-group select.error {
   border-color: #dc3545;
@@ -607,9 +607,15 @@ html[dir="rtl"] .statistics-section h2 {
   font-weight: normal;
 }
 
-.checkbox-label input[type="checkbox"] {
+.checkbox-label input[type="checkbox"],
+.checkbox-label input[type="radio"] {
   width: auto;
+  height: auto;
+  padding: 0;
+  border: none;
+  box-shadow: none;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .files-list {
