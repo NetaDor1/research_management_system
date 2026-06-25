@@ -208,6 +208,7 @@ const Home = () => {
           publicationDate: toDateString(data.publicationDate || data.createdAt),
           publicationType: data.publicationType || 'journal',
           isNew: data.isNew || false,
+          createdAt: data.createdAt || data.submittedAt || null,
         };
       });
 
@@ -816,7 +817,7 @@ const Home = () => {
                 className="research-card"
                 onClick={() => handleArticleClick(article)}
               >
-                {shouldShowNewBadge(article.isNew, article.publicationDate) && (
+                {shouldShowNewBadge(article.isNew, article.createdAt) && (
                   <span className="new-badge">{t('newBadge', 'חדש!')}</span>
                 )}
                 <h3 className="research-title">{article.title}</h3>

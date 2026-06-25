@@ -8,6 +8,7 @@ const REVIEW_PATH = '/api/review-proposal';
 const CHAT_PATH = '/api/research-assistant-chat';
 const HEALTH_PATH = '/api/health';
 const POLISH_PATH = '/api/polish-text';
+const BIBLIOGRAPHY_VERIFY_PATH = '/api/verify-bibliography';
 
 function apiBase() {
   return (process.env.REACT_APP_REVIEW_API_BASE || '').trim().replace(/\/$/, '');
@@ -117,6 +118,14 @@ function apiErrorFromResponse(res, data) {
     return err;
   }
 
+  if (res.status === 404) {
+    const err = new Error(
+      'נתיב הבדיקה לא נמצא בשרת. עצרו את npm run dev (Ctrl+C) והפעילו שוב — השרת צריך לעלות מחדש אחרי עדכון הקוד.'
+    );
+    err.status = 404;
+    return err;
+  }
+
   if (typeof data.error === 'string' && data.error.trim()) {
     const err = new Error(data.error.trim());
     err.status = res.status;
@@ -181,6 +190,41 @@ export async function requestResearchAssistantChat(body) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+  });
+
+  let data = {};
+  try { data = await res.json(); } catch { data = {}; }
+
+  if (!res.ok) throw apiErrorFromResponse(res, data);
+  return data;
+}
+
+export function getBibliographyVerificationUrl() {
+  const base = apiBase();
+  return base ? `${base}${BIBLIOGRAPHY_VERIFY_PATH}` : BIBLIOGRAPHY_VERIFY_PATH;
+}
+
+/** Maps publications + research support fields to the backend verification contract. */
+export function buildBibliographyVerificationPayload(formData) {
+  const f = formData && typeof formData === 'object' ? formData : {};
+  return {
+    bibliography: {
+      selectedPublications: (f.bibliographySelectedPublications || '').trim(),
+      researchSupport: (f.bibliographyResearchSupport || '').trim(),
+    },
+  };
+}
+
+export function hasBibliographyVerificationContent(formData) {
+  const b = buildBibliographyVerificationPayload(formData).bibliography;
+  return Boolean(b.selectedPublications || b.researchSupport);
+}
+
+export async function requestBibliographyVerification(formData) {
+  const res = await fetch(getBibliographyVerificationUrl(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(buildBibliographyVerificationPayload(formData)),
   });
 
   let data = {};

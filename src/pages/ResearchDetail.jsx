@@ -11,6 +11,8 @@ import ResearchPeriodSection from '../components/research/ResearchPeriodSection'
 import BudgetSection from '../components/research/BudgetSection';
 import PartnersSection from '../components/research/PartnersSection';
 import ResearchDescriptionSection from '../components/research/ResearchDescriptionSection';
+import BibliographyDisplaySection from '../components/research/BibliographyDisplaySection';
+import DocumentsDisplaySection from '../components/research/DocumentsDisplaySection';
 import AdditionalInfoSection from '../components/research/AdditionalInfoSection';
 import TasksSection from '../components/research/TasksSection';
 import { canResearcherEditResearch, isDraft } from '../utils/submissionStatus';
@@ -945,29 +947,79 @@ const ResearchDetail = () => {
                   const approvedRaw = parseFloat(approvedBudgetInput) || 0;
                   const approvedILS = approvedRaw * rateToILS;
                   const showILS = currency !== 'ILS';
-                  const cols = showILS ? '1fr 1fr 1fr auto' : '1fr 1fr auto';
+                  const components = researchData.budgetComponents || {};
+                  const hasConversion = currency !== 'ILS';
+                  const headerCols = hasConversion ? '1fr 170px 120px 1fr' : '1fr 170px 140px';
+                  const sym = currencySymbol;
+                  const rate = rateToILS;
+
                   return (
                 <>
-                <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '16px', alignItems: 'end' }}>
-                  <div>
-                    <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '6px', color: '#666' }}>
-                      {t('budgetStatusLabel', 'סטטוס התקציב')}
-                    </label>
-                    <select
-                      value={proposalStatus}
-                      onChange={(e) => setProposalStatus(e.target.value)}
-                      style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
-                    >
-                      <option value="pending">{t('proposalStatusPending', 'בהמתנה')}</option>
-                      <option value="awarded">{t('proposalStatusApproved', 'מאושר')}</option>
-                      <option value="rejected">{t('proposalStatusRejected', 'נדחה')}</option>
-                    </select>
-                    {showILS && <span style={{ display: 'block', height: '17px' }} />}
-                  </div>
+                <div>
+                    <h3 style={{ marginTop: 0, marginBottom: '6px', fontSize: '16px' }}>
+                      {t('budgetComponentsRequestedVsApproved', 'רכיבי תקציב: מבוקש מול התקבל')}
+                    </h3>
+                    {Object.keys(components).length === 0 ? (
+                      <p style={{ color: '#888', fontSize: '14px', margin: '6px 0 0' }}>
+                        {t('noBudgetComponents', 'לא הוגשו רכיבי תקציב בהצעה זו')}
+                      </p>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: headerCols, columnGap: '14px', rowGap: '0', alignItems: 'center' }}>
+                        <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('budgetComponent', 'רכיב')}</div>
+                        <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('requested', 'מבוקש')}</div>
+                        <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('received', 'התקבל')} ({sym})</div>
+                        {hasConversion && <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('convertedILS', 'המרה לשקלים')}</div>}
+                        {Object.entries(components).map(([componentKey, requestedValue]) => {
+                          const approvedVal = parseFloat(String(approvedBudgetComponentsInput[componentKey] ?? '').replace(/,/g, '')) || 0;
+                          const convertedVal = approvedVal * rate;
+                          const rowBg = { background: '#fff', padding: '8px 10px', borderBottom: '1px solid #f0f0f0' };
+                          return (
+                            <React.Fragment key={componentKey}>
+                              <div style={{ ...rowBg, fontWeight: 'bold', color: '#334155', fontSize: '14px' }}>
+                                {getBudgetComponentLabel(componentKey, t)}
+                              </div>
+                              <div style={{ ...rowBg, color: '#334155', fontSize: '14px' }}>
+                                {`${sym} ${Number(requestedValue || 0).toLocaleString(locale, { style: 'decimal' })}`}
+                              </div>
+                              <div style={{ ...rowBg }}>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={approvedBudgetComponentsInput[componentKey] ?? ''}
+                                  onChange={(e) =>
+                                    setApprovedBudgetComponentsInput((prev) => ({
+                                      ...prev,
+                                      [componentKey]: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="0"
+                                  style={{
+                                    width: '100%',
+                                    padding: '6px 8px',
+                                    borderRadius: '6px',
+                                    border: '1px solid #cbd5e1',
+                                    background: '#fff',
+                                    boxSizing: 'border-box',
+                                  }}
+                                />
+                              </div>
+                              {hasConversion && (
+                                <div style={{ ...rowBg, color: '#2b6cb0', fontSize: '14px' }}>
+                                  {approvedVal > 0 ? `₪ ${convertedVal.toLocaleString(locale, { style: 'decimal' })}` : '—'}
+                                </div>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </div>
+                    )}
+                </div>
 
-                  <div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'end', marginTop: '18px' }}>
+                  <div style={{ width: '200px', flexShrink: 0 }}>
                     <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '6px', color: '#666' }}>
-                      {t('approvedBudgetLabel', 'תקציב שהתקבל')} ({currencySymbol})
+                      {t('approvedBudgetLabel', 'סה"כ תקציב שהתקבל')} ({currencySymbol})
                     </label>
                     <input
                       type="text"
@@ -989,7 +1041,7 @@ const ResearchDetail = () => {
                   </div>
 
                   {showILS && (
-                    <div>
+                    <div style={{ width: '200px', flexShrink: 0 }}>
                       <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '6px', color: '#666' }}>
                         {t('approvedBudgetConvertedILS', 'מומר לשקלים (₪)')}
                       </label>
@@ -1016,20 +1068,20 @@ const ResearchDetail = () => {
                     </div>
                   )}
 
-                  <div>
+                  <div style={{ flexShrink: 0 }}>
                     <button
                       type="button"
                       onClick={handleSaveProposalDecision}
                       disabled={savingProposalDecision}
                       style={{
-                        width: '100%',
-                        padding: '10px 14px',
+                        padding: '10px 20px',
                         background: savingProposalDecision ? '#94a3b8' : '#2b6cb0',
                         color: 'white',
                         border: 'none',
                         borderRadius: '6px',
                         cursor: savingProposalDecision ? 'not-allowed' : 'pointer',
                         fontWeight: 'bold',
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       {savingProposalDecision ? t('saving', 'שומר...') : t('saveDecision', 'שמור החלטה')}
@@ -1040,86 +1092,14 @@ const ResearchDetail = () => {
                 </>
                   );
                 })()}
-                <div style={{ marginTop: '18px' }}>
-                    <h3 style={{ marginTop: 0, marginBottom: '6px', fontSize: '16px' }}>
-                      {t('budgetComponentsRequestedVsApproved', 'רכיבי תקציב: מבוקש מול התקבל')}
-                    </h3>
-                    {(() => {
-                      const components = researchData.budgetComponents || {};
-                      const cur = researchData.currency || 'ILS';
-                      const sym = cur === 'USD' ? '$' : cur === 'EUR' ? '€' : '₪';
-                      const rate = cur === 'USD' ? 3.5 : cur === 'EUR' ? 3.8 : 1;
-                      const hasConversion = cur !== 'ILS';
-                      const rowCols = 'minmax(150px, 1.5fr) minmax(120px, 1fr) auto';
-                      if (Object.keys(components).length === 0) {
-                        return (
-                          <p style={{ color: '#888', fontSize: '14px', margin: '6px 0 0' }}>
-                            {t('noBudgetComponents', 'לא הוגשו רכיבי תקציב בהצעה זו')}
-                          </p>
-                        );
-                      }
-                      const headerCols = hasConversion ? '1fr 170px 120px 1fr' : '1fr 170px 140px';
-                      return (
-                        <div style={{ display: 'grid', gridTemplateColumns: headerCols, columnGap: '14px', rowGap: '0', alignItems: 'center' }}>
-                          {/* header row */}
-                          <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('budgetComponent', 'רכיב')}</div>
-                          <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('requested', 'מבוקש')}</div>
-                          <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('received', 'התקבל')} ({sym})</div>
-                          {hasConversion && <div style={{ fontWeight: 'bold', color: '#888', fontSize: '12px', padding: '4px 10px', borderBottom: '1px solid #e2e8f0' }}>{t('convertedILS', 'המרה לשקלים')}</div>}
-                          {/* data rows */}
-                          {Object.entries(components).map(([componentKey, requestedValue]) => {
-                            const approvedVal = parseFloat(String(approvedBudgetComponentsInput[componentKey] ?? '').replace(/,/g, '')) || 0;
-                            const convertedVal = approvedVal * rate;
-                            const rowBg = { background: '#fff', padding: '8px 10px', borderBottom: '1px solid #f0f0f0' };
-                            return (
-                              <React.Fragment key={componentKey}>
-                                <div style={{ ...rowBg, fontWeight: 'bold', color: '#334155', fontSize: '14px' }}>
-                                  {getBudgetComponentLabel(componentKey, t)}
-                                </div>
-                                <div style={{ ...rowBg, color: '#334155', fontSize: '14px' }}>
-                                  {`${sym} ${Number(requestedValue || 0).toLocaleString(locale, { style: 'decimal' })}`}
-                                </div>
-                                <div style={{ ...rowBg }}>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="1"
-                                    value={approvedBudgetComponentsInput[componentKey] ?? ''}
-                                    onChange={(e) =>
-                                      setApprovedBudgetComponentsInput((prev) => ({
-                                        ...prev,
-                                        [componentKey]: e.target.value,
-                                      }))
-                                    }
-                                    placeholder="0"
-                                    style={{
-                                      width: '100%',
-                                      padding: '6px 8px',
-                                      borderRadius: '6px',
-                                      border: '1px solid #cbd5e1',
-                                      background: '#fff',
-                                      boxSizing: 'border-box',
-                                    }}
-                                  />
-                                </div>
-                                {hasConversion && (
-                                  <div style={{ ...rowBg, color: '#2b6cb0', fontSize: '14px' }}>
-                                    {approvedVal > 0 ? `₪ ${convertedVal.toLocaleString(locale, { style: 'decimal' })}` : '—'}
-                                  </div>
-                                )}
-                              </React.Fragment>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
-                  </div>
               </div>
             )}
             <ResearchPeriodSection researchData={researchData} />
             <BudgetSection researchData={researchData} />
             <PartnersSection researchData={researchData} />
+            <DocumentsDisplaySection researchData={researchData} />
             <ResearchDescriptionSection researchData={researchData} />
+            <BibliographyDisplaySection researchData={researchData} />
             <AdditionalInfoSection researchData={researchData} />
             
             {researchData.workPlanTasks && researchData.workPlanTasks.length > 0 && (

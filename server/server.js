@@ -447,6 +447,388 @@ ${proposalBlock || '(No draft text in the form yet — use the user message as t
   }
 });
 
+const MAX_BIBLIO_FIELD = 8000;
+const MAX_BIBLIO_ITEMS = 30;
+
+const BIBLIOGRAPHY_SINGLE_ENTRY_INSTRUCTION = `You are a specialized academic reviewer scoring ONE bibliography entry for a research grant application.
+
+Sections: C = peer-reviewed publication, D = research support/funding
+You must evaluate BOTH the completeness of the format AND the academic credibility of the source.
+CRITICAL FIRST STEP: Identify if the item belongs to Section C (Publications) or Section D (Funding/Support) based on the input text.
+
+Scoring rubric:
+* IF EVALUATING SECTION C (Publications) *
+- 85–100 + "high": Reputable academic publishers/conferences (e.g., IEEE, ACM, Springer) with complete metadata including DOI/URL.
+- 60–84 + "medium": Industry standards or official reports (e.g., OWASP, NIST), OR valid academic papers missing minor identifiers like a DOI.
+- 35–59 + "low": Missing critical academic details (venue, year).
+- 0–34 + "insufficient_data" / "low": CRITICAL PENALTY. Non-peer-reviewed sources. You MUST score personal blogs (Medium), forums (Reddit), Wikipedia, or news sites in this range and flag them as non-academic.
+
+* IF EVALUATING SECTION D (Research Support) *
+- 85–100 + "high": Valid recent grant (active or completed between 2023 and 2026) with clear agency, project name, dates, and role.
+- 60–84 + "medium": Valid recent grant missing minor details (e.g., missing specific amount).
+- 35–59 + "low": CRITICAL PENALTY. Outdated grants (ended before 2023, e.g., 2018-2020), OR misplaced items. If a journal article/book is placed in this funding section, score it here and flag it as a misplaced publication lacking funding details.
+- 0–34 + "insufficient_data" / "low": Completely broken text or irrelevant non-academic claims.
+
+You cannot access external databases. Do not claim you verified PubMed/Scholar.
+
+Output language: Hebrew for concerns/recommendations. Keep recommendations actionable.
+
+Return ONLY valid JSON exactly matching this structure:
+{"id":"","label":"short citation","score":0,"credibilityLevel":"high","concerns":[],"recommendations":[]}`;
+
+const BIBLIO_SCORE_DELAY_MS = 450;
+
+/** Split field into entries: one per line, optional blank lines between, optional numbering/bullets. */
+function splitBibliographyEntries(text) {
+  const raw = String(text || '').replace(/\r\n/g, '\n').trim();
+  if (!raw) return [];
+
+  return raw
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^(?:[-*•●]\s+|\d+[.)]\s+)/, '').trim())
+    .filter(Boolean)
+    .slice(0, MAX_BIBLIO_ITEMS);
+}
+
+function buildBibliographyEntryLists(bibliography) {
+  const publications = splitBibliographyEntries(bibliography.selectedPublications).map((text, index) => ({
+    id: `C-${index + 1}`,
+    text: truncateField(text, 2000),
+  }));
+  const researchSupport = splitBibliographyEntries(bibliography.researchSupport).map((text, index) => ({
+    id: `D-${index + 1}`,
+    text: truncateField(text, 2000),
+  }));
+  return { publications, researchSupport };
+}
+
+function entryLabel(text, maxLen = 140) {
+  const s = String(text || '').trim().replace(/\s+/g, ' ');
+  if (!s) return 'פריט';
+  return s.length <= maxLen ? s : `${s.slice(0, maxLen)}…`;
+}
+
+function extractYearsFromText(text) {
+  const matches = String(text || '').match(/\b(19|20)\d{2}\b/g) || [];
+  return [...new Set(matches.map(Number))];
+}
+
+function looksLikeNonAcademicSource(text) {
+  return /\b(medium\.com|wikipedia|reddit|blogspot|\.blog\b|חדשות|news\.|timesofisrael|ynet)\b/i.test(text);
+}
+
+function looksLikePublicationInSectionD(text) {
+  const t = String(text || '');
+  const pubSignals =
+    /\b(journal|proceedings|symposium|conference|doi|vol\.|pp\.|ieee|acm|springer|elsevier|arxiv|nature|science|מאמר|פרסום|כתב עת)\b/i.test(t) ||
+    /\b10\.\d{4,}\/\S+/.test(t);
+  const fundingSignals =
+    /\b(grant|funded|funding|מענק|מימון|תמיכה|חוקר ראשי|PI\b|co-PI|ISF|NIH|NSF|Horizon|ERC|BMBF|משרד|קרן)\b/i.test(t);
+  return pubSignals && !fundingSignals;
+}
+
+function isOutdatedResearchSupport(text) {
+  const years = extractYearsFromText(text);
+  if (!years.length) return false;
+  const hasRecent = years.some((y) => y >= 2023 && y <= 2026);
+  if (hasRecent) return false;
+  return years.every((y) => y < 2023);
+}
+
+function hasFundingAgencySignal(text) {
+  return /\b(ISF|NIH|NSF|Horizon|ERC|BMBF|משרד|קרן|grant|מענק|מימון|funded|funding)\b/i.test(text);
+}
+
+/** Enforce hard score caps from the Section C/D rubric on the server. */
+function applySectionScoreGuards(entry, section, item) {
+  const text = entry?.text || '';
+  let score = item.score;
+  const concerns = [...(item.concerns || [])];
+  const recommendations = [...(item.recommendations || [])];
+
+  if (section === 'publications' && looksLikeNonAcademicSource(text)) {
+    score = Math.min(score, 35);
+    if (!concerns.some((c) => /לא אקדמי|non-academic|ביקורת עמיתים/i.test(c))) {
+      concerns.push('מקור לא אקדמי (בלוג, ויקיפדיה, חדשות וכו\') — לא מתאים לסעיף פרסומים מבוקרים');
+    }
+  }
+
+  if (section === 'researchSupport') {
+    if (looksLikePublicationInSectionD(text)) {
+      score = Math.min(score, 40);
+      if (!concerns.some((c) => /ממוקם|misplaced|פרסום/i.test(c))) {
+        concerns.push('פריט זה נראה כפרסום (מאמר/ספר) שממוקם בטעות בתמיכת מחקר — חסרים פרטי מימון');
+      }
+    }
+    if (isOutdatedResearchSupport(text)) {
+      score = Math.min(score, 59);
+      if (!concerns.some((c) => /ישן|outdated|2023|2026/i.test(c))) {
+        concerns.push('המענק/פרויקט נראה מחוץ לטווח 3 השנים האחרונות (2023–2026)');
+      }
+    }
+    if (!hasFundingAgencySignal(text) && !looksLikePublicationInSectionD(text) && score > 59) {
+      score = 59;
+      if (!concerns.some((c) => /גוף מממן|מענק/i.test(c))) {
+        concerns.push('חסרים פרטי מימון: גוף מממן, שם מענק/פרויקט או תפקיד');
+      }
+    }
+  }
+
+  return {
+    ...item,
+    score,
+    credibilityLevel: inferCredibilityLevel(score),
+    concerns,
+    recommendations,
+  };
+}
+
+function buildBibliographyEntryPrompt(entry, section) {
+  if (section === 'publications') {
+    return `Evaluate using SECTION C (Publications) rubric ONLY.
+
+id: ${entry.id}
+text:
+${entry.text}
+
+Return JSON with the same id.`;
+  }
+
+  return `Evaluate using SECTION D (Research Support / Funding) rubric ONLY — ignore publication rules.
+
+MANDATORY Section D checks:
+1. Recent grant: active or completed roughly between 2023 and 2026. If ended before 2023 (e.g. 2018–2020) → score 35–59.
+2. Require funding details: agency, grant/project name, dates/period, role (PI/co-PI) when possible.
+3. If this line is a journal/book/article citation (not a grant) → score MUST be 0–40 and flag as misplaced publication.
+
+id: ${entry.id}
+text:
+${entry.text}
+
+Return JSON with the same id.`;
+}
+
+function inferCredibilityLevel(score) {
+  if (score >= 85) return 'high';
+  if (score >= 60) return 'medium';
+  if (score >= 35) return 'low';
+  return 'insufficient_data';
+}
+
+/** Rule-based fallback when Gemini fails — uses Section C vs D rules. */
+function heuristicEntryScore(entry, section) {
+  const text = entry.text || '';
+  const t = text.trim();
+  const len = t.length;
+  const concerns = [];
+  const recommendations = [];
+  let score = 25;
+
+  if (len < 12) {
+    score = 20;
+    concerns.push('הפריט קצר מדי לבדיקה משמעותית');
+  } else if (section === 'researchSupport') {
+    const years = extractYearsFromText(t);
+    const hasRecent = years.some((y) => y >= 2023 && y <= 2026);
+    const hasAgency = hasFundingAgencySignal(t);
+    const hasRole = /\b(PI\b|co-PI|חוקר ראשי|principal investigator|researcher)\b/i.test(t);
+    const hasProjectName = /\b(project|פרויקט|grant|מענק|תוכנית)\b/i.test(t);
+
+    if (looksLikePublicationInSectionD(t)) {
+      score = 30;
+      concerns.push('פריט זה נראה כפרסום שממוקם בטעות בתמיכת מחקר');
+    } else if (isOutdatedResearchSupport(t)) {
+      score = 45;
+      concerns.push('המענק/פרויקט נראה מחוץ לטווח 3 השנים האחרונות (2023–2026)');
+    } else if (hasAgency && hasRecent && hasProjectName) {
+      score = hasRole ? 88 : 78;
+    } else if (hasAgency && hasRecent) {
+      score = 72;
+      recommendations.push('מומלץ לציין שם פרויקט/מענק ותפקיד (PI/co-PI)');
+    } else if (hasAgency) {
+      score = 65;
+      if (!hasRecent) recommendations.push('ציינו תקופת המענק (2023–2026)');
+    } else {
+      score = 50;
+      concerns.push('חסרים פרטי מימון: גוף מממן, שם מענק/פרויקט או תפקיד');
+    }
+  } else {
+    const hasYear = /\b(19|20)\d{2}\b/.test(t);
+    const hasDoi = /\bdoi\s*[:.]?\s*\S+/i.test(t) || /10\.\d{4,}\/\S+/.test(t);
+    const hasUrl = /https?:\/\/\S+/i.test(t);
+    const hasVenue = /\b(journal|proceedings|symposium|conference|nature|science|ieee|acm|springer|elsevier|vol\.|pp\.|arxiv)\b/i.test(t);
+    const isReputable = /\b(ieee|acm|springer|elsevier|nature|science)\b/i.test(t);
+    const isIndustry = /\b(owasp|nist)\b/i.test(t);
+
+    if (looksLikeNonAcademicSource(t)) {
+      score = 25;
+      concerns.push('מקור לא אקדמי — לא עבר ביקורת עמיתים');
+    } else if (isReputable && hasYear && (hasDoi || hasVenue)) {
+      score = 90;
+    } else if (isIndustry && hasYear) {
+      score = 70;
+    } else if (hasYear && hasVenue) {
+      score = 65;
+    } else if (hasYear) {
+      score = 45;
+      concerns.push('חסרים פרטי כתב עת או DOI');
+    } else {
+      score = 35;
+      concerns.push('חסרה שנת פרסום ומטא-דאטה בסיסי');
+    }
+    if (!hasDoi && !hasUrl && len > 30) {
+      recommendations.push('מומלץ להוסיף DOI או קישור לפרסום');
+    }
+  }
+
+  score = Math.min(100, Math.max(0, score));
+  const base = {
+    id: entry.id,
+    label: entryLabel(text),
+    score,
+    credibilityLevel: inferCredibilityLevel(score),
+    concerns,
+    recommendations,
+  };
+  return applySectionScoreGuards(entry, section, base);
+}
+
+function bibliographyFromBody(body) {
+  const b = body?.bibliography && typeof body.bibliography === 'object' ? body.bibliography : body || {};
+  return {
+    selectedPublications: truncateField(String(b.selectedPublications ?? b.bibliographySelectedPublications ?? ''), MAX_BIBLIO_FIELD),
+    researchSupport: truncateField(String(b.researchSupport ?? b.bibliographyResearchSupport ?? ''), MAX_BIBLIO_FIELD),
+  };
+}
+
+function hasBibliographyContent(bibliography) {
+  if (!bibliography || typeof bibliography !== 'object') return false;
+  return [bibliography.selectedPublications, bibliography.researchSupport].some(
+    (v) => typeof v === 'string' && v.trim()
+  );
+}
+
+const VALID_CREDIBILITY_LEVELS = new Set(['high', 'medium', 'low', 'insufficient_data']);
+
+function normalizeScore(value) {
+  let scoreNum =
+    typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value)
+        : NaN;
+  if (!Number.isFinite(scoreNum)) scoreNum = 0;
+  return Math.min(100, Math.max(0, Math.round(scoreNum)));
+}
+
+function normalizeVerificationItem(raw, fallbackEntry) {
+  if (!raw || typeof raw !== 'object') return null;
+  const id =
+    typeof raw.id === 'string' && raw.id.trim()
+      ? raw.id.trim()
+      : fallbackEntry?.id || '';
+  const label =
+    typeof raw.label === 'string' && raw.label.trim()
+      ? raw.label.trim()
+      : entryLabel(fallbackEntry?.text || '');
+  const levelRaw = typeof raw.credibilityLevel === 'string' ? raw.credibilityLevel.trim().toLowerCase() : '';
+  let score = normalizeScore(raw.score);
+  let credibilityLevel = VALID_CREDIBILITY_LEVELS.has(levelRaw) ? levelRaw : inferCredibilityLevel(score);
+
+  return {
+    id,
+    label: fallbackEntry?.text ? entryLabel(fallbackEntry.text) : label,
+    score,
+    credibilityLevel,
+    concerns: normalizeStringArray(raw.concerns),
+    recommendations: normalizeStringArray(raw.recommendations),
+  };
+}
+
+async function scoreSingleBibliographyEntry(singleModel, entry, section) {
+  const prompt = buildBibliographyEntryPrompt(entry, section);
+
+  try {
+    const result = await withRetry(() => singleModel.generateContent(prompt), { retries: 1, baseDelayMs: 1500 });
+    const parsed = parseJsonContent(result.response.text());
+    const normalized = normalizeVerificationItem(parsed, entry);
+    if (normalized) {
+      return applySectionScoreGuards(entry, section, normalized);
+    }
+  } catch (err) {
+    console.warn(`[verify-bibliography] ${entry.id} Gemini failed, using heuristic:`, err.message);
+  }
+  return heuristicEntryScore(entry, section);
+}
+
+async function scoreAllBibliographyEntries(singleModel, entries, section) {
+  if (!entries.length) return [];
+  const results = [];
+  for (let i = 0; i < entries.length; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, BIBLIO_SCORE_DELAY_MS));
+    results.push(await scoreSingleBibliographyEntry(singleModel, entries[i], section));
+  }
+  return results;
+}
+
+function buildVerificationSummary(publications, researchSupport) {
+  const parts = [];
+  if (publications.length) parts.push(`${publications.length} פרסומים`);
+  if (researchSupport.length) parts.push(`${researchSupport.length} פריטי תמיכה`);
+  if (!parts.length) return '';
+  return `נבדקו ${parts.join(' ו-')}. לכל פריט ציון מהימנות נפרד.`;
+}
+
+app.post('/api/verify-bibliography', async (req, res, next) => {
+  try {
+    if (!GEMINI_API_KEY) {
+      const err = new Error('Server is not configured: GEMINI_API_KEY is missing');
+      err.statusCode = 503;
+      throw err;
+    }
+
+    const bibliography = bibliographyFromBody(req.body);
+    if (!hasBibliographyContent(bibliography)) {
+      const err = new Error('At least one of selectedPublications or researchSupport must contain content');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const expected = buildBibliographyEntryLists(bibliography);
+    const totalItems = expected.publications.length + expected.researchSupport.length;
+
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const singleModel = genAI.getGenerativeModel(
+      {
+        model: GEMINI_MODEL,
+        systemInstruction: BIBLIOGRAPHY_SINGLE_ENTRY_INSTRUCTION,
+        generationConfig: { temperature: 0.15, responseMimeType: 'application/json', ...THINKING_OFF },
+      },
+      GEMINI_REQUEST_OPTIONS
+    );
+
+    const publications = await scoreAllBibliographyEntries(singleModel, expected.publications, 'publications');
+    const researchSupport = await scoreAllBibliographyEntries(singleModel, expected.researchSupport, 'researchSupport');
+
+    if (publications.length === 0 && researchSupport.length === 0) {
+      const err = new Error('No bibliography entries to score');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    res.status(200).json({
+      summary: buildVerificationSummary(expected.publications, expected.researchSupport),
+      itemCount: totalItems,
+      publications,
+      researchSupport,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 const MAX_POLISH_FIELD = 4000;
 const VALID_POLISH_ACTIONS = new Set(['improve', 'translate', 'fix']);
 

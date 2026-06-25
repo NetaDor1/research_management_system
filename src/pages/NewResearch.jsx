@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { collection, addDoc, doc, getDoc, getDocs, updateDoc, writeBatch, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, doc, getDoc, getDocs, updateDoc, setDoc, writeBatch, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db, storage } from '../services/firebase';
@@ -22,6 +21,16 @@ import ProposalDocxUpload from '../components/research/ProposalDocxUpload';
 import { getHebrewAcademicYearFromDate, normalizeAcademicYear } from '../utils/academicYear';
 import { canDeleteResearch, getSubmissionStatus } from '../utils/submissionStatus';
 import { navigateBackOrFallback } from '../utils/navigation';
+import {
+  REQUIRED_DOCUMENT_KEYS,
+  REQUIRED_DOCUMENT_FALLBACKS,
+  normalizeRequiredDocumentsFiles,
+  normalizeRequiredDocumentsChecklist,
+  buildRequiredDocumentsChecklist,
+  buildRequiredDocumentsFilesUrls,
+  toPersistedRequiredDocumentsMap,
+  uploadRequiredDocumentFile,
+} from '../utils/requiredDocuments';
 import {
   exportPrintableHtmlToPdf,
   escapeHtml,
@@ -127,15 +136,10 @@ const NewResearch = () => {
     t('budgetOverhead', 'תקורה'),
   ];
 
-  const requiredDocuments = [
-    t('docCV', 'קורות חיים'),
-    t('docAbstract', 'תקציר המחקר'),
-    t('docRecommendationLetter', 'מכתב המלצה'),
-    t('docEthicsApproval', 'אישור אתיקה'),
-    t('docDetailedBudget', 'תקציב מפורט'),
-    t('docPartnerDocs', 'מסמכי שותפים'),
-    t('docInstitutionalApproval', 'אישור מוסדי'),
-  ];
+  const requiredDocuments = REQUIRED_DOCUMENT_KEYS.map((key) => ({
+    key,
+    label: t(key, REQUIRED_DOCUMENT_FALLBACKS[key]),
+  }));
 
   const [formData, setFormData] = useState({
     projectTitle: '',
@@ -180,6 +184,32 @@ const NewResearch = () => {
   const [hasPartners, setHasPartners] = useState(false);
   const [existingResearcherId, setExistingResearcherId] = useState('');
   const previousResearchRef = useRef(null);
+  const formDataRef = useRef(formData);
+  const formDirtyRef = useRef(false);
+
+  const updateFormData = useCallback((updater) => {
+    setFormData((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      formDataRef.current = next;
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    formDirtyRef.current = false;
+  }, [editId]);
+
+  const markFormDirty = () => {
+    formDirtyRef.current = true;
+  };
+
+  const normalizeBibliographyRowsForSave = (rows) =>
+    (Array.isArray(rows) ? rows : []).map((row) => ({
+      institutionLocation: String(row?.institutionLocation ?? ''),
+      degree: String(row?.degree ?? ''),
+      monthYear: String(row?.monthYear ?? ''),
+      fieldOfStudy: String(row?.fieldOfStudy ?? ''),
+    }));
   
   // Refs for date pickers
   const startDatePickerRef = useRef(null);
@@ -187,6 +217,7 @@ const NewResearch = () => {
   const expectedDatePickerRef = useRef(null);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [documentsUploading, setDocumentsUploading] = useState(false);
   const [workPlanKey, setWorkPlanKey] = useState(0);
 
   // Normalize work-plan tasks so edit mode can load both old/new schemas.
@@ -250,14 +281,14 @@ const NewResearch = () => {
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
           const diffYears = (diffDays / 365).toFixed(2);
           
-          setFormData(prev => ({
+          updateFormData(prev => ({
             ...prev,
             researchDurationYears: diffYears
           }));
 
           // Calculate academic year
           const academicYear = getHebrewAcademicYearFromDate(start);
-          setFormData(prev => ({
+          updateFormData(prev => ({
             ...prev,
             academicYear: academicYear
           }));
@@ -274,7 +305,7 @@ const NewResearch = () => {
     }, 0);
     
     if (total > 0) {
-      setFormData(prev => ({
+      updateFormData(prev => ({
         ...prev,
         totalBudget: total.toString()
       }));
@@ -327,7 +358,9 @@ const NewResearch = () => {
   };
 
   const getMissingDocuments = (checklist) => {
-    return requiredDocuments.filter((docName) => !checklist?.[docName]);
+    return requiredDocuments
+      .filter(({ key }) => !checklist?.[key])
+      .map(({ label }) => label);
   };
 
   // Load existing research data when in edit mode
@@ -349,7 +382,36 @@ const NewResearch = () => {
         setExistingResearcherId(data.researcherId || '');
         previousResearchRef.current = data;
 
-        setFormData(prev => ({
+        const normalizedFiles = toPersistedRequiredDocumentsMap(data.requiredDocumentsFiles);
+        const normalizedChecklist = {
+          ...normalizeRequiredDocumentsChecklist(data.requiredDocumentsChecklist),
+          ...buildRequiredDocumentsChecklist(normalizedFiles),
+        };
+
+        if (formDirtyRef.current) {
+          updateFormData((prev) => ({
+            ...prev,
+            requiredDocumentsFiles: {
+              ...normalizedFiles,
+              ...prev.requiredDocumentsFiles,
+            },
+            requiredDocumentsChecklist: {
+              ...normalizedChecklist,
+              ...prev.requiredDocumentsChecklist,
+            },
+          }));
+          return;
+        }
+
+        const loadedWorkPlanTasks = normalizeWorkPlanTasks(
+          data.workPlanTasks ||
+          data.workPlan ||
+          data.ganttTasks ||
+          data.tasks ||
+          []
+        );
+
+        updateFormData(prev => ({
           ...prev,
           projectTitle: data.projectTitle || data.title || '',
           fundName: data.fundName || '',
@@ -369,8 +431,8 @@ const NewResearch = () => {
           partners: (data.partners && data.partners.length > 0)
             ? data.partners
             : [{ name: '', email: '', institution: '', country: '' }],
-          requiredDocumentsChecklist: data.requiredDocumentsChecklist || {},
-          requiredDocumentsFiles: data.requiredDocumentsFiles || {},
+          requiredDocumentsChecklist: normalizedChecklist,
+          requiredDocumentsFiles: normalizedFiles,
           digitalSignature: data.digitalSignature || { signed: false, date: '', signer: '' },
           expectedResponseDate: timestampToDisplayDate(data.expectedResponseDate),
           notes: data.notes || '',
@@ -391,16 +453,11 @@ const NewResearch = () => {
           bibliographyPositionsAndHonors: data.bibliographyPositionsAndHonors || '',
           bibliographySelectedPublications: data.bibliographySelectedPublications || '',
           bibliographyResearchSupport: data.bibliographyResearchSupport || '',
-          workPlanTasks: normalizeWorkPlanTasks(
-            data.workPlanTasks ||
-            data.workPlan ||
-            data.ganttTasks ||
-            data.tasks ||
-            []
-          )
+          workPlanTasks: loadedWorkPlanTasks,
         }));
 
         setHasPartners(Boolean(data.partners && data.partners.length > 0));
+        setWorkPlanKey((key) => key + 1);
       } catch (err) {
         console.error('Error loading research for edit:', err);
       } finally {
@@ -424,12 +481,12 @@ const NewResearch = () => {
       const rate = rates[formData.currency] || 1;
       const converted = (parseFloat(formData.totalBudget) * rate).toFixed(0);
       
-      setFormData(prev => ({
+      updateFormData(prev => ({
         ...prev,
         convertedBudget: converted
       }));
     } else {
-      setFormData(prev => ({
+      updateFormData(prev => ({
         ...prev,
         convertedBudget: ''
       }));
@@ -530,7 +587,7 @@ const NewResearch = () => {
       formatted = day + '/' + month + '/';
     }
 
-    setFormData(prev => ({
+    updateFormData(prev => ({
       ...prev,
       [name]: formatted
     }));
@@ -546,18 +603,19 @@ const NewResearch = () => {
 
   // Handle date picker change (from calendar)
   const handleDatePickerChange = (name, value) => {
+    markFormDirty();
     if (value) {
       // Convert from YYYY-MM-DD to dd/mm/yyyy
       const parts = value.split('-');
       if (parts.length === 3) {
         const formatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
-        setFormData(prev => ({
+        updateFormData(prev => ({
           ...prev,
           [name]: formatted
         }));
       }
     } else {
-      setFormData(prev => ({
+      updateFormData(prev => ({
         ...prev,
         [name]: ''
       }));
@@ -573,10 +631,11 @@ const NewResearch = () => {
   };
 
   const handleChange = (e) => {
+    markFormDirty();
     const { name, value, type, files } = e.target;
     
     if (type === 'file') {
-      setFormData(prev => ({
+      updateFormData(prev => ({
         ...prev,
         [name]: files[0] || null
       }));
@@ -584,7 +643,7 @@ const NewResearch = () => {
       // Handle date fields with custom formatting
       handleDateChange(name, value);
     } else {
-      setFormData(prev => ({
+      updateFormData(prev => ({
         ...prev,
         [name]: value
       }));
@@ -600,10 +659,11 @@ const NewResearch = () => {
   };
 
   const handleBudgetComponentChange = (component, value) => {
+    markFormDirty();
     // Ensure value is a string (for number input)
     const budgetValue = typeof value === 'string' ? value : '';
     
-    setFormData(prev => {
+    updateFormData(prev => {
       const newBudgetComponents = {
         ...prev.budgetComponents,
         [component]: budgetValue
@@ -623,67 +683,157 @@ const NewResearch = () => {
     });
   };
 
-  const handleRequiredDocumentUpload = (documentName, selectedFiles) => {
+  const persistRequiredDocuments = async (proposalId, requiredDocumentsFiles, checklist) => {
+    const persistedFiles = toPersistedRequiredDocumentsMap(requiredDocumentsFiles);
+    const finalChecklist = checklist || buildRequiredDocumentsChecklist(persistedFiles);
+
+    await updateDoc(doc(db, 'researchProposals', proposalId), {
+      requiredDocumentsFiles: persistedFiles,
+      requiredDocumentsChecklist: finalChecklist,
+      updatedAt: serverTimestamp(),
+    });
+
+    updateFormData((prev) => ({
+      ...prev,
+      requiredDocumentsFiles: persistedFiles,
+      requiredDocumentsChecklist: finalChecklist,
+    }));
+
+    previousResearchRef.current = {
+      ...(previousResearchRef.current || {}),
+      requiredDocumentsFiles: persistedFiles,
+      requiredDocumentsChecklist: finalChecklist,
+    };
+    formDirtyRef.current = false;
+  };
+
+  const handleRequiredDocumentUpload = async (documentKey, selectedFiles) => {
     const files = Array.from(selectedFiles || []);
     if (files.length === 0) return;
 
-    setFormData((prev) => ({
+    if (editId) {
+      setDocumentsUploading(true);
+      try {
+        const currentMap = toPersistedRequiredDocumentsMap(formDataRef.current.requiredDocumentsFiles);
+        const existingForDoc = currentMap[documentKey] || [];
+        const uploadedNew = [];
+
+        for (const file of files) {
+          if (!(file instanceof File)) continue;
+          const meta = await uploadRequiredDocumentFile({
+            storage,
+            proposalId: editId,
+            docKey: documentKey,
+            file,
+          });
+          if (meta) uploadedNew.push(meta);
+        }
+
+        const nextFiles = {
+          ...currentMap,
+          [documentKey]: [...existingForDoc, ...uploadedNew],
+        };
+        await persistRequiredDocuments(
+          editId,
+          nextFiles,
+          buildRequiredDocumentsChecklist(nextFiles)
+        );
+      } catch (uploadError) {
+        console.error('Error uploading required document:', uploadError);
+        alert(
+          t('documentUploadError', 'העלאת הקובץ נכשלה. נסו שוב.')
+          + (uploadError?.message ? ` (${uploadError.message})` : '')
+        );
+      } finally {
+        setDocumentsUploading(false);
+      }
+      return;
+    }
+
+    markFormDirty();
+    updateFormData((prev) => ({
       ...prev,
       requiredDocumentsFiles: {
         ...prev.requiredDocumentsFiles,
-        [documentName]: [...(prev.requiredDocumentsFiles?.[documentName] || []), ...files],
+        [documentKey]: [...(prev.requiredDocumentsFiles?.[documentKey] || []), ...files],
       },
       requiredDocumentsChecklist: {
         ...prev.requiredDocumentsChecklist,
-        [documentName]: true,
+        [documentKey]: true,
       },
     }));
   };
 
-  const handleRemoveRequiredDocumentFile = (documentName, fileIndex) => {
-    setFormData((prev) => {
-      const currentFiles = [...(prev.requiredDocumentsFiles?.[documentName] || [])];
+  const handleRemoveRequiredDocumentFile = async (documentKey, fileIndex) => {
+    if (editId) {
+      setDocumentsUploading(true);
+      try {
+        const currentMap = toPersistedRequiredDocumentsMap(formDataRef.current.requiredDocumentsFiles);
+        const nextForDoc = [...(currentMap[documentKey] || [])];
+        nextForDoc.splice(fileIndex, 1);
+        const nextFiles = { ...currentMap, [documentKey]: nextForDoc };
+        await persistRequiredDocuments(
+          editId,
+          nextFiles,
+          buildRequiredDocumentsChecklist(nextFiles)
+        );
+      } catch (removeError) {
+        console.error('Error removing required document:', removeError);
+        alert(t('documentRemoveError', 'שגיאה בהסרת הקובץ'));
+      } finally {
+        setDocumentsUploading(false);
+      }
+      return;
+    }
+
+    markFormDirty();
+    updateFormData((prev) => {
+      const currentFiles = [...(prev.requiredDocumentsFiles?.[documentKey] || [])];
       currentFiles.splice(fileIndex, 1);
       const nextRequiredDocumentsFiles = {
         ...(prev.requiredDocumentsFiles || {}),
-        [documentName]: currentFiles,
+        [documentKey]: currentFiles,
       };
       return {
         ...prev,
         requiredDocumentsFiles: nextRequiredDocumentsFiles,
         requiredDocumentsChecklist: {
           ...prev.requiredDocumentsChecklist,
-          [documentName]: currentFiles.length > 0,
+          [documentKey]: currentFiles.length > 0,
         },
       };
     });
   };
 
   const handlePartnerChange = (index, field, value) => {
+    markFormDirty();
     const updatedPartners = [...formData.partners];
     updatedPartners[index][field] = value;
-    setFormData(prev => ({
+    updateFormData(prev => ({
       ...prev,
       partners: updatedPartners
     }));
   };
 
   const addPartner = () => {
-    setFormData(prev => ({
+    markFormDirty();
+    updateFormData(prev => ({
       ...prev,
       partners: [...prev.partners, { name: '', email: '', institution: '', country: '' }]
     }));
   };
 
   const removePartner = (index) => {
-    setFormData(prev => ({
+    markFormDirty();
+    updateFormData(prev => ({
       ...prev,
       partners: prev.partners.filter((_, i) => i !== index)
     }));
   };
 
   const handleBibliographyEducationChange = (index, field, value) => {
-    setFormData((prev) => {
+    markFormDirty();
+    updateFormData((prev) => {
       const nextRows = [...(prev.bibliographyEducationTraining || [])];
       if (!nextRows[index]) {
         nextRows[index] = { institutionLocation: '', degree: '', monthYear: '', fieldOfStudy: '' };
@@ -700,7 +850,8 @@ const NewResearch = () => {
   };
 
   const addBibliographyEducationRow = () => {
-    setFormData((prev) => ({
+    markFormDirty();
+    updateFormData((prev) => ({
       ...prev,
       bibliographyEducationTraining: [
         ...(prev.bibliographyEducationTraining || []),
@@ -710,7 +861,8 @@ const NewResearch = () => {
   };
 
   const removeBibliographyEducationRow = (index) => {
-    setFormData((prev) => {
+    markFormDirty();
+    updateFormData((prev) => {
       const rows = [...(prev.bibliographyEducationTraining || [])];
       const next = rows.filter((_, i) => i !== index);
       return {
@@ -721,7 +873,8 @@ const NewResearch = () => {
   };
 
   const handleDigitalSignature = () => {
-    setFormData(prev => ({
+    markFormDirty();
+    updateFormData(prev => ({
       ...prev,
       digitalSignature: {
         signed: true,
@@ -731,50 +884,50 @@ const NewResearch = () => {
     }));
   };
 
-  const validateForm = () => {
+  const validateForm = (snapshot = formDataRef.current) => {
     const newErrors = {};
     
-    if (!formData.projectTitle.trim()) {
+    if (!snapshot.projectTitle.trim()) {
       newErrors.projectTitle = 'כותרת הפרוייקט חובה';
     }
-    if (!formData.fundName) {
+    if (!snapshot.fundName) {
       newErrors.fundName = 'שם הקרן חובה';
     }
-    if (!formData.submissionPath) {
+    if (!snapshot.submissionPath) {
       newErrors.submissionPath = 'מסלול ההגשה חובה';
     }
-    if (!formData.researcherRole) {
+    if (!snapshot.researcherRole) {
       newErrors.researcherRole = 'תפקיד החוקר חובה';
     }
-    if (!formData.proposalStage) {
+    if (!snapshot.proposalStage) {
       newErrors.proposalStage = 'שלב ההצעה חובה';
     }
     // Validate date format dd/mm/yyyy
     const datePattern = /^(\d{2})\/(\d{2})\/(\d{4})$/;
     
-    if (!formData.researchStartDate) {
+    if (!snapshot.researchStartDate) {
       newErrors.researchStartDate = 'תאריך תחילת המחקר חובה';
-    } else if (!datePattern.test(formData.researchStartDate)) {
+    } else if (!datePattern.test(snapshot.researchStartDate)) {
       newErrors.researchStartDate = 'תאריך לא תקין. נא להזין בפורמט dd/mm/yyyy';
     } else {
-      const startDateISO = convertDateToISO(formData.researchStartDate);
+      const startDateISO = convertDateToISO(snapshot.researchStartDate);
       const startDate = new Date(startDateISO);
       if (isNaN(startDate.getTime())) {
         newErrors.researchStartDate = 'תאריך לא תקין';
       }
     }
     
-    if (!formData.researchEndDate) {
+    if (!snapshot.researchEndDate) {
       newErrors.researchEndDate = 'תאריך סיום המחקר חובה';
-    } else if (!datePattern.test(formData.researchEndDate)) {
+    } else if (!datePattern.test(snapshot.researchEndDate)) {
       newErrors.researchEndDate = 'תאריך לא תקין. נא להזין בפורמט dd/mm/yyyy';
     } else {
-      const endDateISO = convertDateToISO(formData.researchEndDate);
+      const endDateISO = convertDateToISO(snapshot.researchEndDate);
       const endDate = new Date(endDateISO);
       if (isNaN(endDate.getTime())) {
         newErrors.researchEndDate = 'תאריך לא תקין';
-      } else if (formData.researchStartDate) {
-        const startDateISO = convertDateToISO(formData.researchStartDate);
+      } else if (snapshot.researchStartDate) {
+        const startDateISO = convertDateToISO(snapshot.researchStartDate);
         const startDate = new Date(startDateISO);
         if (!isNaN(startDate.getTime()) && endDate <= startDate) {
           newErrors.researchEndDate = 'תאריך סיום חייב להיות אחרי תאריך התחלה';
@@ -782,7 +935,7 @@ const NewResearch = () => {
       }
     }
     // Check if at least one budget component has a value
-    const hasBudgetComponents = Object.values(formData.budgetComponents || {}).some(amount => {
+    const hasBudgetComponents = Object.values(snapshot.budgetComponents || {}).some(amount => {
       const numAmount = parseFloat(amount) || 0;
       return numAmount > 0;
     });
@@ -795,8 +948,8 @@ const NewResearch = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const validateDraftForm = () => {
-    if (!formData.projectTitle.trim()) {
+  const validateDraftForm = (snapshot = formDataRef.current) => {
+    if (!snapshot.projectTitle.trim()) {
       setErrors({ projectTitle: t('draftTitleRequired', 'יש להזין לפחות כותרת לשמירת טיוטה') });
       return false;
     }
@@ -810,12 +963,14 @@ const NewResearch = () => {
       return;
     }
 
+    const fd = formDataRef.current;
+
     if (asDraft) {
-      if (!validateDraftForm()) {
+      if (!validateDraftForm(fd)) {
         alert(t('draftTitleRequired', 'יש להזין לפחות כותרת לשמירת טיוטה'));
         return;
       }
-    } else if (!validateForm()) {
+    } else if (!validateForm(fd)) {
       alert('יש למלא את כל השדות החובה');
       return;
     }
@@ -831,9 +986,9 @@ const NewResearch = () => {
       console.log('Researcher Name:', researcherName);
 
       // Convert dates to Timestamp for Firestore
-      const researchStartDateISO = convertDateToISO(formData.researchStartDate);
-      const researchEndDateISO = convertDateToISO(formData.researchEndDate);
-      const expectedResponseDateISO = convertDateToISO(formData.expectedResponseDate);
+      const researchStartDateISO = convertDateToISO(fd.researchStartDate);
+      const researchEndDateISO = convertDateToISO(fd.researchEndDate);
+      const expectedResponseDateISO = convertDateToISO(fd.expectedResponseDate);
       
       const researchStartDate = researchStartDateISO 
         ? Timestamp.fromDate(new Date(researchStartDateISO))
@@ -863,7 +1018,7 @@ const NewResearch = () => {
       const finalResearcherName = isEdit && userRole === 'ADMIN' && existingResearcherName
         ? existingResearcherName
         : researcherName;
-      const normalizedFormWorkPlanTasks = normalizeWorkPlanTasks(formData.workPlanTasks || []);
+      const normalizedFormWorkPlanTasks = normalizeWorkPlanTasks(fd.workPlanTasks || []);
       const normalizedExistingWorkPlanTasks = normalizeWorkPlanTasks(
         previousResearchRef.current?.workPlanTasks ||
         previousResearchRef.current?.workPlan ||
@@ -880,21 +1035,57 @@ const NewResearch = () => {
       )
         ? normalizedExistingWorkPlanTasks
         : normalizedFormWorkPlanTasks;
-      const requiredDocumentsChecklistFromFiles = requiredDocuments.reduce((acc, docName) => {
-        const filesForDoc = formData.requiredDocumentsFiles?.[docName] || [];
-        acc[docName] = filesForDoc.length > 0;
-        return acc;
-      }, {});
+      const previousRequiredFiles = toPersistedRequiredDocumentsMap(
+        previousResearchRef.current?.requiredDocumentsFiles
+      );
+      const persistedFromForm = toPersistedRequiredDocumentsMap(fd.requiredDocumentsFiles);
+      const hasPendingLocalFiles = Object.values(
+        normalizeRequiredDocumentsFiles(fd.requiredDocumentsFiles)
+      ).some((entries) => entries.some((item) => item instanceof File));
+
+      let docId = editId;
+      if (!docId) {
+        docId = doc(collection(db, 'researchProposals')).id;
+      }
+
+      let requiredDocumentsFilesUrls;
+      try {
+        if (isEdit && !hasPendingLocalFiles) {
+          requiredDocumentsFilesUrls = {
+            ...previousRequiredFiles,
+            ...persistedFromForm,
+          };
+        } else {
+          requiredDocumentsFilesUrls = await buildRequiredDocumentsFilesUrls({
+            formFiles: normalizeRequiredDocumentsFiles(fd.requiredDocumentsFiles),
+            previousFiles: previousRequiredFiles,
+            docKeys: REQUIRED_DOCUMENT_KEYS,
+            proposalId: docId,
+            storage,
+          });
+          requiredDocumentsFilesUrls = {
+            ...previousRequiredFiles,
+            ...toPersistedRequiredDocumentsMap(requiredDocumentsFilesUrls),
+          };
+        }
+      } catch (requiredDocsError) {
+        console.error('Error uploading required document files:', requiredDocsError);
+        throw new Error('שגיאה בהעלאת קבצי המסמכים. נסו שוב.');
+      }
+
+      const requiredDocumentsChecklistFromFiles = buildRequiredDocumentsChecklist(
+        requiredDocumentsFilesUrls
+      );
 
       const researchData = {
         // פרטים כלליים
-        projectTitle: formData.projectTitle,
-        fundName: formData.fundName,
-        fundType: formData.fundType || '',
-        submissionPath: formData.submissionPath,
-        researcherRole: formData.researcherRole,
-        proposalStage: formData.proposalStage,
-        submissionType: formData.submissionType || '',
+        projectTitle: fd.projectTitle,
+        fundName: fd.fundName,
+        fundType: fd.fundType || '',
+        submissionPath: fd.submissionPath,
+        researcherRole: fd.researcherRole,
+        proposalStage: fd.proposalStage,
+        submissionType: fd.submissionType || '',
         
         // פרטי החוקר
         researcherId: finalResearcherId,
@@ -903,44 +1094,44 @@ const NewResearch = () => {
         // תקופת המחקר
         researchStartDate: researchStartDate,
         researchEndDate: researchEndDate,
-        researchDurationYears: formData.researchDurationYears || '',
-        academicYear: formData.academicYear || '',
+        researchDurationYears: fd.researchDurationYears || '',
+        academicYear: fd.academicYear || '',
         
         // תקציב
-        totalBudget: formData.totalBudget || '',
-        currency: formData.currency || 'ILS',
-        convertedBudget: formData.convertedBudget || '',
-        budgetComponents: formData.budgetComponents || {},
+        totalBudget: fd.totalBudget || '',
+        currency: fd.currency || 'ILS',
+        convertedBudget: fd.convertedBudget || '',
+        budgetComponents: fd.budgetComponents || {},
         
         // שותפים - רק אם יש שותפים
-        partners: hasPartners ? formData.partners.filter(p => p.name || p.email || p.institution || p.country) || [] : [],
+        partners: hasPartners ? fd.partners.filter(p => p.name || p.email || p.institution || p.country) || [] : [],
         
-        // מסמכים (הקישורים עצמם יעודכנו לאחר העלאת הקבצים)
+        // מסמכים
         requiredDocumentsChecklist: requiredDocumentsChecklistFromFiles,
-        requiredDocumentsFiles: previousResearchRef.current?.requiredDocumentsFiles || {},
+        requiredDocumentsFiles: requiredDocumentsFilesUrls,
         
         // חתימה
-        digitalSignature: formData.digitalSignature || { signed: false, signer: '', date: null },
+        digitalSignature: fd.digitalSignature || { signed: false, signer: '', date: null },
         
         // מידע נוסף
         expectedResponseDate: expectedResponseDate,
-        notes: formData.notes || '',
+        notes: fd.notes || '',
         
         // תיאור המחקר
-        abstract: formData.abstract || '',
-        scientificBackground: formData.scientificBackground || '',
-        researchObjectives: formData.researchObjectives || '',
-        detailedDescription: formData.detailedDescription || '',
-        significanceInnovation: formData.significanceInnovation || '',
-        applicability: formData.applicability || '',
-        principalInvestigatorName: formData.principalInvestigatorName || '',
-        biographicalSummaryName: formData.biographicalSummaryName || '',
-        biographicalSummaryPositionTitle: formData.biographicalSummaryPositionTitle || '',
-        bibliographyEducationTraining: formData.bibliographyEducationTraining || [],
-        bibliographyPersonalStatement: formData.bibliographyPersonalStatement || '',
-        bibliographyPositionsAndHonors: formData.bibliographyPositionsAndHonors || '',
-        bibliographySelectedPublications: formData.bibliographySelectedPublications || '',
-        bibliographyResearchSupport: formData.bibliographyResearchSupport || '',
+        abstract: fd.abstract || '',
+        scientificBackground: fd.scientificBackground || '',
+        researchObjectives: fd.researchObjectives || '',
+        detailedDescription: fd.detailedDescription || '',
+        significanceInnovation: fd.significanceInnovation || '',
+        applicability: fd.applicability || '',
+        principalInvestigatorName: fd.principalInvestigatorName || '',
+        biographicalSummaryName: fd.biographicalSummaryName || '',
+        biographicalSummaryPositionTitle: fd.biographicalSummaryPositionTitle || '',
+        bibliographyEducationTraining: normalizeBibliographyRowsForSave(fd.bibliographyEducationTraining),
+        bibliographyPersonalStatement: String(fd.bibliographyPersonalStatement ?? ''),
+        bibliographyPositionsAndHonors: String(fd.bibliographyPositionsAndHonors ?? ''),
+        bibliographySelectedPublications: String(fd.bibliographySelectedPublications ?? ''),
+        bibliographyResearchSupport: String(fd.bibliographyResearchSupport ?? ''),
         
         // תוכנית עבודה
         workPlanTasks: finalWorkPlanTasks,
@@ -968,83 +1159,19 @@ const NewResearch = () => {
 
       console.log('Research data prepared:', researchData);
 
-      // Create or update document in Firestore
       console.log(isEdit ? 'Updating research proposal...' : 'Creating research proposal...');
-      let docId = editId;
-
       if (isEdit) {
-        await updateDoc(doc(db, 'researchProposals', editId), researchData);
+        await updateDoc(doc(db, 'researchProposals', docId), researchData);
       } else {
-        const docRef = await addDoc(collection(db, 'researchProposals'), researchData);
-        docId = docRef.id;
+        await setDoc(doc(db, 'researchProposals', docId), researchData);
         console.log('Document created with ID:', docId);
       }
 
-      // Upload files after document creation
-      let requiredDocumentsFilesUrls = { ...(previousResearchRef.current?.requiredDocumentsFiles || {}) };
-
-      // Upload files per required document category (supports multiple files per category).
-      if (docId) {
-        try {
-          const nextRequiredDocumentsFiles = {};
-          for (const docName of requiredDocuments) {
-            const docFiles = formData.requiredDocumentsFiles?.[docName] || [];
-            const uploadedOrExisting = [];
-
-            for (let idx = 0; idx < docFiles.length; idx++) {
-              const fileItem = docFiles[idx];
-
-              // Keep existing metadata entries when editing.
-              if (fileItem && typeof fileItem === 'object' && fileItem.url) {
-                uploadedOrExisting.push(fileItem);
-                continue;
-              }
-
-              if (fileItem instanceof File) {
-                const safeDocName = encodeURIComponent(docName);
-                const fileRef = ref(
-                  storage,
-                  `researchProposals/${docId}/required/${safeDocName}/${Date.now()}-${idx}-${fileItem.name}`
-                );
-                await uploadBytes(fileRef, fileItem);
-                const url = await getDownloadURL(fileRef);
-                uploadedOrExisting.push({
-                  name: fileItem.name,
-                  url,
-                  uploadedAt: new Date().toISOString(),
-                });
-              }
-            }
-
-            nextRequiredDocumentsFiles[docName] = uploadedOrExisting;
-          }
-
-          requiredDocumentsFilesUrls = nextRequiredDocumentsFiles;
-        } catch (requiredDocsError) {
-          console.error('Error uploading required document files:', requiredDocsError);
-        }
-      }
-
-      // Update document with file URLs if any files were uploaded
-      if (docId && Object.keys(requiredDocumentsFilesUrls).length > 0) {
-        try {
-          console.log('Updating document with file URLs...');
-          const nextRequiredChecklist = requiredDocuments.reduce((acc, docName) => {
-            acc[docName] = (requiredDocumentsFilesUrls[docName] || []).length > 0;
-            return acc;
-          }, {});
-
-          await updateDoc(doc(db, 'researchProposals', docId), {
-            requiredDocumentsFiles: requiredDocumentsFilesUrls,
-            requiredDocumentsChecklist: nextRequiredChecklist,
-            updatedAt: serverTimestamp(),
-          });
-          console.log('Document updated with file URLs');
-        } catch (updateError) {
-          console.error('Error updating document with file URLs:', updateError);
-          // Continue even if update fails
-        }
-      }
+      updateFormData((prev) => ({
+        ...prev,
+        requiredDocumentsFiles: toPersistedRequiredDocumentsMap(requiredDocumentsFilesUrls),
+        requiredDocumentsChecklist: requiredDocumentsChecklistFromFiles,
+      }));
 
       // ── Notify admin when RESEARCHER submits (not draft) ────────────────
       if (userRole === 'RESEARCHER' && !asDraft) {
@@ -1054,8 +1181,8 @@ const NewResearch = () => {
           targetRole: 'ADMIN',
           title: notifyAsNew ? 'חוקר הגיש הצעת מחקר חדשה' : 'חוקר עדכן הצעת מחקר',
           message: notifyAsNew
-            ? `${user?.name || 'חוקר'} הגיש/ה הצעת מחקר חדשה: "${formData.projectTitle}".`
-            : `${user?.name || 'חוקר'} עדכן/ה את הצעת המחקר "${formData.projectTitle}".`,
+            ? `${user?.name || 'חוקר'} הגיש/ה הצעת מחקר חדשה: "${fd.projectTitle}".`
+            : `${user?.name || 'חוקר'} עדכן/ה את הצעת המחקר "${fd.projectTitle}".`,
           type: notifyAsNew ? 'researcher_new_proposal' : 'researcher_edit_proposal',
           entityType: 'research',
           entityId: docId,
@@ -1070,7 +1197,7 @@ const NewResearch = () => {
 
         notifications.push({
           title: 'עדכון הצעת מחקר',
-          message: `הצעת המחקר "${formData.projectTitle}" עודכנה על ידי רשות המחקר.`,
+          message: `הצעת המחקר "${fd.projectTitle}" עודכנה על ידי רשות המחקר.`,
           type: 'research_update',
           eventKey: `research_updated:${editId}:${Date.now()}`
         });
@@ -1136,6 +1263,13 @@ const NewResearch = () => {
           )
         );
       }
+
+      previousResearchRef.current = {
+        ...(previousResearchRef.current || {}),
+        ...researchData,
+        requiredDocumentsFiles: requiredDocumentsFilesUrls,
+      };
+      formDirtyRef.current = false;
 
       console.log('Research proposal saved successfully!');
       if (asDraft) {
@@ -1264,9 +1398,12 @@ const NewResearch = () => {
       `).join('');
 
     // Build documents checklist HTML
+    const docLabelByKey = Object.fromEntries(
+      requiredDocuments.map(({ key, label }) => [key, label])
+    );
     const documentsHTML = Object.entries(formData.requiredDocumentsChecklist)
       .filter(([_, checked]) => checked)
-      .map(([doc]) => `<li>${doc}</li>`)
+      .map(([docKey]) => `<li>${docLabelByKey[docKey] || docKey}</li>`)
       .join('');
 
     const budgetTotalDisplay = formData.totalBudget
@@ -1402,11 +1539,12 @@ const NewResearch = () => {
   };
 
   const handleWorkPlanTasksChange = useCallback((tasks) => {
-    setFormData((prev) => {
+    updateFormData((prev) => {
       const prevTasks = prev.workPlanTasks || [];
       const nextTasks = tasks || [];
       if (prevTasks === nextTasks) return prev;
       if (JSON.stringify(prevTasks) === JSON.stringify(nextTasks)) return prev;
+      markFormDirty();
       return {
         ...prev,
         workPlanTasks: nextTasks,
@@ -1417,7 +1555,8 @@ const NewResearch = () => {
   const handleProposalDocxParsed = useCallback((parsed) => {
     if (!parsed || typeof parsed !== 'object') return;
 
-    setFormData((prev) => ({
+    markFormDirty();
+    updateFormData((prev) => ({
       ...prev,
       projectTitle: parsed.projectTitle || prev.projectTitle,
       abstract: parsed.abstract || prev.abstract,
@@ -1463,10 +1602,7 @@ const NewResearch = () => {
             <FormEditToolbar
               visible={Boolean(editId)}
               onCancelEdit={handleCancel}
-              onDelete={handleDeleteResearch}
-              showDelete={showDeleteButton}
               deleting={deleting}
-              deleteLabel={t('deleteResearch', 'מחק הצעה')}
               t={t}
             />
           </div>
@@ -1511,13 +1647,19 @@ const NewResearch = () => {
           <ResearchDescriptionSection
             formData={formData}
             handleChange={handleChange}
-            onPolish={(improved) => setFormData((prev) => ({ ...prev, ...improved }))}
+            onPolish={(improved) => {
+              markFormDirty();
+              updateFormData((prev) => ({ ...prev, ...improved }));
+            }}
           />
 
           <PartnersSection
             formData={formData}
             hasPartners={hasPartners}
-            setHasPartners={setHasPartners}
+            setHasPartners={(value) => {
+              markFormDirty();
+              setHasPartners(value);
+            }}
             handlePartnerChange={handlePartnerChange}
             addPartner={addPartner}
             removePartner={removePartner}
@@ -1528,6 +1670,7 @@ const NewResearch = () => {
             handleRequiredDocumentUpload={handleRequiredDocumentUpload}
             handleRemoveRequiredDocumentFile={handleRemoveRequiredDocumentFile}
             requiredDocuments={requiredDocuments}
+            documentsUploading={documentsUploading}
           />
 
           <DigitalSignatureSection
@@ -1542,7 +1685,10 @@ const NewResearch = () => {
             formatDateForDisplay={formatDateForDisplay}
             convertDateToISO={convertDateToISO}
             expectedDatePickerRef={expectedDatePickerRef}
-            onPolish={(improved) => setFormData((prev) => ({ ...prev, ...improved }))}
+            onPolish={(improved) => {
+              markFormDirty();
+              updateFormData((prev) => ({ ...prev, ...improved }));
+            }}
           />
 
           {editId && loadingExisting ? (
@@ -1566,7 +1712,10 @@ const NewResearch = () => {
             handleBibliographyEducationChange={handleBibliographyEducationChange}
             addBibliographyEducationRow={addBibliographyEducationRow}
             removeBibliographyEducationRow={removeBibliographyEducationRow}
-            onPolish={(improved) => setFormData((prev) => ({ ...prev, ...improved }))}
+            onPolish={(improved) => {
+              markFormDirty();
+              updateFormData((prev) => ({ ...prev, ...improved }));
+            }}
           />
 
           {/* Form Actions */}
@@ -1591,7 +1740,7 @@ const NewResearch = () => {
                 </button>
               )}
               {showDraftButton && (
-                <button type="button" className="btn-draft" onClick={handleSaveDraft} disabled={deleting}>
+                <button type="button" className="btn-draft" onClick={handleSaveDraft} disabled={deleting || documentsUploading}>
                   {t('saveDraft', 'שמור כטיוטה')}
                 </button>
               )}
@@ -1600,7 +1749,7 @@ const NewResearch = () => {
               <button type="button" className="btn-export-pdf" onClick={handleExportPDF} disabled={deleting}>
                 {t('exportPdfShort', 'ייצוא PDF')}
               </button>
-              <button type="submit" className="btn-submit" disabled={deleting}>
+              <button type="submit" className="btn-submit" disabled={deleting || loadingExisting || documentsUploading}>
                 {userRole === 'RESEARCHER'
                   ? t('submitToAuthority', 'הגש לרשות המחקר')
                   : t('submitProposal', 'הגשת הצעה')}
@@ -1611,7 +1760,10 @@ const NewResearch = () => {
 
         <ResearchProposalReviewAssistant
           formData={formData}
-          onFillForm={(fields) => setFormData((prev) => ({ ...prev, ...fields }))}
+          onFillForm={(fields) => {
+            markFormDirty();
+            updateFormData((prev) => ({ ...prev, ...fields }));
+          }}
         />
       </div>
     </div>

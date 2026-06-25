@@ -7,7 +7,8 @@ const DocumentsSection = ({
   formData, 
   handleRequiredDocumentUpload,
   handleRemoveRequiredDocumentFile,
-  requiredDocuments
+  requiredDocuments,
+  documentsUploading = false,
 }) => {
   const { t } = useLanguage();
 
@@ -17,16 +18,27 @@ const DocumentsSection = ({
 
       <div className="form-group">
         <label>{t('documentsChecklistLabel', "רשימת צ'קליסט של מסמכים להגשה מטעם המוסד")}</label>
+        {documentsUploading && (
+          <p style={{ margin: '0 0 10px', color: '#64748b', fontSize: '14px' }}>
+            {t('uploadingFiles', 'מעלה קבצים...')}
+          </p>
+        )}
         <div className="documents-checklist-grid">
-          {requiredDocuments.map((docName) => (
+          {requiredDocuments.map((doc) => {
+            const docKey = typeof doc === 'string' ? doc : doc.key;
+            const docLabel = typeof doc === 'string' ? doc : doc.label;
+            return (
             <DocumentChecklistCard
-              key={docName}
-              docName={docName}
-              files={formData.requiredDocumentsFiles?.[docName] || []}
-              onUpload={(files) => handleRequiredDocumentUpload(docName, files)}
-              onRemove={(fileIndex) => handleRemoveRequiredDocumentFile(docName, fileIndex)}
+              key={docKey}
+              docName={docKey}
+              displayLabel={docLabel}
+              files={formData.requiredDocumentsFiles?.[docKey] || []}
+              onUpload={(files) => handleRequiredDocumentUpload(docKey, files)}
+              onRemove={(fileIndex) => handleRemoveRequiredDocumentFile(docKey, fileIndex)}
+              disabled={documentsUploading}
             />
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

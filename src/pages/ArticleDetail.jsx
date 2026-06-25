@@ -224,7 +224,6 @@ const ArticleDetail = () => {
           <div class="kv"><div class="k">${escapeHtml(t('publishedJournalName', 'שם העיתון בו פורסם'))}</div><div class="v">${escapeHtml(articleData.journalName || t('notSpecified', 'לא צוין'))}</div></div>
           <div class="kv"><div class="k">${escapeHtml(t('journalRankingLabel', 'דירוג העיתון'))}</div><div class="v">${escapeHtml(articleData.journalRanking || t('notSpecified', 'לא צוין'))}</div></div>
           <div class="kv"><div class="k">${escapeHtml(t('publicationYearLabel', 'שנת הפרסום'))}</div><div class="v">${escapeHtml(articleData.publicationYear || t('notSpecified', 'לא צוין'))}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('publicationDateLabel', 'תאריך פרסום'))}</div><div class="v">${escapeHtml(formatDateForLocale(articleData.publicationDate))}</div></div>
           <div class="kv"><div class="k">${escapeHtml(t('publicationTypeLabel', 'סוג פרסום'))}</div><div class="v">${escapeHtml(publicationTypeLabel)}</div></div>
           <div class="kv"><div class="k">${escapeHtml(t('researcher', 'חוקר'))}</div><div class="v">${escapeHtml(articleData.researcherName || t('notSpecified', 'לא צוין'))}</div></div>
           <div class="kv"><div class="k">${escapeHtml(t('status', 'סטטוס'))}</div><div class="v">${escapeHtml(statusLabel)}</div></div>
@@ -235,6 +234,13 @@ const ArticleDetail = () => {
         <div class="section">
           <h2>${escapeHtml(t('articleLinkLabel', 'קישור למאמר'))}</h2>
           <div class="kv"><div class="v"><a href="${escapeHtml(articleData.articleLink)}" target="_blank" rel="noopener noreferrer">${escapeHtml(articleData.articleLink)}</a></div></div>
+        </div>
+      ` : ''}
+
+      ${articleData.articleFile?.url ? `
+        <div class="section">
+          <h2>${escapeHtml(t('articleFileLabel', 'קובץ המאמר (PDF / Word)'))}</h2>
+          <div class="kv"><div class="v"><a href="${escapeHtml(articleData.articleFile.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(articleData.articleFile.name || t('downloadArticleFile', 'הורד קובץ המאמר'))}</a></div></div>
         </div>
       ` : ''}
 
@@ -383,21 +389,9 @@ const ArticleDetail = () => {
                     marginBottom: '5px',
                     color: '#666'
                   }}>
-                    {t('publicationYearShort', 'שנת פרסום')}:
+                    {t('publicationYearLabel', 'שנת הפרסום')}:
                   </label>
                   <span style={{ fontSize: '16px' }}>{articleData.publicationYear || notSpecified}</span>
-                </div>
-
-                <div>
-                  <label style={{ 
-                    display: 'block', 
-                    fontWeight: 'bold', 
-                    marginBottom: '5px',
-                    color: '#666'
-                  }}>
-                    {t('publicationDateLabel', 'תאריך פרסום')}:
-                  </label>
-                  <span style={{ fontSize: '16px' }}>{formatDate(articleData.publicationDate)}</span>
                 </div>
 
                 <div>
@@ -509,6 +503,34 @@ const ArticleDetail = () => {
                     onMouseOut={(e) => e.target.style.textDecoration = 'none'}
                   >
                     {articleData.articleLink}
+                  </a>
+                </div>
+              )}
+
+              {articleData.articleFile?.url && (
+                <div style={{ marginTop: '20px' }}>
+                  <label style={{
+                    display: 'block',
+                    fontWeight: 'bold',
+                    marginBottom: '10px',
+                    color: '#666'
+                  }}>
+                    {t('articleFileLabel', 'קובץ המאמר (PDF / Word)')}:
+                  </label>
+                  <a
+                    href={articleData.articleFile.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: '#667eea',
+                      textDecoration: 'none',
+                      fontSize: '16px',
+                      wordBreak: 'break-all',
+                    }}
+                    onMouseOver={(e) => e.target.style.textDecoration = 'underline'}
+                    onMouseOut={(e) => e.target.style.textDecoration = 'none'}
+                  >
+                    📄 {articleData.articleFile.name || t('downloadArticleFile', 'הורד קובץ המאמר')}
                   </a>
                 </div>
               )}

@@ -1,5 +1,5 @@
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
-const NEW_BADGE_DAYS = 14;
+export const NEW_BADGE_DAYS = 14;
 
 const toDate = (value) => {
   if (!value) return null;

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { collection, addDoc, doc, getDoc, getDocs, updateDoc, writeBatch, serverTimestamp, Timestamp, query, where, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, doc, getDoc, getDocs, updateDoc, setDoc, writeBatch, serverTimestamp, Timestamp, query, where, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db, storage } from '../services/firebase';
@@ -10,6 +9,16 @@ import AIPolishButton from '../components/research/AIPolishButton';
 import { navigateBackOrFallback } from '../utils/navigation';
 import DocumentChecklistCard from '../components/research/form/DocumentChecklistCard';
 import { canDeletePatent, getSubmissionStatus } from '../utils/submissionStatus';
+import {
+  PATENT_REQUIRED_DOCUMENT_DEFS,
+  PATENT_REQUIRED_DOCUMENT_KEYS,
+  normalizePatentDocumentsFiles,
+  normalizePatentDocumentsChecklist,
+  buildPatentDocumentsChecklist,
+  buildPatentRequiredDocumentsFilesUrls,
+  toPersistedPatentDocumentsMap,
+  uploadPatentDocumentFile,
+} from '../utils/patentRequiredDocuments';
 import FormEditToolbar from '../components/FormEditToolbar';
 import PatentDisclosureSection, {
   EMPTY_INVENTOR,
@@ -22,15 +31,6 @@ import './Page.css';
 import './Research.css';
 
 const INSTITUTION_PERCENTAGE_OPTIONS = ['10%', '20%', '30%', '40%', '50%', '60%', '70%', '80%', '90%'];
-
-const PATENT_REQUIRED_DOCUMENT_DEFS = [
-  { key: 'מסמך הבקשה לפטנט', labelKey: 'patentDocApplication' },
-  { key: 'אישור מוסדי', labelKey: 'patentDocInstitutional' },
-  { key: 'הסכם שותפים', labelKey: 'patentDocPartnersAgreement' },
-  { key: 'תקציב מפורט', labelKey: 'patentDocDetailedBudget' },
-  { key: 'מסמכי רישום', labelKey: 'patentDocRegistration' },
-  { key: 'אישורי תשלום', labelKey: 'patentDocPayment' },
-];
 
 const SUBMISSION_PATH_DEFS = [
   { value: 'מסלול רגיל', labelKey: 'patentPathRegular' },
@@ -169,6 +169,7 @@ const NewPatent = () => {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [documentsUploading, setDocumentsUploading] = useState(false);
   const [hasPartners, setHasPartners] = useState(false);
   const [hasInventors, setHasInventors] = useState(false);
   const [researchOptions, setResearchOptions] = useState([]);
@@ -179,6 +180,19 @@ const NewPatent = () => {
   const datePickerRefs = useRef({});
   const inventionDatePickerRef = useRef(null);
   const previousPatentRef = useRef(null);
+  const formDataRef = useRef(formData);
+
+  useEffect(() => {
+    formDataRef.current = formData;
+  }, [formData]);
+
+  const updateFormData = (updater) => {
+    setFormData((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      formDataRef.current = next;
+      return next;
+    });
+  };
 
   const convertDateToISO = (dateValue) => {
     if (!dateValue || typeof dateValue !== 'string') return '';
@@ -327,6 +341,12 @@ const NewPatent = () => {
           loadedDates[key] = convertToInputDate(data[key]);
         });
 
+        const normalizedFiles = toPersistedPatentDocumentsMap(data.requiredDocumentsFiles);
+        const normalizedChecklist = {
+          ...normalizePatentDocumentsChecklist(data.requiredDocumentsChecklist),
+          ...buildPatentDocumentsChecklist(normalizedFiles),
+        };
+
         setFormData(prev => ({
           ...prev,
           projectTitle: data.projectTitle || data.title || '',
@@ -352,8 +372,8 @@ const NewPatent = () => {
           currency: data.currency || 'ILS',
           convertedBudget: data.convertedBudget || '',
           stageBudgets: data.stageBudgets || {},
-          requiredDocumentsChecklist: data.requiredDocumentsChecklist || {},
-          requiredDocumentsFiles: data.requiredDocumentsFiles || {},
+          requiredDocumentsChecklist: normalizedChecklist,
+          requiredDocumentsFiles: normalizedFiles,
           digitalSignature: data.digitalSignature || { signed: false, date: '', signer: '' },
           notes: data.notes || '',
           inventionTitleEnglish: data.inventionTitleEnglish || '',
@@ -507,37 +527,120 @@ const NewPatent = () => {
     }));
   };
 
-  const handleRequiredDocumentUpload = (documentName, selectedFiles) => {
+  const persistPatentDocuments = async (patentId, requiredDocumentsFiles, checklist) => {
+    const persistedFiles = toPersistedPatentDocumentsMap(requiredDocumentsFiles);
+    const finalChecklist = checklist || buildPatentDocumentsChecklist(persistedFiles);
+
+    await updateDoc(doc(db, 'patents', patentId), {
+      requiredDocumentsFiles: persistedFiles,
+      requiredDocumentsChecklist: finalChecklist,
+      updatedAt: serverTimestamp(),
+    });
+
+    updateFormData((prev) => ({
+      ...prev,
+      requiredDocumentsFiles: persistedFiles,
+      requiredDocumentsChecklist: finalChecklist,
+    }));
+
+    previousPatentRef.current = {
+      ...(previousPatentRef.current || {}),
+      requiredDocumentsFiles: persistedFiles,
+      requiredDocumentsChecklist: finalChecklist,
+    };
+  };
+
+  const handleRequiredDocumentUpload = async (documentKey, selectedFiles) => {
     const files = Array.from(selectedFiles || []);
     if (files.length === 0) return;
 
-    setFormData((prev) => ({
+    if (editId) {
+      setDocumentsUploading(true);
+      try {
+        const currentMap = toPersistedPatentDocumentsMap(formDataRef.current.requiredDocumentsFiles);
+        const existingForDoc = currentMap[documentKey] || [];
+        const uploadedNew = [];
+
+        for (const file of files) {
+          if (!(file instanceof File)) continue;
+          const meta = await uploadPatentDocumentFile({
+            storage,
+            patentId: editId,
+            docKey: documentKey,
+            file,
+          });
+          if (meta) uploadedNew.push(meta);
+        }
+
+        const nextFiles = {
+          ...currentMap,
+          [documentKey]: [...existingForDoc, ...uploadedNew],
+        };
+        await persistPatentDocuments(
+          editId,
+          nextFiles,
+          buildPatentDocumentsChecklist(nextFiles)
+        );
+      } catch (uploadError) {
+        console.error('Error uploading patent document:', uploadError);
+        alert(
+          t('documentUploadError', 'העלאת הקובץ נכשלה. נסו שוב.')
+          + (uploadError?.message ? ` (${uploadError.message})` : '')
+        );
+      } finally {
+        setDocumentsUploading(false);
+      }
+      return;
+    }
+
+    updateFormData((prev) => ({
       ...prev,
       requiredDocumentsFiles: {
         ...prev.requiredDocumentsFiles,
-        [documentName]: [...(prev.requiredDocumentsFiles?.[documentName] || []), ...files],
+        [documentKey]: [...(prev.requiredDocumentsFiles?.[documentKey] || []), ...files],
       },
       requiredDocumentsChecklist: {
         ...prev.requiredDocumentsChecklist,
-        [documentName]: true,
+        [documentKey]: true,
       },
     }));
   };
 
-  const handleRemoveRequiredDocumentFile = (documentName, fileIndex) => {
-    setFormData((prev) => {
-      const currentFiles = [...(prev.requiredDocumentsFiles?.[documentName] || [])];
+  const handleRemoveRequiredDocumentFile = async (documentKey, fileIndex) => {
+    if (editId) {
+      setDocumentsUploading(true);
+      try {
+        const currentMap = toPersistedPatentDocumentsMap(formDataRef.current.requiredDocumentsFiles);
+        const nextForDoc = [...(currentMap[documentKey] || [])];
+        nextForDoc.splice(fileIndex, 1);
+        const nextFiles = { ...currentMap, [documentKey]: nextForDoc };
+        await persistPatentDocuments(
+          editId,
+          nextFiles,
+          buildPatentDocumentsChecklist(nextFiles)
+        );
+      } catch (removeError) {
+        console.error('Error removing patent document:', removeError);
+        alert(t('documentRemoveError', 'שגיאה בהסרת הקובץ'));
+      } finally {
+        setDocumentsUploading(false);
+      }
+      return;
+    }
+
+    updateFormData((prev) => {
+      const currentFiles = [...(prev.requiredDocumentsFiles?.[documentKey] || [])];
       currentFiles.splice(fileIndex, 1);
 
       return {
         ...prev,
         requiredDocumentsFiles: {
           ...prev.requiredDocumentsFiles,
-          [documentName]: currentFiles,
+          [documentKey]: currentFiles,
         },
         requiredDocumentsChecklist: {
           ...prev.requiredDocumentsChecklist,
-          [documentName]: currentFiles.length > 0,
+          [documentKey]: currentFiles.length > 0,
         },
       };
     });
@@ -647,106 +750,142 @@ const NewPatent = () => {
         }
       });
 
-      // Prepare patent data
-      const linkedResearch = formData.researchProposalId
-        ? researchOptions.find(option => option.id === formData.researchProposalId)
+      const fd = formDataRef.current;
+      const linkedResearch = fd.researchProposalId
+        ? researchOptions.find(option => option.id === fd.researchProposalId)
         : null;
 
-      const requiredDocumentsChecklistFromFiles = PATENT_REQUIRED_DOCUMENT_DEFS.reduce((acc, { key: docName }) => {
-        const filesForDoc = formData.requiredDocumentsFiles?.[docName] || [];
-        acc[docName] = filesForDoc.length > 0;
-        return acc;
-      }, {});
+      const previousRequiredFiles = toPersistedPatentDocumentsMap(
+        previousPatentRef.current?.requiredDocumentsFiles
+      );
+      const persistedFromForm = toPersistedPatentDocumentsMap(fd.requiredDocumentsFiles);
+      const hasPendingLocalFiles = Object.values(
+        normalizePatentDocumentsFiles(fd.requiredDocumentsFiles)
+      ).some((entries) => entries.some((item) => item instanceof File));
+
+      let docId = editId;
+      if (!docId) {
+        docId = doc(collection(db, 'patents')).id;
+      }
+
+      let requiredDocumentsFilesUrls;
+      try {
+        if (isEdit && !hasPendingLocalFiles) {
+          requiredDocumentsFilesUrls = {
+            ...previousRequiredFiles,
+            ...persistedFromForm,
+          };
+        } else {
+          requiredDocumentsFilesUrls = await buildPatentRequiredDocumentsFilesUrls({
+            formFiles: normalizePatentDocumentsFiles(fd.requiredDocumentsFiles),
+            previousFiles: previousRequiredFiles,
+            docKeys: PATENT_REQUIRED_DOCUMENT_KEYS,
+            patentId: docId,
+            storage,
+          });
+          requiredDocumentsFilesUrls = {
+            ...previousRequiredFiles,
+            ...toPersistedPatentDocumentsMap(requiredDocumentsFilesUrls),
+          };
+        }
+      } catch (requiredDocsError) {
+        console.error('Error uploading required patent documents:', requiredDocsError);
+        throw new Error(t('documentUploadError', 'שגיאה בהעלאת קבצי המסמכים. נסו שוב.'));
+      }
+
+      const requiredDocumentsChecklistFromFiles = buildPatentDocumentsChecklist(
+        requiredDocumentsFilesUrls
+      );
 
       const patentData = {
         // פרטים כלליים
-        title: formData.projectTitle,
-        projectTitle: formData.projectTitle,
-        researchProposalId: formData.researchProposalId || null,
+        title: fd.projectTitle,
+        projectTitle: fd.projectTitle,
+        researchProposalId: fd.researchProposalId || null,
         researchProposalTitle: linkedResearch?.title || '',
         
         // אחוזי המוסד
-        institutionPercentage: formData.institutionPercentage,
+        institutionPercentage: fd.institutionPercentage,
         
         // שותפים
         partners: hasPartners
-          ? formData.partners.filter(p => p.name || p.email || p.institution || p.percentage)
+          ? fd.partners.filter(p => p.name || p.email || p.institution || p.percentage)
           : [],
         
         // יחידת מסחור
-        commercializationUnit: formData.commercializationUnit,
-        commercializationContact1: formData.commercializationContact1,
-        commercializationContact2: formData.commercializationContact2,
-        commercializationEmail1: formData.commercializationEmail1,
-        commercializationEmail2: formData.commercializationEmail2,
+        commercializationUnit: fd.commercializationUnit,
+        commercializationContact1: fd.commercializationContact1,
+        commercializationContact2: fd.commercializationContact2,
+        commercializationEmail1: fd.commercializationEmail1,
+        commercializationEmail2: fd.commercializationEmail2,
         
         // מסלול ותפקיד
-        submissionPath: formData.submissionPath,
-        researcherRole: formData.researcherRole,
+        submissionPath: fd.submissionPath,
+        researcherRole: fd.researcherRole,
         
         // סטטוס ושלב
-        status: formData.patentStatus,
-        patentStage: formData.patentStage,
+        status: fd.patentStatus,
+        patentStage: fd.patentStage,
         
         // תאריכים
         ...datesTimestamps,
         registrationDate: datesTimestamps.registrationDate || datesTimestamps.submissionDate || serverTimestamp(),
         
         // תקציב
-        totalBudget: formData.totalBudget || '',
-        currency: formData.currency || 'ILS',
-        convertedBudget: formData.convertedBudget || '',
-        stageBudgets: formData.stageBudgets || {},
+        totalBudget: fd.totalBudget || '',
+        currency: fd.currency || 'ILS',
+        convertedBudget: fd.convertedBudget || '',
+        stageBudgets: fd.stageBudgets || {},
         
-        // מסמכים (הקישורים עצמם יעודכנו לאחר העלאת הקבצים)
+        // מסמכים
         requiredDocumentsChecklist: requiredDocumentsChecklistFromFiles,
-        requiredDocumentsFiles: isEdit ? (formData.requiredDocumentsFiles || {}) : {},
+        requiredDocumentsFiles: requiredDocumentsFilesUrls,
         
         // חתימה
-        digitalSignature: formData.digitalSignature || { signed: false, signer: '', date: null },
+        digitalSignature: fd.digitalSignature || { signed: false, signer: '', date: null },
         
         // הערות
-        notes: formData.notes || '',
+        notes: fd.notes || '',
 
         // טופס גילוי המצאה (DOI)
-        inventionTitleEnglish: formData.inventionTitleEnglish || '',
-        inventionTitleHebrew: formData.inventionTitleHebrew || '',
-        shortDescription: formData.shortDescription || '',
-        inventionTypeElaboration: formData.inventionTypeElaboration || '',
-        potentialCustomers: formData.potentialCustomers || '',
-        commercialEntityContacts: formData.commercialEntityContacts || '',
+        inventionTitleEnglish: fd.inventionTitleEnglish || '',
+        inventionTitleHebrew: fd.inventionTitleHebrew || '',
+        shortDescription: fd.shortDescription || '',
+        inventionTypeElaboration: fd.inventionTypeElaboration || '',
+        potentialCustomers: fd.potentialCustomers || '',
+        commercialEntityContacts: fd.commercialEntityContacts || '',
         inventors: hasInventors
-          ? (formData.inventors || []).filter((inv) => inv.name || inv.title || inv.nationalId || inv.department)
+          ? (fd.inventors || []).filter((inv) => inv.name || inv.title || inv.nationalId || inv.department)
           : [],
-        inventionFirstDate: formData.inventionFirstDate
+        inventionFirstDate: fd.inventionFirstDate
           ? (() => {
-              const iso = convertDateToISO(formData.inventionFirstDate);
+              const iso = convertDateToISO(fd.inventionFirstDate);
               return iso ? Timestamp.fromDate(new Date(iso)) : null;
             })()
           : null,
-        inventionTimeFrame: formData.inventionTimeFrame || '',
-        inventionWorkType: formData.inventionWorkType || '',
-        fundingSupportType: formData.fundingSupportType || '',
-        fundingSources: (formData.fundingSources || []).filter((row) => row.source || row.grantNumber || row.supportPeriod),
-        nonJceMaterialsUsed: formData.nonJceMaterialsUsed || '',
-        nonJceMaterialsDetails: formData.nonJceMaterialsDetails || '',
-        hasBeenPublished: formData.hasBeenPublished || '',
-        publicationDetails: formData.publicationDetails || '',
-        futurePublicationPlans: formData.futurePublicationPlans || '',
-        priorPatentFiled: formData.priorPatentFiled || '',
-        priorPatentDetails: formData.priorPatentDetails || '',
-        literatureSurveyPerformed: formData.literatureSurveyPerformed || '',
-        literatureSurveyNotes: formData.literatureSurveyNotes || '',
-        priorArtPatents: (formData.priorArtPatents || []).filter((row) => row.title || row.publicationNumber || row.country),
-        priorArtPublications: (formData.priorArtPublications || []).filter((row) => row.title || row.authors),
-        scientificBackground: formData.scientificBackground || '',
-        detailedDescription: formData.detailedDescription || '',
-        advantagesOverExisting: formData.advantagesOverExisting || '',
-        potentialUsesAndImplementation: formData.potentialUsesAndImplementation || '',
-        additionalResearchProgram: formData.additionalResearchProgram || '',
-        referenceList: formData.referenceList || '',
-        developmentBudgetEstimate: formData.developmentBudgetEstimate || '',
-        developmentTimeEstimate: formData.developmentTimeEstimate || '',
+        inventionTimeFrame: fd.inventionTimeFrame || '',
+        inventionWorkType: fd.inventionWorkType || '',
+        fundingSupportType: fd.fundingSupportType || '',
+        fundingSources: (fd.fundingSources || []).filter((row) => row.source || row.grantNumber || row.supportPeriod),
+        nonJceMaterialsUsed: fd.nonJceMaterialsUsed || '',
+        nonJceMaterialsDetails: fd.nonJceMaterialsDetails || '',
+        hasBeenPublished: fd.hasBeenPublished || '',
+        publicationDetails: fd.publicationDetails || '',
+        futurePublicationPlans: fd.futurePublicationPlans || '',
+        priorPatentFiled: fd.priorPatentFiled || '',
+        priorPatentDetails: fd.priorPatentDetails || '',
+        literatureSurveyPerformed: fd.literatureSurveyPerformed || '',
+        literatureSurveyNotes: fd.literatureSurveyNotes || '',
+        priorArtPatents: (fd.priorArtPatents || []).filter((row) => row.title || row.publicationNumber || row.country),
+        priorArtPublications: (fd.priorArtPublications || []).filter((row) => row.title || row.authors),
+        scientificBackground: fd.scientificBackground || '',
+        detailedDescription: fd.detailedDescription || '',
+        advantagesOverExisting: fd.advantagesOverExisting || '',
+        potentialUsesAndImplementation: fd.potentialUsesAndImplementation || '',
+        additionalResearchProgram: fd.additionalResearchProgram || '',
+        referenceList: fd.referenceList || '',
+        developmentBudgetEstimate: fd.developmentBudgetEstimate || '',
+        developmentTimeEstimate: fd.developmentTimeEstimate || '',
         
         // פרטי החוקר
         researcherId: researcherId,
@@ -767,80 +906,28 @@ const NewPatent = () => {
 
       console.log('Patent data prepared:', patentData);
 
-      // Create or update document in Firestore
-      let docId = editId;
       if (isEdit) {
-        await updateDoc(doc(db, 'patents', editId), patentData);
+        await updateDoc(doc(db, 'patents', docId), patentData);
       } else {
-        const docRef = await addDoc(collection(db, 'patents'), patentData);
-        docId = docRef.id;
+        await setDoc(doc(db, 'patents', docId), patentData);
         console.log('Document created with ID:', docId);
       }
 
-      // Upload files after document creation
-      let requiredDocumentsFilesUrls = { ...(formData.requiredDocumentsFiles || {}) };
-      
-      if (docId) {
+      updateFormData((prev) => ({
+        ...prev,
+        requiredDocumentsFiles: toPersistedPatentDocumentsMap(requiredDocumentsFilesUrls),
+        requiredDocumentsChecklist: requiredDocumentsChecklistFromFiles,
+      }));
+
+      previousPatentRef.current = {
+        ...(previousPatentRef.current || {}),
+        ...patentData,
+        requiredDocumentsFiles: requiredDocumentsFilesUrls,
+      };
+
+      if (!asDraft && docId && fd.researchProposalId) {
         try {
-          const nextRequiredDocumentsFiles = {};
-          for (const { key: docName } of PATENT_REQUIRED_DOCUMENT_DEFS) {
-            const docFiles = formData.requiredDocumentsFiles?.[docName] || [];
-            const uploadedOrExisting = [];
-
-            for (let idx = 0; idx < docFiles.length; idx++) {
-              const fileItem = docFiles[idx];
-
-              if (fileItem && typeof fileItem === 'object' && fileItem.url) {
-                uploadedOrExisting.push(fileItem);
-                continue;
-              }
-
-              if (fileItem instanceof File) {
-                const safeDocName = encodeURIComponent(docName);
-                const fileRef = ref(
-                  storage,
-                  `patents/${docId}/required/${safeDocName}/${Date.now()}-${idx}-${fileItem.name}`
-                );
-                await uploadBytes(fileRef, fileItem);
-                const url = await getDownloadURL(fileRef);
-                uploadedOrExisting.push({
-                  name: fileItem.name,
-                  url,
-                  uploadedAt: new Date().toISOString(),
-                });
-              }
-            }
-
-            nextRequiredDocumentsFiles[docName] = uploadedOrExisting;
-          }
-
-          requiredDocumentsFilesUrls = nextRequiredDocumentsFiles;
-        } catch (requiredDocsError) {
-          console.error('Error uploading required patent documents:', requiredDocsError);
-        }
-      }
-
-      // Update document with file URLs if any files were uploaded
-      if (docId && Object.keys(requiredDocumentsFilesUrls).length > 0) {
-        try {
-          const nextRequiredChecklist = PATENT_REQUIRED_DOCUMENT_DEFS.reduce((acc, { key: docName }) => {
-            acc[docName] = (requiredDocumentsFilesUrls[docName] || []).length > 0;
-            return acc;
-          }, {});
-
-          await updateDoc(doc(db, 'patents', docId), {
-            requiredDocumentsFiles: requiredDocumentsFilesUrls,
-            requiredDocumentsChecklist: nextRequiredChecklist,
-            updatedAt: serverTimestamp(),
-          });
-        } catch (updateError) {
-          console.error('Error updating document with file URLs:', updateError);
-        }
-      }
-
-      if (!asDraft && docId && formData.researchProposalId) {
-        try {
-          await updateDoc(doc(db, 'researchProposals', formData.researchProposalId), {
+          await updateDoc(doc(db, 'researchProposals', fd.researchProposalId), {
             hasPatent: true,
             linkedPatentIds: arrayUnion(docId),
             updatedAt: serverTimestamp()
@@ -1002,7 +1089,7 @@ const NewPatent = () => {
     });
   };
 
-  const isBusy = isSubmitting || deleting;
+  const isBusy = isSubmitting || deleting || documentsUploading;
 
   return (
     <div className="page-container">
@@ -1012,10 +1099,7 @@ const NewPatent = () => {
           <FormEditToolbar
             visible={Boolean(editId)}
             onCancelEdit={handleCancel}
-            onDelete={handleDeletePatent}
-            showDelete={showDeleteButton}
             deleting={deleting}
-            deleteLabel={t('deletePatent', 'מחק פטנט')}
             t={t}
           />
         </div>
@@ -1458,15 +1542,21 @@ const NewPatent = () => {
             <h2>{t('patentDocumentsTitle')}</h2>
             <div className="form-group">
               <label>{t('patentDocumentsChecklist')}</label>
+              {documentsUploading && (
+                <p style={{ margin: '0 0 10px', color: '#64748b', fontSize: '14px' }}>
+                  {t('uploadingFiles', 'מעלה קבצים...')}
+                </p>
+              )}
               <div className="documents-checklist-grid">
-                {PATENT_REQUIRED_DOCUMENT_DEFS.map(({ key, labelKey }) => (
+                {PATENT_REQUIRED_DOCUMENT_DEFS.map(({ labelKey, fallback }) => (
                   <DocumentChecklistCard
-                    key={key}
-                    docName={key}
-                    displayLabel={t(labelKey)}
-                    files={formData.requiredDocumentsFiles?.[key] || []}
-                    onUpload={(files) => handleRequiredDocumentUpload(key, files)}
-                    onRemove={(fileIndex) => handleRemoveRequiredDocumentFile(key, fileIndex)}
+                    key={labelKey}
+                    docName={labelKey}
+                    displayLabel={t(labelKey, fallback)}
+                    files={formData.requiredDocumentsFiles?.[labelKey] || []}
+                    onUpload={(files) => handleRequiredDocumentUpload(labelKey, files)}
+                    onRemove={(fileIndex) => handleRemoveRequiredDocumentFile(labelKey, fileIndex)}
+                    disabled={documentsUploading}
                   />
                 ))}
               </div>

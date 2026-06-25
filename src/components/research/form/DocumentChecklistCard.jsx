@@ -9,6 +9,7 @@ const DocumentChecklistCard = ({
   files = [],
   onUpload,
   onRemove,
+  disabled = false,
 }) => {
   const { t } = useLanguage();
   const hasFiles = files.length > 0;
@@ -33,6 +34,7 @@ const DocumentChecklistCard = ({
       variant="document"
       hasFiles={hasFiles}
       onFiles={onUpload}
+      disabled={disabled}
     >
       <div className="document-checklist-card__inner">
         <div className="document-checklist-card__title">

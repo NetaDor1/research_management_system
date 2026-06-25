@@ -1,15 +1,42 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { collection, addDoc, serverTimestamp, Timestamp, query, where, getDocs, doc, getDoc, updateDoc, writeBatch, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { db } from '../services/firebase';
+import { db, storage } from '../services/firebase';
 import { createNotification } from '../services/notifications';
 import { navigateBackOrFallback } from '../utils/navigation';
 import { canDeleteArticle, getSubmissionStatus } from '../utils/submissionStatus';
+import { sanitizeStorageFileName } from '../utils/fileDownload';
 import FormEditToolbar from '../components/FormEditToolbar';
 import './Page.css';
 import './Research.css';
+
+const ALLOWED_ARTICLE_FILE_TYPES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]);
+const ALLOWED_ARTICLE_FILE_EXT = /\.(pdf|doc|docx)$/i;
+
+const isAllowedArticleFile = (file) => (
+  ALLOWED_ARTICLE_FILE_TYPES.has(file.type) || ALLOWED_ARTICLE_FILE_EXT.test(file.name || '')
+);
+
+const getArticleStorageRootId = (researchProposalId, researcherId) => (
+  researchProposalId || `researcher-${researcherId || 'unknown'}`
+);
+
+const buildArticleFileMeta = (fileItem) => {
+  if (!fileItem || fileItem instanceof File || !fileItem.url) return null;
+  return {
+    name: fileItem.name || fileItem.fileName || 'file',
+    url: fileItem.url,
+    storagePath: fileItem.storagePath || '',
+    uploadedAt: fileItem.uploadedAt || null,
+  };
+};
 
 const NewArticle = () => {
   const navigate = useNavigate();
@@ -32,11 +59,13 @@ const NewArticle = () => {
     journalRanking: '',
     publicationYear: '',
     articleLink: '',
+    articleFile: null,
     researchProposalId: ''
   });
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fileUploading, setFileUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [researchOptions, setResearchOptions] = useState([]);
   const [researchLoading, setResearchLoading] = useState(true);
@@ -116,6 +145,7 @@ const NewArticle = () => {
           journalRanking: data.journalRanking || '',
           publicationYear: data.publicationYear || '',
           articleLink: data.articleLink || '',
+          articleFile: data.articleFile?.url ? data.articleFile : null,
           researchProposalId: data.researchProposalId || ''
         }));
       } catch (err) {
@@ -132,6 +162,120 @@ const NewArticle = () => {
       ...prev,
       [name]: value
     }));
+  };
+
+  const uploadArticleManuscript = async (articleId, file, researchProposalId, researcherId) => {
+    const storageRootId = getArticleStorageRootId(researchProposalId, researcherId);
+    const safeFileName = sanitizeStorageFileName(file.name);
+    const storagePath = `researchProposals/${storageRootId}/articles/${articleId}/manuscript/${safeFileName}`;
+    const fileRef = ref(storage, storagePath);
+    await uploadBytes(fileRef, file, {
+      contentType: file.type || 'application/octet-stream',
+      contentDisposition: `attachment; filename="${safeFileName}"`,
+    });
+    const url = await getDownloadURL(fileRef);
+    return {
+      name: file.name,
+      url,
+      storagePath,
+      uploadedAt: new Date().toISOString(),
+    };
+  };
+
+  const persistArticleFile = async (articleId, uploadedFile) => {
+    await updateDoc(doc(db, 'articles', articleId), {
+      articleFile: uploadedFile,
+      updatedAt: serverTimestamp(),
+    });
+    setFormData((prev) => ({ ...prev, articleFile: uploadedFile }));
+    previousArticleRef.current = {
+      ...(previousArticleRef.current || {}),
+      articleFile: uploadedFile,
+    };
+  };
+
+  const handleArticleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    if (!isAllowedArticleFile(file)) {
+      setErrors((prev) => ({
+        ...prev,
+        articleFile: t('articleFileInvalidType', 'ניתן להעלות רק קבצי PDF או Word'),
+      }));
+      return;
+    }
+
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.articleFile;
+      return next;
+    });
+
+    if (editId) {
+      setFileUploading(true);
+      try {
+        const uploadedFile = await uploadArticleManuscript(
+          editId,
+          file,
+          formData.researchProposalId,
+          user?.id
+        );
+        await persistArticleFile(editId, uploadedFile);
+        alert(t('articleFileUploadSuccess', 'הקובץ הועלה בהצלחה'));
+      } catch (uploadError) {
+        console.error('Error uploading article file:', uploadError);
+        alert(
+          t(
+            'articleFileUploadError',
+            'העלאת הקובץ נכשלה. נסה/י שוב.'
+          ) + (uploadError?.message ? ` (${uploadError.message})` : '')
+        );
+      } finally {
+        setFileUploading(false);
+      }
+      return;
+    }
+
+    setFormData((prev) => ({ ...prev, articleFile: file }));
+  };
+
+  const handleArticleFileRemove = async () => {
+    setFormData((prev) => ({ ...prev, articleFile: null }));
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.articleFile;
+      return next;
+    });
+
+    if (editId && previousArticleRef.current?.articleFile?.url) {
+      try {
+        await updateDoc(doc(db, 'articles', editId), {
+          articleFile: null,
+          updatedAt: serverTimestamp(),
+        });
+        previousArticleRef.current = {
+          ...previousArticleRef.current,
+          articleFile: null,
+        };
+      } catch (removeError) {
+        console.error('Error removing article file:', removeError);
+        alert(t('articleFileRemoveError', 'שגיאה בהסרת הקובץ'));
+      }
+    }
+  };
+
+  const getArticleFilePreview = () => {
+    const fileItem = formData.articleFile;
+    if (!fileItem) return { name: '', url: '' };
+    if (fileItem instanceof File) {
+      return { name: fileItem.name, url: URL.createObjectURL(fileItem) };
+    }
+    return {
+      name: fileItem.name || fileItem.fileName || 'file',
+      url: fileItem.url || '',
+    };
   };
 
   const validateForm = () => {
@@ -204,6 +348,12 @@ const NewArticle = () => {
         ? Timestamp.fromDate(new Date(`${formData.publicationYear}-01-01`))
         : serverTimestamp();
 
+      const existingArticleFile = previousArticleRef.current?.articleFile;
+      let articleFileMeta = buildArticleFileMeta(formData.articleFile);
+      if (!articleFileMeta && formData.articleFile instanceof File && existingArticleFile?.url) {
+        articleFileMeta = buildArticleFileMeta(existingArticleFile);
+      }
+
       // Prepare article data
       const articleData = {
         // פרטים כלליים
@@ -212,6 +362,7 @@ const NewArticle = () => {
         journalRanking: formData.journalRanking,
         publicationYear: formData.publicationYear,
         articleLink: formData.articleLink || '',
+        articleFile: articleFileMeta,
         researchProposalId: formData.researchProposalId || '',
         
         // פרטי החוקר
@@ -248,6 +399,26 @@ const NewArticle = () => {
         const docRef = await addDoc(collection(db, 'articles'), articleData);
         docId = docRef.id;
         console.log('Document created with ID:', docId);
+      }
+
+      if (docId && formData.articleFile instanceof File) {
+        try {
+          const uploadedFile = await uploadArticleManuscript(
+            docId,
+            formData.articleFile,
+            formData.researchProposalId,
+            researcherId
+          );
+          await persistArticleFile(docId, uploadedFile);
+        } catch (uploadError) {
+          console.error('Error uploading article file:', uploadError);
+          alert(
+            t(
+              'articleFileUploadError',
+              'המאמר נשמר, אך העלאת הקובץ נכשלה. נסה/י שוב בעריכת המאמר.'
+            ) + (uploadError?.message ? ` (${uploadError.message})` : '')
+          );
+        }
       }
 
       if (!asDraft && docId && formData.researchProposalId) {
@@ -408,7 +579,8 @@ const NewArticle = () => {
     navigateBackOrFallback(navigate, getCancelTarget());
   };
 
-  const isBusy = isSubmitting || deleting;
+  const isBusy = isSubmitting || deleting || fileUploading;
+  const articleFilePreview = getArticleFilePreview();
 
   return (
     <div className="page-container">
@@ -418,10 +590,7 @@ const NewArticle = () => {
           <FormEditToolbar
             visible={Boolean(editId)}
             onCancelEdit={handleCancel}
-            onDelete={handleDeleteArticle}
-            showDelete={showDeleteButton}
             deleting={deleting}
-            deleteLabel={t('deleteArticle', 'מחק מאמר')}
             t={t}
           />
         </div>
@@ -532,6 +701,49 @@ const NewArticle = () => {
                   {t('openLink', 'פתח קישור')} →
                 </a>
               )}
+            </div>
+
+            <div className="form-group">
+              <label>{t('articleFileLabel', 'קובץ המאמר (PDF / Word)')}</label>
+              <p style={{ marginTop: 0, marginBottom: '8px', color: '#64748b', fontSize: '13px' }}>
+                {t('articleFileHint', 'ניתן להעלות קובץ PDF או Word (אופציונלי)')}
+              </p>
+              {fileUploading && (
+                <p style={{ margin: '0 0 8px', color: '#667eea', fontWeight: 600 }}>
+                  {t('uploadingArticleFile', 'מעלה קובץ...')}
+                </p>
+              )}
+              {formData.articleFile ? (
+                <div style={{ display: 'grid', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <a
+                      href={articleFilePreview.url || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: '#667eea', wordBreak: 'break-all' }}
+                    >
+                      📄 {articleFilePreview.name}
+                    </a>
+                    <button type="button" className="remove-btn" onClick={handleArticleFileRemove} disabled={fileUploading}>
+                      {t('removeArticleFile', 'הסר קובץ')}
+                    </button>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    onChange={handleArticleFileSelect}
+                    disabled={fileUploading}
+                  />
+                </div>
+              ) : (
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={handleArticleFileSelect}
+                  disabled={fileUploading}
+                />
+              )}
+              {errors.articleFile && <span className="error-message">{errors.articleFile}</span>}
             </div>
           </div>
 

@@ -86,7 +86,7 @@ const ProposalDocxUpload = ({ onParsed, disabled = false }) => {
       <p className="proposal-docx-upload-desc">
         {t(
           'proposalDocxUploadDesc',
-          'העלו קובץ לפי הפורמט הקבוע — שדות התוכן ימולאו אוטומטית.'
+          'העלו קובץ לפי הפורמט הקבוע- שדות התוכן ימולאו אוטומטית.'
         )}
       </p>
 

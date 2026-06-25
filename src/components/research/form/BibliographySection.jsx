@@ -1,6 +1,8 @@
 import React from 'react';
 import { useLanguage } from '../../../context/LanguageContext';
 import AIPolishButton from '../AIPolishButton';
+import BibliographyVerificationButton from '../BibliographyVerificationButton';
+import '../AIPolishButton.css';
 
 const BIBLIO_LABELS_HE = {
   bibliographyPersonalStatement: 'הצהרה אישית',
@@ -188,32 +190,53 @@ const BibliographySection = ({
         />
       </div>
 
-      <div className="form-group">
-        <label htmlFor="bibliographySelectedPublications">
-          {t('selectedPublicationsLabel', 'C. Selected Peer-reviewed Publications')}
-        </label>
-        <textarea
-          id="bibliographySelectedPublications"
-          name="bibliographySelectedPublications"
-          value={formData.bibliographySelectedPublications || ''}
-          onChange={handleChange}
-          rows="6"
-          placeholder={t('selectedPublicationsPlaceholder', 'List selected publications and mark the 5 most relevant.')}
-        />
-      </div>
+      <div className="biblio-cd-block">
+        <div className="biblio-cd-block-header">
+          <h3 className="biblio-cd-block-title">
+            {t('biblioVerifyBlockTitle', 'בדיקת מהימנות — סעיפים C ו-D')}
+          </h3>
+          <BibliographyVerificationButton formData={formData} />
+          <p
+            className="biblio-cd-block-hint"
+            style={{ fontSize: '0.82rem', lineHeight: 1.4, margin: '6px 0 0', color: '#64748b' }}
+          >
+            {t(
+              'biblioVerifyFormatHint',
+                           'כדי לעשות בדיקה ראשונית למהימנות - יש לכתוב את שם המאמר + שם המחבר + שנת הפרסום. נא למספר את המאמרים ולכתוב כל מאמר בשורה נפרדת.' 
+            )}
+          </p>
+        </div>
 
-      <div className="form-group">
-        <label htmlFor="bibliographyResearchSupport">
-          {t('researchSupportLabel', 'D. Research Support')}
-        </label>
-        <textarea
-          id="bibliographyResearchSupport"
-          name="bibliographyResearchSupport"
-          value={formData.bibliographyResearchSupport || ''}
-          onChange={handleChange}
-          rows="6"
-          placeholder={t('researchSupportPlaceholder', 'List ongoing/completed projects from the past 3 years.')}
-        />
+        <div className="form-group">
+          <label htmlFor="bibliographySelectedPublications">
+            {t('selectedPublicationsLabel', 'C. Selected Peer-reviewed Publications')}
+          </label>
+          <textarea
+            id="bibliographySelectedPublications"
+            name="bibliographySelectedPublications"
+            value={formData.bibliographySelectedPublications || ''}
+            onChange={handleChange}
+            rows="6"
+            placeholder={t(
+              'selectedPublicationsPlaceholder',
+              'לדוגמה:\n1. שם המאמר, שם המחבר, 2024\n2. שם המאמר, שם המחבר, 2023'
+            )}
+          />
+        </div>
+
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label htmlFor="bibliographyResearchSupport">
+            {t('researchSupportLabel', 'D. Research Support')}
+          </label>
+          <textarea
+            id="bibliographyResearchSupport"
+            name="bibliographyResearchSupport"
+            value={formData.bibliographyResearchSupport || ''}
+            onChange={handleChange}
+            rows="6"
+            placeholder={t('researchSupportPlaceholder', 'List ongoing/completed projects from the past 3 years.')}
+          />
+        </div>
       </div>
     </div>
   );

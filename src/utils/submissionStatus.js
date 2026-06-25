@@ -43,6 +43,5 @@ export const canDeletePatent = (data) => {
 
 export const canDeleteArticle = (data) => {
   if (!data) return false;
-  if (isDraft(data)) return true;
-  return (data.status || 'in-review') === 'in-review';
+  return canResearcherEditArticle(data);
 };

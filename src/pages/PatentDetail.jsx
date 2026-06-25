@@ -14,6 +14,7 @@ import './Research.css';
 import { exportPrintableHtmlToPdf, escapeHtml } from '../utils/exportPdf';
 import { navigateBackOrFallback } from '../utils/navigation';
 import PatentDisclosureDisplay from '../components/research/PatentDisclosureDisplay';
+import PatentDocumentsDisplaySection from '../components/research/PatentDocumentsDisplaySection';
 
 const PatentDetail = () => {
   const { id } = useParams();
@@ -1423,6 +1424,8 @@ const PatentDetail = () => {
                 })()}
               </div>
             )}
+
+            <PatentDocumentsDisplaySection patentData={patentData} />
 
             {/* שותפים */}
             {patentData.partners && patentData.partners.length > 0 && (
