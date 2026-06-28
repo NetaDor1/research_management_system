@@ -401,16 +401,16 @@ FORMATTING RULES (strictly follow):
 - Use - for bullet points.
 - Do NOT use # or ## headers. Do NOT use --- separators. Do NOT use * for bullets (use -).
 - Do NOT write the word "טיוטה" or "draft" anywhere.
-- Keep answers clean and readable — avoid excessive symbols.
+- Keep answers clean and readable - avoid excessive symbols.
 
 CONTENT RULES:
-- When the user asks for a full draft or proposal, write ALL sections (Abstract, Scientific Background, Research Objectives, Detailed Description, Significance/Innovation, Applicability, Budget) with their full content — not just headings.
-- When the user asks for advice or feedback only, give guidance and bullet points — without writing paragraph drafts unless asked.
-- If a section is missing from the form, tell the user what to add — do not invent content.
+- When the user asks for a full draft or proposal, write ALL sections (Abstract, Scientific Background, Research Objectives, Detailed Description, Significance/Innovation, Applicability, Budget) with their full content  no-t just headings.
+- When the user asks for advice or feedback only, give guidance and bullet points - without writing paragraph drafts unless asked.
+- If a section is missing from the form, tell the user what to add - do not invent content.
 - Do not invent grant deadlines, committee names, or citations.
 
 Current draft context (may be partial):
-${proposalBlock || '(No draft text in the form yet — use the user message as the topic if they describe one.)'}`;
+${proposalBlock || '(No draft text in the form yet - use the user message as the topic if they describe one.)'}`;
 
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     const model = genAI.getGenerativeModel(
@@ -551,7 +551,7 @@ function applySectionScoreGuards(entry, section, item) {
   if (section === 'publications' && looksLikeNonAcademicSource(text)) {
     score = Math.min(score, 35);
     if (!concerns.some((c) => /לא אקדמי|non-academic|ביקורת עמיתים/i.test(c))) {
-      concerns.push('מקור לא אקדמי (בלוג, ויקיפדיה, חדשות וכו\') — לא מתאים לסעיף פרסומים מבוקרים');
+      concerns.push('מקור לא אקדמי (בלוג, ויקיפדיה, חדשות וכו\') - לא מתאים לסעיף פרסומים מבוקרים');
     }
   }
 
@@ -559,7 +559,7 @@ function applySectionScoreGuards(entry, section, item) {
     if (looksLikePublicationInSectionD(text)) {
       score = Math.min(score, 40);
       if (!concerns.some((c) => /ממוקם|misplaced|פרסום/i.test(c))) {
-        concerns.push('פריט זה נראה כפרסום (מאמר/ספר) שממוקם בטעות בתמיכת מחקר — חסרים פרטי מימון');
+        concerns.push('פריט זה נראה כפרסום (מאמר/ספר) שממוקם בטעות בתמיכת מחקר - חסרים פרטי מימון');
       }
     }
     if (isOutdatedResearchSupport(text)) {

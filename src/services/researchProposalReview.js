@@ -29,7 +29,7 @@ export function getReviewApiHealthUrl() {
   return base ? `${base}${HEALTH_PATH}` : HEALTH_PATH;
 }
 
-/** Quick reachability check — returns true if the Express AI server is up. */
+/** Quick reachability check - returns true if the Express AI server is up. */
 export async function checkReviewApiHealth() {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 4000);
@@ -120,7 +120,7 @@ function apiErrorFromResponse(res, data) {
 
   if (res.status === 404) {
     const err = new Error(
-      'נתיב הבדיקה לא נמצא בשרת. עצרו את npm run dev (Ctrl+C) והפעילו שוב — השרת צריך לעלות מחדש אחרי עדכון הקוד.'
+      'נתיב הבדיקה לא נמצא בשרת. עצרו את npm run dev (Ctrl+C) והפעילו שוב - השרת צריך לעלות מחדש אחרי עדכון הקוד.'
     );
     err.status = 404;
     return err;

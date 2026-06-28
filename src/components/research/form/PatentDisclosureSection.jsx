@@ -82,7 +82,7 @@ const PatentDisclosureSection = ({
 
   return (
     <>
-      <div className="form-section">
+      <div className="form-section" id="patent-doi-section">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '12px', flexWrap: 'wrap' }}>
           <h2 style={{ margin: 0 }}>{t('doiFormTitle', 'טופס גילוי המצאה (DOI)')}</h2>
           {onPolish && (

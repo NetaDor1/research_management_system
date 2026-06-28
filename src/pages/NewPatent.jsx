@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { collection, doc, getDoc, getDocs, updateDoc, setDoc, writeBatch, serverTimestamp, Timestamp, query, where, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +20,7 @@ import {
   uploadPatentDocumentFile,
 } from '../utils/patentRequiredDocuments';
 import FormEditToolbar from '../components/FormEditToolbar';
+import PatentDocxUpload from '../components/research/PatentDocxUpload';
 import PatentDisclosureSection, {
   EMPTY_INVENTOR,
   EMPTY_FUNDING,
@@ -1091,17 +1092,88 @@ const NewPatent = () => {
 
   const isBusy = isSubmitting || deleting || documentsUploading;
 
+  const handlePatentDocxParsed = useCallback((parsed) => {
+    if (!parsed || typeof parsed !== 'object') return;
+
+    setFormData((prev) => {
+      const next = { ...prev };
+
+      const textFields = [
+        'inventionTitleEnglish',
+        'inventionTitleHebrew',
+        'shortDescription',
+        'inventionTypeElaboration',
+        'potentialCustomers',
+        'commercialEntityContacts',
+        'inventionFirstDate',
+        'inventionTimeFrame',
+        'inventionWorkType',
+        'fundingSupportType',
+        'nonJceMaterialsUsed',
+        'nonJceMaterialsDetails',
+        'hasBeenPublished',
+        'publicationDetails',
+        'futurePublicationPlans',
+        'priorPatentFiled',
+        'priorPatentDetails',
+        'literatureSurveyPerformed',
+        'literatureSurveyNotes',
+        'scientificBackground',
+        'detailedDescription',
+        'advantagesOverExisting',
+        'potentialUsesAndImplementation',
+        'additionalResearchProgram',
+        'referenceList',
+        'developmentBudgetEstimate',
+        'developmentTimeEstimate',
+      ];
+
+      textFields.forEach((key) => {
+        if (parsed[key]) next[key] = parsed[key];
+      });
+
+      if (!prev.projectTitle?.trim()) {
+        next.projectTitle = parsed.inventionTitleEnglish || parsed.inventionTitleHebrew || prev.projectTitle;
+      }
+
+      if (Array.isArray(parsed.inventors) && parsed.inventors.length > 0) {
+        next.inventors = parsed.inventors;
+      }
+
+      if (Array.isArray(parsed.fundingSources) && parsed.fundingSources.length > 0) {
+        next.fundingSources = parsed.fundingSources;
+      }
+
+      if (Array.isArray(parsed.priorArtPatents) && parsed.priorArtPatents.length > 0) {
+        next.priorArtPatents = parsed.priorArtPatents;
+      }
+
+      if (Array.isArray(parsed.priorArtPublications) && parsed.priorArtPublications.length > 0) {
+        next.priorArtPublications = parsed.priorArtPublications;
+      }
+
+      return next;
+    });
+
+    if (Array.isArray(parsed.inventors) && parsed.inventors.length > 0) {
+      setHasInventors(true);
+    }
+  }, []);
+
   return (
     <div className="page-container">
       <div className="page-content" style={{ maxWidth: '1200px' }}>
         <div className="form-page-header">
           <h1>{t('newPatentTitle', 'הוספת פטנט חדש')}</h1>
-          <FormEditToolbar
-            visible={Boolean(editId)}
-            onCancelEdit={handleCancel}
-            deleting={deleting}
-            t={t}
-          />
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '12px' }}>
+            <PatentDocxUpload onParsed={handlePatentDocxParsed} disabled={isBusy} />
+            <FormEditToolbar
+              visible={Boolean(editId)}
+              onCancelEdit={handleCancel}
+              deleting={deleting}
+              t={t}
+            />
+          </div>
         </div>
         <p className="form-subtitle">{t('newPatentSubtitle', 'בקשה לקניין רוחני (כמערכת גמול הצטיינות)')}</p>
 

@@ -7,6 +7,7 @@ import { db } from '../services/firebase';
 import { createNotification } from '../services/notifications';
 import TasksCalendarContainer from '../components/TasksCalendarContainer';
 import UpcomingTasks from '../components/UpcomingTasks';
+import LimitedCardGrid from '../components/LimitedCardGrid';
 import { shouldShowNewBadge } from '../utils/newBadge';
 import './Page.css';
 import './Research.css';
@@ -637,6 +638,66 @@ const Home = () => {
     return '';
   };
 
+  const renderResearchCard = (research, { closeModal } = {}) => (
+    <button
+      type="button"
+      className="research-card"
+      onClick={() => {
+        closeModal?.();
+        handleResearchClick(research);
+      }}
+    >
+      {shouldShowNewBadge(research.isNew, research.submissionDate) && (
+        <span className="new-badge">{t('newBadge', 'חדש!')}</span>
+      )}
+      <h3 className="research-title">{research.title}</h3>
+      <p className="research-researcher">{research.researcher}</p>
+      <span className={`status-button ${getStatusClass(getDisplayStatus(research), 'research')}`}>
+        {getStatusLabel(getDisplayStatus(research), 'research')}
+      </span>
+    </button>
+  );
+
+  const renderPatentCard = (patent, { closeModal } = {}) => (
+    <button
+      type="button"
+      className="research-card"
+      onClick={() => {
+        closeModal?.();
+        handlePatentClick(patent);
+      }}
+    >
+      {shouldShowNewBadge(patent.isNew, patent.registrationDate) && (
+        <span className="new-badge">{t('newBadge', 'חדש!')}</span>
+      )}
+      <h3 className="research-title">{patent.title}</h3>
+      <p className="research-researcher">{patent.researcher}</p>
+      <span className={`status-button ${getStatusClass(getDisplayStatus(patent), 'patent')}`}>
+        {getStatusLabel(getDisplayStatus(patent), 'patent')}
+      </span>
+    </button>
+  );
+
+  const renderArticleCard = (article, { closeModal } = {}) => (
+    <button
+      type="button"
+      className="research-card"
+      onClick={() => {
+        closeModal?.();
+        handleArticleClick(article);
+      }}
+    >
+      {shouldShowNewBadge(article.isNew, article.createdAt) && (
+        <span className="new-badge">{t('newBadge', 'חדש!')}</span>
+      )}
+      <h3 className="research-title">{article.title}</h3>
+      <p className="research-researcher">{article.researcher}</p>
+      <span className={`status-button ${getStatusClass(getDisplayStatus(article), 'article')}`}>
+        {getStatusLabel(getDisplayStatus(article), 'article')}
+      </span>
+    </button>
+  );
+
   // Show admin view or researcher view
   if (isAdmin()) {
     return (
@@ -697,37 +758,28 @@ const Home = () => {
             </div>
           )}
 
-          <div className="research-grid">
-            <button
-              className="research-card add-research-card"
-              onClick={handleAddResearch}
-            >
-              <h3 className="add-research-title">{t('addNewResearch', 'הוספת מחקר חדש')}</h3>
-            </button>
-
-            {!researchLoading && !researchError && researchData.length === 0 && (
-              <div className="no-results-grid-item">
-                <p>{t('noResearchFound', 'לא נמצאו מחקרים')}</p>
-              </div>
-            )}
-
-            {!researchLoading && !researchError && researchData.map((research) => (
-              <button
-                key={research.id}
-                className="research-card"
-                onClick={() => handleResearchClick(research)}
-              >
-                {shouldShowNewBadge(research.isNew, research.submissionDate) && (
-                  <span className="new-badge">{t('newBadge', 'חדש!')}</span>
-                )}
-                <h3 className="research-title">{research.title}</h3>
-                <p className="research-researcher">{research.researcher}</p>
-                <button className={`status-button ${getStatusClass(getDisplayStatus(research), 'research')}`}>
-                  {getStatusLabel(getDisplayStatus(research), 'research')}
+          {!researchLoading && !researchError && (
+            <LimitedCardGrid
+              items={researchData}
+              renderItem={renderResearchCard}
+              showAllModalTitle={t('allResearchTitle', 'כל המחקרים')}
+              addCard={(
+                <button
+                  type="button"
+                  className="research-card add-research-card"
+                  onClick={handleAddResearch}
+                >
+                  <h3 className="add-research-title">{t('addNewResearch', 'הוספת מחקר חדש')}</h3>
                 </button>
-              </button>
-            ))}
-          </div>
+              )}
+            />
+          )}
+
+          {!researchLoading && !researchError && researchData.length === 0 && (
+            <div className="no-results-grid-item" style={{ marginTop: '12px' }}>
+              <p>{t('noResearchFound', 'לא נמצאו מחקרים')}</p>
+            </div>
+          )}
         </div>
 
         {/* Patents Section */}
@@ -746,38 +798,28 @@ const Home = () => {
             </div>
           )}
 
-          <div className="research-grid">
-            <button
-              className="research-card add-research-card"
-              onClick={handleAddPatent}
-              type="button"
-            >
-              <h3 className="add-research-title">{t('addNewPatent', 'הוספת פטנט חדש')}</h3>
-            </button>
-
-            {!patentsLoading && !patentsError && patentsData.length === 0 && (
-              <div className="no-results-grid-item">
-                <p>{t('noPatentsFound', 'לא נמצאו פטנטים')}</p>
-              </div>
-            )}
-
-            {!patentsLoading && !patentsError && patentsData.map((patent) => (
-              <button
-                key={patent.id}
-                className="research-card"
-                onClick={() => handlePatentClick(patent)}
-              >
-                {shouldShowNewBadge(patent.isNew, patent.registrationDate) && (
-                  <span className="new-badge">{t('newBadge', 'חדש!')}</span>
-                )}
-                <h3 className="research-title">{patent.title}</h3>
-                <p className="research-researcher">{patent.researcher}</p>
-                <button className={`status-button ${getStatusClass(getDisplayStatus(patent), 'patent')}`}>
-                  {getStatusLabel(getDisplayStatus(patent), 'patent')}
+          {!patentsLoading && !patentsError && (
+            <LimitedCardGrid
+              items={patentsData}
+              renderItem={renderPatentCard}
+              showAllModalTitle={t('allPatentsTitle', 'כל הפטנטים')}
+              addCard={(
+                <button
+                  type="button"
+                  className="research-card add-research-card"
+                  onClick={handleAddPatent}
+                >
+                  <h3 className="add-research-title">{t('addNewPatent', 'הוספת פטנט חדש')}</h3>
                 </button>
-              </button>
-            ))}
-          </div>
+              )}
+            />
+          )}
+
+          {!patentsLoading && !patentsError && patentsData.length === 0 && (
+            <div className="no-results-grid-item" style={{ marginTop: '12px' }}>
+              <p>{t('noPatentsFound', 'לא נמצאו פטנטים')}</p>
+            </div>
+          )}
         </div>
 
         {/* Articles Section */}
@@ -796,38 +838,28 @@ const Home = () => {
             </div>
           )}
 
-          <div className="research-grid">
-            <button
-              className="research-card add-research-card"
-              onClick={handleAddArticle}
-              type="button"
-            >
-              <h3 className="add-research-title">{t('addNewArticle', 'הוספת מאמר חדש')}</h3>
-            </button>
-
-            {!articlesLoading && !articlesError && articlesData.length === 0 && (
-              <div className="no-results-grid-item">
-                <p>{t('noArticlesFound', 'לא נמצאו מאמרים')}</p>
-              </div>
-            )}
-
-            {!articlesLoading && !articlesError && articlesData.map((article) => (
-              <button
-                key={article.id}
-                className="research-card"
-                onClick={() => handleArticleClick(article)}
-              >
-                {shouldShowNewBadge(article.isNew, article.createdAt) && (
-                  <span className="new-badge">{t('newBadge', 'חדש!')}</span>
-                )}
-                <h3 className="research-title">{article.title}</h3>
-                <p className="research-researcher">{article.researcher}</p>
-                <button className={`status-button ${getStatusClass(getDisplayStatus(article), 'article')}`}>
-                  {getStatusLabel(getDisplayStatus(article), 'article')}
+          {!articlesLoading && !articlesError && (
+            <LimitedCardGrid
+              items={articlesData}
+              renderItem={renderArticleCard}
+              showAllModalTitle={t('allArticlesTitle', 'כל המאמרים')}
+              addCard={(
+                <button
+                  type="button"
+                  className="research-card add-research-card"
+                  onClick={handleAddArticle}
+                >
+                  <h3 className="add-research-title">{t('addNewArticle', 'הוספת מאמר חדש')}</h3>
                 </button>
-              </button>
-            ))}
-          </div>
+              )}
+            />
+          )}
+
+          {!articlesLoading && !articlesError && articlesData.length === 0 && (
+            <div className="no-results-grid-item" style={{ marginTop: '12px' }}>
+              <p>{t('noArticlesFound', 'לא נמצאו מאמרים')}</p>
+            </div>
+          )}
         </div>
 
         {/* Calendar Section */}

@@ -24,6 +24,13 @@ const PatentDetail = () => {
   const textAlign = isRTL ? 'right' : 'left';
   const locale = language === 'en' ? 'en-US' : 'he-IL';
   const notSpecified = t('notSpecified', 'לא צוין');
+  const getStageLabel = (stageKey) => {
+    const match = /^stage(\d+)$/i.exec(String(stageKey || '').trim());
+    if (match) {
+      return t(`patentStage${match[1]}`, stageKey);
+    }
+    return stageKey;
+  };
   const [patentData, setPatentData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -638,7 +645,7 @@ const PatentDetail = () => {
       : `<div class="muted">${escapeHtml(t('notSpecified', 'לא צוין'))}</div>`;
 
     const stageBudgetRowsHtml = Object.entries(stageBudgets)
-      .map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`)
+      .map(([k, v]) => `<tr><td>${escapeHtml(getStageLabel(k))}</td><td>${escapeHtml(v)}</td></tr>`)
       .join('');
 
     const stageBudgetTableHtml = stageBudgetRowsHtml
@@ -1304,7 +1311,7 @@ const PatentDetail = () => {
                             const hasApproved = approved !== undefined && approved !== null;
                             return (
                               <tr key={key}>
-                                <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9', fontWeight: 'bold', color: '#475569' }}>{key}</td>
+                                <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9', fontWeight: 'bold', color: '#475569' }}>{getStageLabel(key)}</td>
                                 <td style={{ padding: '10px', borderBottom: '1px solid #f1f5f9' }}>
                                   {`${sym} ${Number(value || 0).toLocaleString(locale, { style: 'decimal' })}`}
                                 </td>
@@ -1397,7 +1404,7 @@ const PatentDetail = () => {
                             const rowBg = { background: '#fff', padding: '8px 10px', borderBottom: '1px solid #f0f0f0' };
                             return (
                               <React.Fragment key={stageKey}>
-                                <div style={{ ...rowBg, fontWeight: 'bold', color: '#334155', fontSize: '14px' }}>{stageKey}</div>
+                                <div style={{ ...rowBg, fontWeight: 'bold', color: '#334155', fontSize: '14px' }}>{getStageLabel(stageKey)}</div>
                                 <div style={{ ...rowBg, color: '#334155', fontSize: '14px' }}>
                                   {`${sym} ${Number(requestedVal || 0).toLocaleString(locale, { style: 'decimal' })}`}
                                 </div>
