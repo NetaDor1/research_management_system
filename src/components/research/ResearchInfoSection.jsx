@@ -32,17 +32,19 @@ const fundLinks = {
   'מרכז לדאטה ובינה מלאכותית - אונ\' תל אביב': 'https://datascience.tau.ac.il/'
 };
 
-const ResearchInfoSection = ({ researchData, onQuickApprove, onQuickReject, quickDecisionLoading }) => {
+const ResearchInfoSection = ({ researchData, onMoveToPending, onQuickApprove, onQuickReject, quickDecisionLoading }) => {
   const { t, isRTL } = useLanguage();
   const textAlign = isRTL ? 'right' : 'left';
   const notSpecified = t('notSpecified', 'לא צוין');
 
   const getStatusLabel = (status) => {
     switch (status) {
+      case 'submitted':
+        return t('submittedStatus', 'הוגש');
       case 'awarded':
         return t('awarded', 'זכייה');
       case 'pending':
-        return t('pending', 'המתנה');
+        return t('pending', 'בהמתנה');
       case 'rejected':
         return t('rejected', 'לא אושר');
       default:
@@ -54,6 +56,7 @@ const ResearchInfoSection = ({ researchData, onQuickApprove, onQuickReject, quic
     switch (status) {
       case 'awarded':
         return 'status-awarded';
+      case 'submitted':
       case 'pending':
         return 'status-pending';
       case 'rejected':
@@ -222,6 +225,26 @@ const ResearchInfoSection = ({ researchData, onQuickApprove, onQuickReject, quic
           >
             {getStatusLabel(researchData.status)}
           </span>
+          {researchData.status === 'submitted' && onMoveToPending && (
+            <div style={{ marginTop: '10px' }}>
+              <button
+                type="button"
+                disabled={quickDecisionLoading}
+                onClick={onMoveToPending}
+                style={{
+                  padding: '4px 14px',
+                  background: 'transparent',
+                  color: quickDecisionLoading ? '#aaa' : '#8a6d3b',
+                  border: `1px solid ${quickDecisionLoading ? '#aaa' : '#8a6d3b'}`,
+                  borderRadius: '6px',
+                  cursor: quickDecisionLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '13px',
+                }}
+              >
+                {quickDecisionLoading ? t('saving', 'שומר...') : t('moveToPending', 'בהמתנה')}
+              </button>
+            </div>
+          )}
           {researchData.status === 'pending' && onQuickApprove && onQuickReject && (
             <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
               <button
@@ -254,7 +277,7 @@ const ResearchInfoSection = ({ researchData, onQuickApprove, onQuickReject, quic
                   fontSize: '13px',
                 }}
               >
-                ✖ {t('rejectProposal', ' דחה הצעה')}
+                ✖ {t('rejectProposal', 'דחה הצעה')}
               </button>
             </div>
           )}

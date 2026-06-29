@@ -8,6 +8,15 @@ import { shouldShowNewBadge } from '../utils/newBadge';
 import './Research.css';
 import { isSubmitted } from '../utils/submissionStatus';
 
+const normalizeArticleStatus = (status) => {
+  if (status === 'published') return 'approved';
+  if (status === 'in-review') return 'pending';
+  if (status === 'submitted' || status === 'pending' || status === 'approved' || status === 'rejected') {
+    return status;
+  }
+  return 'submitted';
+};
+
 const Articles = () => {
   const { isAdmin, user, userRole } = useAuth();
   const { t } = useLanguage();
@@ -98,7 +107,7 @@ const Articles = () => {
             id: doc.id,
             title: data.title || 'ללא כותרת',
             researcher: data.researcherName || data.researcher || 'חוקר',
-            status: data.status || 'published',
+            status: normalizeArticleStatus(data.status),
             submissionStatus: data.submissionStatus || 'submitted',
             publicationDate: toDateString(data.publicationDate),
             publicationType: data.publicationType || 'journal',
@@ -217,10 +226,12 @@ const Articles = () => {
     switch (status) {
       case 'draft':
         return t('draft', 'טיוטה');
-      case 'published':
-        return t('published', 'פורסם');
-      case 'in-review':
-        return t('inReview', 'בביקורת');
+      case 'submitted':
+        return t('submittedStatus', 'הוגש');
+      case 'pending':
+        return t('pending', 'בהמתנה');
+      case 'approved':
+        return t('approved', 'אושר');
       case 'rejected':
         return t('rejected', 'נדחה');
       default:
@@ -232,9 +243,10 @@ const Articles = () => {
     switch (status) {
       case 'draft':
         return 'status-draft';
-      case 'published':
+      case 'approved':
         return 'status-awarded';
-      case 'in-review':
+      case 'submitted':
+      case 'pending':
         return 'status-pending';
       case 'rejected':
         return 'status-rejected';
@@ -267,8 +279,9 @@ const Articles = () => {
             >
               <option value="all">{t('status', 'סטטוס')}</option>
               <option value="draft">{t('draft', 'טיוטה')}</option>
-              <option value="published">{t('published', 'פורסם')}</option>
-              <option value="in-review">{t('inReview', 'בביקורת')}</option>
+              <option value="submitted">{t('submittedStatus', 'הוגש')}</option>
+              <option value="pending">{t('pending', 'בהמתנה')}</option>
+              <option value="approved">{t('approved', 'אושר')}</option>
               <option value="rejected">{t('rejected', 'נדחה')}</option>
             </select>
             <select

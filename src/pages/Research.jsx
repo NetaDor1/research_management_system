@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
 import { shouldShowNewBadge } from '../utils/newBadge';
-import { isSubmitted } from '../utils/submissionStatus';
+import { isSubmitted, normalizeResearchStatus } from '../utils/submissionStatus';
 import './Research.css';
 
 const Research = () => {
@@ -230,13 +230,15 @@ const Research = () => {
   };
 
   const getStatusLabel = (status) => {
-    switch (status) {
+    switch (normalizeResearchStatus(status)) {
       case 'draft':
         return t('draft', 'טיוטה');
+      case 'submitted':
+        return t('submittedStatus', 'הוגש');
       case 'awarded':
         return t('awarded', 'זכייה');
       case 'pending':
-        return t('pending', 'המתנה');
+        return t('pending', 'בהמתנה');
       case 'rejected':
         return t('rejected', 'לא אושר');
       default:
@@ -245,11 +247,12 @@ const Research = () => {
   };
 
   const getStatusClass = (status) => {
-    switch (status) {
+    switch (normalizeResearchStatus(status)) {
       case 'draft':
         return 'status-draft';
       case 'awarded':
         return 'status-awarded';
+      case 'submitted':
       case 'pending':
         return 'status-pending';
       case 'rejected':
@@ -283,8 +286,9 @@ const Research = () => {
             >
               <option value="all">{t('status', 'סטטוס')}</option>
               <option value="draft">{t('draft', 'טיוטה')}</option>
+              <option value="submitted">{t('submittedStatus', 'הוגש')}</option>
               <option value="awarded">{t('awarded', 'זכייה')}</option>
-              <option value="pending">{t('pending', 'המתנה')}</option>
+              <option value="pending">{t('pending', 'בהמתנה')}</option>
               <option value="rejected">{t('rejected', 'לא אושר')}</option>
             </select>
             <select

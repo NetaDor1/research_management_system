@@ -2,8 +2,9 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useLanguage } from '../context/LanguageContext';
-import { normalizeAcademicYear } from '../utils/academicYear';
 import { getBudgetComponentLabel } from '../utils/budgetComponents';
+import { getPatentStatusLabel as getPatentStatusLabelFromUtil } from '../utils/patentStatuses';
+import { isResearchAwarded, resolveResearchPeriodDates } from '../utils/researchPeriod';
 import './DetailModal.css';
 
 const DetailModal = ({ isOpen, onClose, itemId, type }) => {
@@ -115,27 +116,37 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
           </div>
         </div>
 
-        <div className="detail-section">
-          <h3>{t('researchPeriod', 'תקופת המחקר')}</h3>
-          <div className="detail-grid">
-            <div className="detail-item">
-              <label>{t('startDateLabel', 'תאריך לועזי של תחילת המחקר (dd/mm/yyyy)')}:</label>
-              <span>{formatDate(itemData.researchStartDate)}</span>
+        {type === 'research' && isResearchAwarded(itemData) && (() => {
+          const { durationYears, startDate, endDate } = resolveResearchPeriodDates(itemData);
+          const locale = language === 'en' ? 'en-US' : 'he-IL';
+          const formatDate = (date) => {
+            if (!date) return t('notSpecified', 'לא צוין');
+            try {
+              return date.toLocaleDateString(locale);
+            } catch {
+              return t('notSpecified', 'לא צוין');
+            }
+          };
+          return (
+            <div className="detail-section">
+              <h3>{t('researchPeriod', 'תקופת המחקר')}</h3>
+              <div className="detail-grid">
+                <div className="detail-item">
+                  <label>{t('totalResearchYears', 'סה"כ תקופת המחקר בשנים')}:</label>
+                  <span>{durationYears ?? itemData.researchDurationYears ?? t('notSpecified', 'לא צוין')}</span>
+                </div>
+                <div className="detail-item">
+                  <label>{t('researchPeriodStartDate', 'תאריך תחילת המחקר')}:</label>
+                  <span>{formatDate(startDate)}</span>
+                </div>
+                <div className="detail-item">
+                  <label>{t('researchPeriodEndDate', 'תאריך סיום המחקר')}:</label>
+                  <span>{formatDate(endDate)}</span>
+                </div>
+              </div>
             </div>
-            <div className="detail-item">
-              <label>{t('endDateLabel', 'תאריך לועזי של סוף המחקר (dd/mm/yyyy)')}:</label>
-              <span>{formatDate(itemData.researchEndDate)}</span>
-            </div>
-            <div className="detail-item">
-              <label>{t('totalResearchYears', 'סה"כ תקופת המחקר בשנים (חישוב אוטומטי)')}:</label>
-              <span>{itemData.researchDurationYears || t('notSpecified', 'לא צוין')}</span>
-            </div>
-            <div className="detail-item">
-              <label>{t('academicYearLabel', 'שנה אקדמית (תרגום אוטומטי)')}:</label>
-              <span>{normalizeAcademicYear(itemData.academicYear, itemData.researchStartDate) || t('notSpecified', 'לא צוין')}</span>
-            </div>
-          </div>
-        </div>
+          );
+        })()}
 
         <div className="detail-section">
           <h3>{t('budgetTitle', 'תקציב')}</h3>
@@ -208,8 +219,9 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
             <div className="detail-item">
               <label>{t('status', 'סטטוס')}:</label>
               <span className={`status-badge status-${itemData.status || 'pending'}`}>
-                {itemData.status === 'awarded' ? t('awarded', 'זכייה') : 
-                 itemData.status === 'pending' ? t('pending', 'המתנה') : 
+                {itemData.status === 'submitted' ? t('submittedStatus', 'הוגש') :
+                 itemData.status === 'awarded' ? t('awarded', 'זכייה') : 
+                 itemData.status === 'pending' ? t('pending', 'בהמתנה') : 
                  itemData.status === 'rejected' ? t('rejected', 'לא אושר') : itemData.status}
               </span>
             </div>
@@ -230,20 +242,7 @@ const DetailModal = ({ isOpen, onClose, itemId, type }) => {
     );
   };
 
-  const getPatentStatusLabel = (status) => {
-    switch (status) {
-      case 'registered':
-        return t('registered', 'רשום');
-      case 'approved':
-        return t('approved', 'אושר');
-      case 'in-process':
-        return t('inProcess', 'בהליך');
-      case 'rejected':
-        return t('rejected', 'נדחה');
-      default:
-        return status || t('notSpecified', 'לא צוין');
-    }
-  };
+  const getPatentStatusLabel = (status) => getPatentStatusLabelFromUtil(status, t);
 
   const getArticleStatusLabel = (status) => {
     switch (status) {

@@ -9,6 +9,7 @@ import TasksCalendarContainer from '../components/TasksCalendarContainer';
 import UpcomingTasks from '../components/UpcomingTasks';
 import LimitedCardGrid from '../components/LimitedCardGrid';
 import { shouldShowNewBadge } from '../utils/newBadge';
+import { getPatentStatusLabel, getPatentStatusClass, normalizePatentStatus, PATENT_STATUS_PROVISIONAL } from '../utils/patentStatuses';
 import './Page.css';
 import './Research.css';
 
@@ -146,7 +147,7 @@ const Home = () => {
           id: doc.id,
           title: data.title || data.projectTitle || t('noTitle', 'ללא כותרת'),
           researcher: data.researcherName || data.researcher || t('researcher', 'חוקר'),
-          status: data.status || 'in-process',
+          status: normalizePatentStatus(data.status) || PATENT_STATUS_PROVISIONAL,
           submissionStatus: data.submissionStatus || 'submitted',
           registrationDate: toDateString(data.registrationDate || data.submissionDate || data.createdAt),
           isNew: data.isNew || false,
@@ -583,34 +584,31 @@ const Home = () => {
     }
     if (type === 'research') {
       switch (status) {
+        case 'submitted':
+          return t('submittedStatus', 'הוגש');
         case 'awarded':
           return t('awarded', 'זכייה');
         case 'pending':
-          return t('pending', 'המתנה');
+          return t('pending', 'בהמתנה');
         case 'rejected':
           return t('rejected', 'לא אושר');
         default:
           return status;
       }
     } else if (type === 'patent') {
-      switch (status) {
-        case 'registered':
-          return t('registered', 'רשום');
-        case 'approved':
-          return t('approved', 'אושר');
-        case 'in-process':
-          return t('inProcess', 'בהליך');
-        case 'rejected':
-          return t('rejected', 'נדחה');
-        default:
-          return status;
-      }
+      return getPatentStatusLabel(status, t);
     } else if (type === 'article') {
       switch (status) {
+        case 'submitted':
+          return t('submittedStatus', 'הוגש');
+        case 'pending':
+          return t('pending', 'בהמתנה');
+        case 'approved':
+          return t('approved', 'אושר');
         case 'published':
-          return t('published', 'פורסם');
+          return t('approved', 'אושר');
         case 'in-review':
-          return t('inReview', 'בביקורת');
+          return t('pending', 'בהמתנה');
         case 'rejected':
           return t('rejected', 'נדחה');
         default:
@@ -621,14 +619,17 @@ const Home = () => {
   };
 
   const getStatusClass = (status, type = 'research') => {
-    if (type === 'research' || type === 'patent' || type === 'article') {
+    if (type === 'patent') {
+      return getPatentStatusClass(status);
+    }
+    if (type === 'research' || type === 'article') {
       if (status === 'awarded' || status === 'registered' || status === 'approved' || status === 'published') {
         return 'status-awarded';
       }
       if (status === 'draft') {
         return 'status-draft';
       }
-      if (status === 'pending' || status === 'in-process' || status === 'in-review') {
+      if (status === 'submitted' || status === 'pending' || status === 'in-process' || status === 'in-review') {
         return 'status-pending';
       }
       if (status === 'rejected') {

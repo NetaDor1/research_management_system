@@ -101,7 +101,9 @@ const PatentDisclosureDisplay = ({ patentData, t, formatDate, notSpecified }) =>
                 <Field label={t('titleAndName', 'תואר')} value={inv.title} notSpecified={notSpecified} />
                 <Field label={t('fullName', 'שם מלא')} value={inv.name} notSpecified={notSpecified} />
                 <Field label={t('nationalId', 'ת.ז.')} value={inv.nationalId} notSpecified={notSpecified} />
+                <Field label={t('inventorEmail', 'אימייל')} value={inv.email} notSpecified={notSpecified} />
                 <Field label={t('department', 'מחלקה')} value={inv.department} notSpecified={notSpecified} />
+                <Field label={t('inventorInstitution', 'מוסד')} value={inv.institution} notSpecified={notSpecified} />
                 <Field label={t('partInInvention', 'חלק בהמצאה (%)')} value={inv.partInInvention} notSpecified={notSpecified} />
                 <Field
                   label={t('inventorOrContributor', 'סוג')}

@@ -7,6 +7,13 @@ import { db } from '../services/firebase';
 import { shouldShowNewBadge } from '../utils/newBadge';
 import './Research.css';
 import { isSubmitted } from '../utils/submissionStatus';
+import {
+  PATENT_STATUS_OPTIONS,
+  normalizePatentStatus,
+  getPatentStatusLabel,
+  getPatentStatusClass,
+  PATENT_STATUS_PROVISIONAL,
+} from '../utils/patentStatuses';
 
 const Patents = () => {
   const { isAdmin, user, userRole } = useAuth();
@@ -97,7 +104,7 @@ const Patents = () => {
             id: doc.id,
             title: data.title || data.projectTitle || 'ללא כותרת',
             researcher: data.researcherName || data.researcher || 'חוקר',
-            status: data.status || 'in-process',
+            status: normalizePatentStatus(data.status) || PATENT_STATUS_PROVISIONAL,
             submissionStatus: data.submissionStatus || 'submitted',
             registrationDate: toDateString(data.registrationDate || data.submissionDate || data.createdAt),
             isNew: data.isNew || false,
@@ -205,39 +212,9 @@ const Patents = () => {
     navigate('/patents/new');
   };
 
-  const getStatusLabel = (status) => {
-    switch (status) {
-      case 'draft':
-        return t('draft', 'טיוטה');
-      case 'registered':
-        return t('registered', 'רשום');
-      case 'approved':
-        return t('approved', 'אושר');
-      case 'in-process':
-        return t('inProcess', 'בהליך');
-      case 'rejected':
-        return t('rejected', 'נדחה');
-      default:
-        return status;
-    }
-  };
+  const getStatusLabel = (status) => getPatentStatusLabel(status, t);
 
-  const getStatusClass = (status) => {
-    switch (status) {
-      case 'draft':
-        return 'status-draft';
-      case 'registered':
-        return 'status-awarded';
-      case 'approved':
-        return 'status-awarded';
-      case 'in-process':
-        return 'status-pending';
-      case 'rejected':
-        return 'status-rejected';
-      default:
-        return '';
-    }
-  };
+  const getStatusClass = (status) => getPatentStatusClass(status);
 
   return (
     <div className="research-page">
@@ -263,10 +240,11 @@ const Patents = () => {
             >
               <option value="all">{t('status', 'סטטוס')}</option>
               <option value="draft">{t('draft', 'טיוטה')}</option>
-              <option value="registered">{t('registered', 'רשום')}</option>
-              <option value="approved">{t('approved', 'אושר')}</option>
-              <option value="in-process">{t('inProcess', 'בהליך')}</option>
-              <option value="rejected">{t('rejected', 'נדחה')}</option>
+              {PATENT_STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {t(option.labelKey, option.defaultLabel)}
+                </option>
+              ))}
             </select>
           </div>
           <div className="sort-group">

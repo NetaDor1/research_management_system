@@ -15,6 +15,13 @@ import { exportPrintableHtmlToPdf, escapeHtml } from '../utils/exportPdf';
 import { navigateBackOrFallback } from '../utils/navigation';
 import PatentDisclosureDisplay from '../components/research/PatentDisclosureDisplay';
 import PatentDocumentsDisplaySection from '../components/research/PatentDocumentsDisplaySection';
+import {
+  PATENT_STATUS_OPTIONS,
+  normalizePatentStatus,
+  getPatentStatusLabel,
+  getPatentStatusClass,
+  PATENT_STATUS_PROVISIONAL,
+} from '../utils/patentStatuses';
 
 const PatentDetail = () => {
   const { id } = useParams();
@@ -37,6 +44,7 @@ const PatentDetail = () => {
   const [linkedResearch, setLinkedResearch] = useState(null);
   const [linkedResearchLoading, setLinkedResearchLoading] = useState(false);
   const [patentDecisionLoading, setPatentDecisionLoading] = useState(false);
+  const [selectedPatentStatus, setSelectedPatentStatus] = useState(PATENT_STATUS_PROVISIONAL);
   const [approvedStageBudgetsInput, setApprovedStageBudgetsInput] = useState({});
   const [approvedPatentBudgetInput, setApprovedPatentBudgetInput] = useState('');
   const [savingPatentBudget, setSavingPatentBudget] = useState(false);
@@ -80,7 +88,10 @@ const PatentDetail = () => {
             return;
           }
 
-          setPatentData(data);
+          setPatentData({
+            ...data,
+            status: normalizePatentStatus(data.status),
+          });
         } else {
           setError(t('patentNotFound', 'הפטנט לא נמצא'));
         }
@@ -96,6 +107,11 @@ const PatentDetail = () => {
       fetchPatent();
     }
   }, [id, userRole, user?.id]);
+
+  useEffect(() => {
+    if (!patentData) return;
+    setSelectedPatentStatus(normalizePatentStatus(patentData.status));
+  }, [patentData]);
 
   useEffect(() => {
     if (!db) return;
@@ -221,35 +237,9 @@ const PatentDetail = () => {
     return `${currencySymbol} ${Number(amount).toLocaleString(locale)}`;
   };
 
-  const getStatusLabel = (status) => {
-    switch (status) {
-      case 'registered':
-        return t('registered', 'רשום');
-      case 'approved':
-        return t('approved', 'אושר');
-      case 'in-process':
-        return t('inProcess', 'בהליך');
-      case 'rejected':
-        return t('rejected', 'נדחה');
-      default:
-        return status || notSpecified;
-    }
-  };
+  const getStatusLabel = (status) => getPatentStatusLabel(status, t);
 
-  const getStatusClass = (status) => {
-    switch (status) {
-      case 'registered':
-        return 'status-awarded';
-      case 'approved':
-        return 'status-awarded';
-      case 'in-process':
-        return 'status-pending';
-      case 'rejected':
-        return 'status-rejected';
-      default:
-        return '';
-    }
-  };
+  const getStatusClass = (status) => getPatentStatusClass(status);
 
   const getBackPath = () => (userRole === 'RESEARCHER' ? '/' : '/patents');
 
@@ -529,10 +519,10 @@ const PatentDetail = () => {
     }
   };
 
-  const handlePatentDecision = async (newStatus) => {
+  const handlePatentStatusSave = async () => {
     if (!isAdmin() || !id || !db || !patentData) return;
-    const label = newStatus === 'approved' ? 'לאשר' : 'לדחות';
-    if (!window.confirm(`האם אתה בטוח שברצונך ${label} את הפטנט הזה?`)) return;
+    const newStatus = normalizePatentStatus(selectedPatentStatus);
+    if (newStatus === normalizePatentStatus(patentData.status)) return;
 
     setPatentDecisionLoading(true);
     try {
@@ -542,14 +532,11 @@ const PatentDetail = () => {
       });
 
       if (patentData.researcherId) {
-        const notifTitle = newStatus === 'approved' ? 'הפטנט אושר' : 'הפטנט נדחה';
-        const notifMsg = newStatus === 'approved'
-          ? `הפטנט "${patentData.projectTitle || patentData.title || ''}" אושר.`
-          : `הפטנט "${patentData.projectTitle || patentData.title || ''}" נדחה.`;
+        const statusLabel = getPatentStatusLabel(newStatus, t);
         await createNotification({
           userId: patentData.researcherId,
-          title: notifTitle,
-          message: notifMsg,
+          title: 'סטטוס הפטנט עודכן',
+          message: `סטטוס הפטנט "${patentData.projectTitle || patentData.title || ''}" עודכן ל-${statusLabel}.`,
           type: 'patent_status',
           entityType: 'patent',
           entityId: id,
@@ -675,7 +662,7 @@ const PatentDetail = () => {
           <div class="kv"><div class="k">${escapeHtml(t('submissionPathLabel', 'מסלול ההגשה לקרן'))}</div><div class="v">${escapeHtml(patentData.submissionPath || t('notSpecified', 'לא צוין'))}</div></div>
           <div class="kv"><div class="k">${escapeHtml(t('researcherRoleLabel', 'תפקיד החוקר בהצעת המחקר'))}</div><div class="v">${escapeHtml(patentData.researcherRole || t('notSpecified', 'לא צוין'))}</div></div>
           <div class="kv"><div class="k">${escapeHtml(t('researcher', 'חוקר'))}</div><div class="v">${escapeHtml(patentData.researcherName || t('notSpecified', 'לא צוין'))}</div></div>
-          <div class="kv"><div class="k">${escapeHtml(t('status', 'סטטוס'))}</div><div class="v">${escapeHtml(patentData.status || '')}</div></div>
+          <div class="kv"><div class="k">${escapeHtml(t('status', 'סטטוס'))}</div><div class="v">${escapeHtml(getPatentStatusLabel(patentData.status, t))}</div></div>
           <div class="kv"><div class="k">${escapeHtml(patentStageLabel)}</div><div class="v">${escapeHtml(patentData.patentStage || t('notSpecified', 'לא צוין'))}</div></div>
         </div>
       </div>
@@ -950,39 +937,46 @@ const PatentDetail = () => {
                   >
                     {getStatusLabel(patentData.status)}
                   </span>
-                  {isAdmin() && patentData.status === 'in-process' && (
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                  {isAdmin() && (
+                    <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                      <select
+                        value={selectedPatentStatus}
+                        onChange={(e) => setSelectedPatentStatus(e.target.value)}
+                        disabled={patentDecisionLoading}
+                        style={{
+                          minWidth: '220px',
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '14px',
+                          background: '#fff',
+                        }}
+                      >
+                        {PATENT_STATUS_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {t(option.labelKey, option.defaultLabel)}
+                          </option>
+                        ))}
+                      </select>
                       <button
                         type="button"
-                        disabled={patentDecisionLoading}
-                        onClick={() => handlePatentDecision('approved')}
+                        disabled={
+                          patentDecisionLoading ||
+                          normalizePatentStatus(selectedPatentStatus) === normalizePatentStatus(patentData.status)
+                        }
+                        onClick={handlePatentStatusSave}
                         style={{
-                          padding: '5px 12px',
-                          background: 'transparent',
-                          color: patentDecisionLoading ? '#aaa' : '#3d8c5c',
-                          border: `1px solid ${patentDecisionLoading ? '#aaa' : '#3d8c5c'}`,
+                          padding: '6px 14px',
+                          background: patentDecisionLoading ? '#94a3b8' : '#667eea',
+                          color: 'white',
+                          border: 'none',
                           borderRadius: '6px',
                           cursor: patentDecisionLoading ? 'not-allowed' : 'pointer',
                           fontSize: '13px',
+                          fontWeight: 'bold',
                         }}
                       >
-                        ✔ {t('approvePatent', 'אשר')}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={patentDecisionLoading}
-                        onClick={() => handlePatentDecision('rejected')}
-                        style={{
-                          padding: '5px 12px',
-                          background: 'transparent',
-                          color: patentDecisionLoading ? '#aaa' : '#b84f5a',
-                          border: `1px solid ${patentDecisionLoading ? '#aaa' : '#b84f5a'}`,
-                          borderRadius: '6px',
-                          cursor: patentDecisionLoading ? 'not-allowed' : 'pointer',
-                          fontSize: '13px',
-                        }}
-                      >
-                        ✖ {t('rejectPatent', 'דחה')}
+                        {patentDecisionLoading ? t('saving', 'שומר...') : t('savePatentStatus', 'שמור סטטוס')}
                       </button>
                     </div>
                   )}

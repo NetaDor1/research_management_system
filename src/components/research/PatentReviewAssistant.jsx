@@ -2,10 +2,10 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import {
-  buildResearchReviewPayload,
+  buildPatentReviewPayload,
   checkReviewApiHealth,
-  requestResearchAssistantChat,
-} from '../../services/researchProposalReview';
+  requestPatentAssistantChat,
+} from '../../services/patentProposalReview';
 import './ResearchProposalReviewAssistant.css';
 
 function renderInline(text) {
@@ -40,26 +40,28 @@ function MarkdownMessage({ text }) {
   );
 }
 
-// ── Full-proposal detection & section parsing ───────────────────────────────
-
 const NUMBERED_FIELD_MAP = {
-  1: 'abstract',
-  2: 'scientificBackground',
-  3: 'researchObjectives',
-  4: 'detailedDescription',
-  5: 'significanceInnovation',
-  6: 'applicability',
+  1: 'shortDescription',
+  2: 'inventionTypeElaboration',
+  3: 'potentialCustomers',
+  4: 'commercialEntityContacts',
+  5: 'detailedDescription',
+  6: 'advantagesOverExisting',
+  7: 'potentialUsesAndImplementation',
 };
 
 /** More specific patterns first to avoid wrong matches. */
 const SECTION_DEFS = [
-  { field: 'applicability', pattern: /ישימות|applicability/i },
-  { field: 'significanceInnovation', pattern: /משמעות|חדשנות|תועלת פוטנציאלית|significance|innovation/i },
+  { field: 'commercialEntityContacts', pattern: /גורם מסחרי|קשרים עם גורם|commercial entity|commercial contacts/i },
+  { field: 'potentialCustomers', pattern: /לקוחות|צרכנים|משתמשים|potential customers|consumers or users/i },
+  { field: 'inventionTypeElaboration', pattern: /מוצר\/תהליך\/שיטה|product.*process|process or method/i },
+  { field: 'shortDescription', pattern: /תיאור קצר(?!.*מפורט)|short description/i },
+  { field: 'advantagesOverExisting', pattern: /יתרונות.*(?:ידע|קיימ)|advantages over/i },
+  { field: 'potentialUsesAndImplementation', pattern: /שימושים פוטנציאליים|potential uses/i },
   { field: 'detailedDescription', pattern: /תיאור מפורט|detailed description/i },
-  { field: 'researchObjectives', pattern: /מטרות מחקר|מטרות ספציפיות|research objectives|specific aims/i },
-  { field: 'scientificBackground', pattern: /רקע מדעי|מצב טכנולוגי|scientific background|state of the art/i },
-  { field: 'abstract', pattern: /תקציר|abstract/i },
 ];
+
+const GROUP_HEADER_PATTERN = /^(?:טופס גילוי המצאה|invention disclosure form|תיאור מפורט של המצאה|detailed invention description)(?:\s*\(|\s*\/|\s*$)/i;
 
 function normalizeHeaderText(text) {
   return String(text || '')
@@ -75,7 +77,7 @@ function resolveSectionField(num, text) {
     return NUMBERED_FIELD_MAP[num];
   }
   const normalized = normalizeHeaderText(text);
-  if (!normalized) return null;
+  if (!normalized || GROUP_HEADER_PATTERN.test(normalized)) return null;
   for (const { field, pattern } of SECTION_DEFS) {
     if (pattern.test(normalized)) return field;
   }
@@ -86,6 +88,7 @@ function extractHeaderFromLine(line) {
   const trimmed = line.trim();
   if (!trimmed) return null;
 
+  // 5. **Title** or 5. Title
   let m = trimmed.match(/^(\d+)[\.\):]\s*(?:\*\*(.+?)\*\*|(.+?))\s*$/);
   if (m) {
     return {
@@ -95,11 +98,18 @@ function extractHeaderFromLine(line) {
     };
   }
 
+  // **5. Title** or **Title**
   m = trimmed.match(/^\*\*(?:(\d+)[\.\):]\s*)?(.+?)\*\*\s*$/);
   if (m) {
-    return { type: 'section', num: m[1] ? Number(m[1]) : null, text: m[2].trim() };
+    const num = m[1] ? Number(m[1]) : null;
+    const text = m[2].trim();
+    if (!num && GROUP_HEADER_PATTERN.test(normalizeHeaderText(text))) {
+      return { type: 'group' };
+    }
+    return { type: 'section', num, text };
   }
 
+  // Plain numbered line without bold: 5. Title
   m = trimmed.match(/^(\d+)[\.\):]\s+(.+)$/);
   if (m) {
     return { type: 'section', num: Number(m[1]), text: m[2].trim() };
@@ -108,20 +118,21 @@ function extractHeaderFromLine(line) {
   return null;
 }
 
-function isFullProposal(text) {
-  return Object.keys(parseProposalSections(text)).length >= 3;
+function isFullPatentDraft(text) {
+  const parsed = parsePatentSections(text);
+  return Object.keys(parsed).length >= 3;
 }
 
 function stripMarkdown(text) {
   return text
-    .replace(/\*\*(.+?)\*\*/g, '$1')  // **bold** → plain
-    .replace(/\*(.+?)\*/g, '$1')       // *italic* → plain
-    .replace(/^#{1,6}\s+/gm, '')       // # headers → plain
-    .replace(/^[-*]\s+/gm, '- ')       // normalize bullets
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^[-*]\s+/gm, '- ')
     .trim();
 }
 
-function parseProposalSections(text) {
+function parsePatentSections(text) {
   const lines = text.split('\n');
   const result = {};
   let currentField = null;
@@ -137,6 +148,11 @@ function parseProposalSections(text) {
 
   for (const line of lines) {
     const header = extractHeaderFromLine(line);
+    if (header?.type === 'group') {
+      flush();
+      currentField = null;
+      continue;
+    }
     if (header?.type === 'section') {
       const field = resolveSectionField(header.num, header.text);
       if (field) {
@@ -145,32 +161,20 @@ function parseProposalSections(text) {
         continue;
       }
     }
-
-    const bold = line.match(/^\*\*(?:\d+[\.\)]\s*)?(.+?)\*\*\s*$/);
-    if (bold) {
-      const field = resolveSectionField(null, bold[1].trim());
-      if (field) {
-        flush();
-        currentField = field;
-        continue;
-      }
-    }
-
     if (currentField !== null) buffer.push(line);
   }
   flush();
   return result;
 }
 
-const ResearchProposalReviewAssistant = ({ formData, onFillForm }) => {
+const PatentReviewAssistant = ({ formData, onFillForm }) => {
   const { t, language, isRTL } = useLanguage();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const [loadingAction, setLoadingAction] = useState(null); // 'send' | null
+  const [loadingAction, setLoadingAction] = useState(null);
   const [error, setError] = useState('');
   const [serverOnline, setServerOnline] = useState(null);
-  // track which message indices have been imported into the form
   const [filledIndices, setFilledIndices] = useState(new Set());
   const wrapperRef = useRef(null);
   const listRef = useRef(null);
@@ -188,11 +192,11 @@ const ResearchProposalReviewAssistant = ({ formData, onFillForm }) => {
     const onMove = (mv) => {
       if (dir.includes('e')) {
         const w = Math.min(Math.max(280, startW + mv.clientX - startX), window.innerWidth - 40);
-        wrapper.style.width = w + 'px';
+        wrapper.style.width = `${w}px`;
       }
       if (dir.includes('n')) {
         const h = Math.min(Math.max(300, startH - (mv.clientY - startY)), window.innerHeight - 100);
-        wrapper.style.height = h + 'px';
+        wrapper.style.height = `${h}px`;
       }
     };
     const onUp = () => {
@@ -248,9 +252,12 @@ const ResearchProposalReviewAssistant = ({ formData, onFillForm }) => {
     setLoadingAction('send');
 
     try {
-      const proposal = buildResearchReviewPayload(formData);
-      const { reply } = await requestResearchAssistantChat({ messages: next, proposal });
-      setMessages((prev) => [...prev, { role: 'model', content: reply, canFillForm: isFullProposal(reply) }]);
+      const patent = buildPatentReviewPayload(formData);
+      const { reply } = await requestPatentAssistantChat({ messages: next, patent });
+      setMessages((prev) => [
+        ...prev,
+        { role: 'model', content: reply, canFillForm: isFullPatentDraft(reply) },
+      ]);
     } catch (e) {
       setError(e.message || (lang === 'en' ? 'Request failed' : 'הבקשה נכשלה'));
     } finally {
@@ -259,7 +266,7 @@ const ResearchProposalReviewAssistant = ({ formData, onFillForm }) => {
   }, [input, loading, messages, formData, lang]);
 
   const handleFillForm = useCallback((msgIdx, content) => {
-    const sections = parseProposalSections(content);
+    const sections = parsePatentSections(content);
     const count = Object.keys(sections).length;
     if (count === 0) return;
     if (onFillForm) onFillForm(sections);
@@ -284,112 +291,105 @@ const ResearchProposalReviewAssistant = ({ formData, onFillForm }) => {
       style={{ textAlign: isRTL ? 'right' : 'left' }}
     >
       {open ? (
-        <div
-          ref={wrapperRef}
-          className="research-ai-chat-panel-wrapper"
-        >
-          {/* top resize handle — outside the clipped panel */}
+        <div ref={wrapperRef} className="research-ai-chat-panel-wrapper">
           <div className="ai-resize-handle ai-resize-n" onMouseDown={(e) => startResize(e, 'n')} />
-          {/* right resize handle */}
           <div className="ai-resize-handle ai-resize-e" onMouseDown={(e) => startResize(e, 'e')} />
-          {/* top-right corner handle */}
           <div className="ai-resize-handle ai-resize-ne" onMouseDown={(e) => startResize(e, 'ne')} />
 
           <div
             className="research-ai-chat-panel"
             role="dialog"
-            aria-label={t('aiResearchChatTitle', 'עוזר הצעת מחקר')}
+            aria-label={t('aiPatentChatTitle', 'עוזר בקשת פטנט')}
             style={{ width: '100%', height: '100%' }}
           >
-
-          <div className="research-ai-chat-header">
-            <h2>{t('aiResearchChatTitle', 'עוזר הצעת מחקר')}</h2>
-            <button
-              type="button"
-              className="research-ai-chat-icon-btn"
-              onClick={() => setOpen(false)}
-              aria-label={t('aiResearchChatClose', 'סגירה')}
-            >
-              ×
-            </button>
-          </div>
-
-          {serverOnline === false ? (
-            <div className="research-ai-chat-server-hint" role="status">
-              {lang === 'en' ? 'AI server offline' : 'שרת AI לא מחובר'}
+            <div className="research-ai-chat-header">
+              <h2>{t('aiPatentChatTitle', 'עוזר בקשת פטנט')}</h2>
+              <button
+                type="button"
+                className="research-ai-chat-icon-btn"
+                onClick={() => setOpen(false)}
+                aria-label={t('aiPatentChatClose', 'סגירה')}
+              >
+                ×
+              </button>
             </div>
-          ) : null}
 
-          <div className="research-ai-chat-messages" ref={listRef}>
-            <p className="research-ai-chat-intro">
-              {t(
-                'aiResearchChatIntro',
-                'שאלו על ניסוח, תקציב, חוסרים במסמך או על הכנה להגשה. ההקשר נשלח מהטופס הנוכחי (גם אם חלקי).'
-              )}
-            </p>
-            {messages.map((m, idx) => (
-              <div key={`m-${idx}`} className={`research-ai-chat-bubble-row ${m.role}`}>
-                <div className={`research-ai-chat-bubble ${m.role}`}>
-                  {m.role === 'model'
-                    ? <MarkdownMessage text={m.content} />
-                    : m.content}
-                  {m.role === 'model' && m.canFillForm && onFillForm ? (
-                    filledIndices.has(idx) ? (
-                      <div className="ai-fill-form-done">
-                        {lang === 'he' ? '✓ הוזן לטופס' : '✓ Filled in form'}
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        className="ai-fill-form-btn"
-                        onClick={() => handleFillForm(idx, m.content)}
-                      >
-                        {lang === 'he' ? 'הזן לטופס' : 'Fill form'}
-                      </button>
-                    )
-                  ) : null}
-                </div>
-              </div>
-            ))}
-            {loading ? (
-              <div className="research-ai-chat-typing">
-                {t('aiResearchChatThinking', 'כותב תשובה…')}
+            {serverOnline === false ? (
+              <div className="research-ai-chat-server-hint" role="status">
+                {lang === 'en' ? 'AI server offline' : 'שרת AI לא מחובר'}
               </div>
             ) : null}
-          </div>
 
-          {error ? (
-            <div className="research-ai-chat-error" role="alert">
-              {error}
+            <div className="research-ai-chat-messages" ref={listRef}>
+              <p className="research-ai-chat-intro">
+                {t(
+                  'aiPatentChatIntro',
+                  'שאלו על ניסוח טופס גילוי המצאה, תיאור מפורט, יתרונות תחרותיים או הכנה להגשת פטנט. ההקשר נשלח מהטופס הנוכחי.'
+                )}
+              </p>
+              {messages.map((m, idx) => (
+                <div key={`m-${idx}`} className={`research-ai-chat-bubble-row ${m.role}`}>
+                  <div className={`research-ai-chat-bubble ${m.role}`}>
+                    {m.role === 'model'
+                      ? <MarkdownMessage text={m.content} />
+                      : m.content}
+                    {m.role === 'model' && m.canFillForm && onFillForm ? (
+                      filledIndices.has(idx) ? (
+                        <div className="ai-fill-form-done">
+                          {lang === 'he' ? '✓ הוזן לטופס' : '✓ Filled in form'}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="ai-fill-form-btn"
+                          onClick={() => handleFillForm(idx, m.content)}
+                        >
+                          {lang === 'he' ? 'הזן לטופס' : 'Fill form'}
+                        </button>
+                      )
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+              {loading ? (
+                <div className="research-ai-chat-typing">
+                  {t('aiPatentChatThinking', 'כותב תשובה…')}
+                </div>
+              ) : null}
             </div>
-          ) : null}
 
-          <div className="research-ai-chat-input-row">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder={t('aiResearchChatPlaceholder', 'כתבו שאלה…')}
-              rows={2}
-              disabled={loading}
-              aria-label={t('aiResearchChatPlaceholder', 'כתבו שאלה…')}
-              dir={isRTL ? 'rtl' : 'ltr'}
-            />
-            <button
-              type="button"
-              className="research-ai-chat-send"
-              onClick={sendUserMessage}
-              disabled={loading || !input.trim() || serverOnline === false}
-              aria-busy={loadingAction === 'send'}
-            >
-              {loadingAction === 'send' ? (
-                <span className="ai-spinner" aria-label={lang === 'en' ? 'Sending…' : 'שולח…'} />
-              ) : (
-                t('aiResearchChatSend', 'שליחה')
-              )}
-            </button>
+            {error ? (
+              <div className="research-ai-chat-error" role="alert">
+                {error}
+              </div>
+            ) : null}
+
+            <div className="research-ai-chat-input-row">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder={t('aiPatentChatPlaceholder', 'כתבו שאלה על המצאה…')}
+                rows={2}
+                disabled={loading}
+                aria-label={t('aiPatentChatPlaceholder', 'כתבו שאלה על המצאה…')}
+                dir={isRTL ? 'rtl' : 'ltr'}
+              />
+              <button
+                type="button"
+                className="research-ai-chat-send"
+                onClick={sendUserMessage}
+                disabled={loading || !input.trim() || serverOnline === false}
+                aria-busy={loadingAction === 'send'}
+              >
+                {loadingAction === 'send' ? (
+                  <span className="ai-spinner" aria-label={lang === 'en' ? 'Sending…' : 'שולח…'} />
+                ) : (
+                  t('aiPatentChatSend', 'שליחה')
+                )}
+              </button>
+            </div>
           </div>
-        </div>
         </div>
       ) : null}
 
@@ -397,8 +397,8 @@ const ResearchProposalReviewAssistant = ({ formData, onFillForm }) => {
         type="button"
         className="research-ai-chat-fab"
         onClick={() => setOpen((v) => !v)}
-        aria-label={t('aiResearchChatFabAria', 'פתיחת עוזר הצעת מחקר')}
-        title={t('aiResearchChatFabAria', 'פתיחת עוזר הצעת מחקר')}
+        aria-label={t('aiPatentChatFabAria', 'פתיחת עוזר בקשת פטנט')}
+        title={t('aiPatentChatFabAria', 'פתיחת עוזר בקשת פטנט')}
       >
         AI
       </button>
@@ -409,4 +409,4 @@ const ResearchProposalReviewAssistant = ({ formData, onFillForm }) => {
   return createPortal(ui, document.body);
 };
 
-export default ResearchProposalReviewAssistant;
+export default PatentReviewAssistant;

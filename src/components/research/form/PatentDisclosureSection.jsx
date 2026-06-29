@@ -1,8 +1,31 @@
 import React from 'react';
 import { useLanguage } from '../../../context/LanguageContext';
 import AIPolishButton from '../AIPolishButton';
+import { textInputAlign, textInputDir } from '../../../utils/textInputDirection';
+import '../AIPolishButton.css';
 
-const EMPTY_INVENTOR = { title: '', name: '', nationalId: '', department: '', partInInvention: '', roleType: 'inventor' };
+const DirTextarea = ({ value, style, ...props }) => {
+  const dir = textInputDir(value);
+  return (
+    <textarea
+      {...props}
+      value={value}
+      dir={dir}
+      style={{ textAlign: textInputAlign(dir), ...style }}
+    />
+  );
+};
+
+const EMPTY_INVENTOR = {
+  title: '',
+  name: '',
+  nationalId: '',
+  email: '',
+  department: '',
+  institution: '',
+  partInInvention: '',
+  roleType: 'inventor',
+};
 const EMPTY_FUNDING = { source: '', supportPeriod: '', grantNumber: '', subjectComments: '' };
 const EMPTY_PRIOR_PATENT = { country: '', publicationNumber: '', title: '', filingPublicationDate: '', relevance: '' };
 const EMPTY_PRIOR_PUBLICATION = { title: '', authors: '', placeOfPublication: '', publicationDate: '', publishedByInventor: '' };
@@ -54,6 +77,16 @@ const PatentDisclosureSection = ({
     inventionTypeElaboration: formData.inventionTypeElaboration,
     potentialCustomers: formData.potentialCustomers,
     commercialEntityContacts: formData.commercialEntityContacts,
+  };
+
+  const polishLabels = {
+    shortDescription: t('shortDescriptionInvention'),
+    inventionTypeElaboration: t('inventionTypeElaboration'),
+    potentialCustomers: t('potentialCustomers'),
+    commercialEntityContacts: t('commercialEntityContacts'),
+  };
+
+  const detailedPolishFields = {
     scientificBackground: formData.scientificBackground,
     detailedDescription: formData.detailedDescription,
     advantagesOverExisting: formData.advantagesOverExisting,
@@ -62,11 +95,7 @@ const PatentDisclosureSection = ({
     referenceList: formData.referenceList,
   };
 
-  const polishLabels = {
-    shortDescription: t('shortDescriptionInvention'),
-    inventionTypeElaboration: t('inventionTypeElaboration'),
-    potentialCustomers: t('potentialCustomers'),
-    commercialEntityContacts: t('commercialEntityContacts'),
+  const detailedPolishLabels = {
     scientificBackground: t('scientificBackground'),
     detailedDescription: t('detailedDescription'),
     advantagesOverExisting: t('advantagesOverExisting'),
@@ -106,22 +135,22 @@ const PatentDisclosureSection = ({
 
         <div className="form-group">
           <label>{t('shortDescriptionInvention', 'תיאור קצר של המצאה (אנגלית)')}</label>
-          <textarea name="shortDescription" value={formData.shortDescription || ''} onChange={handleChange} rows={4} dir="ltr" />
+          <DirTextarea name="shortDescription" value={formData.shortDescription || ''} onChange={handleChange} rows={4} />
         </div>
 
         <div className="form-group">
           <label>{t('inventionTypeElaboration', '2a. האם המצאה היא מוצר/תהליך/שיטה? פרט (אנגלית)')}</label>
-          <textarea name="inventionTypeElaboration" value={formData.inventionTypeElaboration || ''} onChange={handleChange} rows={3} dir="ltr" />
+          <DirTextarea name="inventionTypeElaboration" value={formData.inventionTypeElaboration || ''} onChange={handleChange} rows={3} />
         </div>
 
         <div className="form-group">
           <label>{t('potentialCustomers', '2b. מי הלקוחות/צרכנים/משתמשים הפוטנציאליים? (אנגלית)')}</label>
-          <textarea name="potentialCustomers" value={formData.potentialCustomers || ''} onChange={handleChange} rows={3} dir="ltr" />
+          <DirTextarea name="potentialCustomers" value={formData.potentialCustomers || ''} onChange={handleChange} rows={3} />
         </div>
 
         <div className="form-group">
           <label>{t('commercialEntityContacts', '2c. האם היו קשרים עם גורם מסחרי בנוגע להמצאה? פרט (אנגלית)')}</label>
-          <textarea name="commercialEntityContacts" value={formData.commercialEntityContacts || ''} onChange={handleChange} rows={3} dir="ltr" />
+          <DirTextarea name="commercialEntityContacts" value={formData.commercialEntityContacts || ''} onChange={handleChange} rows={3} />
         </div>
       </div>
 
@@ -176,8 +205,18 @@ const PatentDisclosureSection = ({
                 <input type="text" value={inventor.nationalId || ''} onChange={(e) => handleInventorChange(index, 'nationalId', e.target.value)} dir="ltr" />
               </div>
               <div className="form-group">
+                <label>{t('inventorEmail', 'אימייל')}</label>
+                <input type="email" value={inventor.email || ''} onChange={(e) => handleInventorChange(index, 'email', e.target.value)} dir="ltr" />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
                 <label>{t('department', 'מחלקה')}</label>
                 <input type="text" value={inventor.department || ''} onChange={(e) => handleInventorChange(index, 'department', e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>{t('inventorInstitution', 'מוסד')}</label>
+                <input type="text" value={inventor.institution || ''} onChange={(e) => handleInventorChange(index, 'institution', e.target.value)} />
               </div>
             </div>
             <div className="form-row">
@@ -444,30 +483,39 @@ const PatentDisclosureSection = ({
       </div>
 
       <div className="form-section">
-        <h2>{t('detailedInventionDescription', 'תיאור מפורט של המצאה (אופציונלי)')}</h2>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', gap: '12px', flexWrap: 'wrap' }}>
+          <h2 style={{ margin: 0 }}>{t('detailedInventionDescription', 'תיאור מפורט של המצאה (אופציונלי)')}</h2>
+          {onPolish && (
+            <AIPolishButton
+              fields={detailedPolishFields}
+              fieldLabels={detailedPolishLabels}
+              onApply={onPolish}
+            />
+          )}
+        </div>
         <div className="form-group">
           <label>{t('scientificBackground', 'רקע מדעי ופרסומים מדעיים (אנגלית)')}</label>
-          <textarea name="scientificBackground" value={formData.scientificBackground || ''} onChange={handleChange} rows={5} dir="ltr" />
+          <DirTextarea name="scientificBackground" value={formData.scientificBackground || ''} onChange={handleChange} rows={5} />
         </div>
         <div className="form-group">
           <label>{t('detailedDescription', 'תיאור מפורט של המצאה (אנגלית)')}</label>
-          <textarea name="detailedDescription" value={formData.detailedDescription || ''} onChange={handleChange} rows={6} dir="ltr" />
+          <DirTextarea name="detailedDescription" value={formData.detailedDescription || ''} onChange={handleChange} rows={6} />
         </div>
         <div className="form-group">
           <label>{t('advantagesOverExisting', 'יתרונות המצאה על פני הידע והשימושים הקיימים (אנגלית)')}</label>
-          <textarea name="advantagesOverExisting" value={formData.advantagesOverExisting || ''} onChange={handleChange} rows={4} dir="ltr" />
+          <DirTextarea name="advantagesOverExisting" value={formData.advantagesOverExisting || ''} onChange={handleChange} rows={4} />
         </div>
         <div className="form-group">
           <label>{t('potentialUsesAndImplementation', 'שימושים פוטנציאליים ויישום (אנגלית)')}</label>
-          <textarea name="potentialUsesAndImplementation" value={formData.potentialUsesAndImplementation || ''} onChange={handleChange} rows={4} dir="ltr" />
+          <DirTextarea name="potentialUsesAndImplementation" value={formData.potentialUsesAndImplementation || ''} onChange={handleChange} rows={4} />
         </div>
         <div className="form-group">
           <label>{t('additionalResearchProgram', 'תוכנית מחקר נוספת לפיתוח המצאה (אנגלית)')}</label>
-          <textarea name="additionalResearchProgram" value={formData.additionalResearchProgram || ''} onChange={handleChange} rows={4} dir="ltr" />
+          <DirTextarea name="additionalResearchProgram" value={formData.additionalResearchProgram || ''} onChange={handleChange} rows={4} />
         </div>
         <div className="form-group">
           <label>{t('referenceList', 'רשימת מקורות (אנגלית)')}</label>
-          <textarea name="referenceList" value={formData.referenceList || ''} onChange={handleChange} rows={4} dir="ltr" />
+          <DirTextarea name="referenceList" value={formData.referenceList || ''} onChange={handleChange} rows={4} />
         </div>
         <div className="form-row">
           <div className="form-group">

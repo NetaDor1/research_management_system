@@ -15,7 +15,8 @@ import BibliographyDisplaySection from '../components/research/BibliographyDispl
 import DocumentsDisplaySection from '../components/research/DocumentsDisplaySection';
 import AdditionalInfoSection from '../components/research/AdditionalInfoSection';
 import TasksSection from '../components/research/TasksSection';
-import { canResearcherEditResearch, isDraft } from '../utils/submissionStatus';
+import { canResearcherEditResearch, isDraft, normalizeResearchStatus } from '../utils/submissionStatus';
+import { getAwardedPeriodUpdate, isResearchAwarded, resolveResearchPeriodDates } from '../utils/researchPeriod';
 import WorkPlanSection from '../components/research/WorkPlanSection';
 import './Page.css';
 import './Research.css';
@@ -30,7 +31,6 @@ import {
   buildSectionHeading,
   buildDocFooter,
 } from '../utils/exportPdf';
-import { normalizeAcademicYear } from '../utils/academicYear';
 import { navigateBackOrFallback } from '../utils/navigation';
 import { getBudgetComponentLabel } from '../utils/budgetComponents';
 
@@ -91,7 +91,10 @@ const ResearchDetail = () => {
             return;
           }
 
-          setResearchData(data);
+          setResearchData({
+            ...data,
+            status: normalizeResearchStatus(data.status),
+          });
         } else {
           setError(t('researchNotFound', 'המחקר לא נמצא'));
         }
@@ -245,23 +248,42 @@ const ResearchDetail = () => {
     });
   };
 
+  const canChangeProposalStatus = () =>
+    Boolean(
+      researchData &&
+      (isAdmin() || (userRole === 'RESEARCHER' && researchData.researcherId === user?.id))
+    );
+
   const handleQuickDecision = async (newStatus) => {
-    if (!isAdmin() || !id || !db || !researchData) return;
-    const label = newStatus === 'awarded' ? 'לאשר' : 'לדחות';
-    if (!window.confirm(`האם אתה בטוח שברצונך ${label} את הצעת המחקר הזו?`)) return;
+    if (!canChangeProposalStatus() || !id || !db || !researchData) return;
+    if (newStatus === 'awarded' || newStatus === 'rejected') {
+      const label = newStatus === 'awarded' ? 'לאשר' : 'לדחות';
+      if (!window.confirm(`האם אתה בטוח שברצונך ${label} את הצעת המחקר הזו?`)) return;
+    }
 
     setQuickDecisionLoading(true);
     try {
+      const periodUpdate = getAwardedPeriodUpdate(researchData, newStatus);
       await updateDoc(doc(db, 'researchProposals', id), {
         status: newStatus,
         updatedAt: serverTimestamp(),
+        ...periodUpdate,
       });
 
-      if (researchData.researcherId) {
-        const notifTitle = newStatus === 'awarded' ? 'הצעת המחקר אושרה' : 'הצעת המחקר נדחתה';
-        const notifMsg = newStatus === 'awarded'
-          ? `הצעת המחקר "${researchData.projectTitle || researchData.title || ''}" אושרה.`
-          : `הצעת המחקר "${researchData.projectTitle || researchData.title || ''}" נדחתה.`;
+      const proposalTitle = researchData.projectTitle || researchData.title || '';
+      if (isAdmin() && researchData.researcherId) {
+        const notifTitle =
+          newStatus === 'awarded'
+            ? 'הצעת המחקר אושרה'
+            : newStatus === 'rejected'
+              ? 'הצעת המחקר נדחתה'
+              : 'הצעת המחקר בהמתנה';
+        const notifMsg =
+          newStatus === 'awarded'
+            ? `הצעת המחקר "${proposalTitle}" אושרה.`
+            : newStatus === 'rejected'
+              ? `הצעת המחקר "${proposalTitle}" נדחתה.`
+              : `הצעת המחקר "${proposalTitle}" הועברה לסטטוס בהמתנה.`;
         await createNotification({
           userId: researchData.researcherId,
           title: notifTitle,
@@ -272,9 +294,22 @@ const ResearchDetail = () => {
           link: `/research/${id}`,
           eventKey: `research_status:${id}:${newStatus}:${Date.now()}`,
         });
+      } else if (!isAdmin()) {
+        const statusLabel = newStatus === 'awarded' ? 'זכייה' : newStatus === 'rejected' ? 'נדחה' : 'בהמתנה';
+        await createNotification({
+          userId: 'ADMIN',
+          targetRole: 'ADMIN',
+          title: 'עדכון סטטוס הצעת מחקר',
+          message: `${user?.name || 'חוקר'} עדכן/ה את סטטוס הצעת המחקר "${proposalTitle}" ל-${statusLabel}.`,
+          type: 'research_status_update',
+          entityType: 'research',
+          entityId: id,
+          link: `/research/${id}`,
+          eventKey: `research_status:${id}:${newStatus}:${Date.now()}`,
+        });
       }
 
-      setResearchData((prev) => ({ ...prev, status: newStatus }));
+      setResearchData((prev) => ({ ...prev, status: newStatus, ...periodUpdate }));
       setProposalStatus(newStatus);
     } catch (err) {
       console.error('Error updating research status:', err);
@@ -324,11 +359,13 @@ const ResearchDetail = () => {
 
     setSavingProposalDecision(true);
     try {
+      const periodUpdate = getAwardedPeriodUpdate(researchData, proposalStatus);
       const payload = {
         status: proposalStatus,
         approvedBudget: shouldSetApprovedBudget ? parsedApprovedBudget : null,
         approvedBudgetComponents: approvedBudgetComponentsPayload,
         updatedAt: serverTimestamp(),
+        ...periodUpdate,
       };
 
       await updateDoc(doc(db, 'researchProposals', id), payload);
@@ -365,6 +402,7 @@ const ResearchDetail = () => {
         status: proposalStatus,
         approvedBudget: shouldSetApprovedBudget ? parsedApprovedBudget : null,
         approvedBudgetComponents: approvedBudgetComponentsPayload,
+        ...periodUpdate,
       }));
 
       alert('סטטוס ההצעה עודכן בהצלחה.');
@@ -666,10 +704,6 @@ const ResearchDetail = () => {
     const lang = language === 'en' ? 'en' : 'he';
 
     const budgetComponents = researchData.budgetComponents || {};
-    const displayAcademicYear = normalizeAcademicYear(
-      researchData.academicYear,
-      researchData.researchStartDate
-    );
     const partners = Array.isArray(researchData.partners) ? researchData.partners : [];
     const workPlanTasks = Array.isArray(researchData.workPlanTasks) ? researchData.workPlanTasks : [];
 
@@ -772,12 +806,14 @@ const ResearchDetail = () => {
         [t('researcher', 'חוקר'), val(researchData.researcherName)],
       ])}
 
-      ${buildMetaSection(t('researchPeriod', 'תקופת המחקר'), [
-        [t('startDateLabel', 'תאריך לועזי של תחילת המחקר (dd/mm/yyyy)'), formatDateForLocale(researchData.researchStartDate)],
-        [t('endDateLabel', 'תאריך לועזי של סוף המחקר (dd/mm/yyyy)'), formatDateForLocale(researchData.researchEndDate)],
-        [t('totalResearchYears', 'סה"כ תקופת המחקר בשנים (חישוב אוטומטי)'), val(researchData.researchDurationYears)],
-        [t('academicYearLabel', 'שנה אקדמית (תרגום אוטומטי)'), val(displayAcademicYear)],
-      ])}
+      ${isResearchAwarded(researchData) ? (() => {
+        const { startDate, endDate } = resolveResearchPeriodDates(researchData);
+        return buildMetaSection(t('researchPeriod', 'תקופת המחקר'), [
+          [t('totalResearchYears', 'סה"כ תקופת המחקר בשנים'), val(researchData.researchDurationYears)],
+          [t('researchPeriodStartDate', 'תאריך תחילת המחקר'), startDate ? formatDateForLocale(researchData.researchStartDate) : val(null)],
+          [t('researchPeriodEndDate', 'תאריך סיום המחקר'), endDate ? endDate.toLocaleDateString(language === 'en' ? 'en-US' : 'he-IL') : val(null)],
+        ]);
+      })() : ''}
 
       <div class="section">
         ${buildSectionHeading(t('budgetTitle', 'תקציב'))}
@@ -923,8 +959,9 @@ const ResearchDetail = () => {
 
             <ResearchInfoSection
               researchData={researchData}
-              onQuickApprove={isAdmin() ? () => handleQuickDecision('awarded') : undefined}
-              onQuickReject={isAdmin() ? () => handleQuickDecision('rejected') : undefined}
+              onMoveToPending={canChangeProposalStatus() ? () => handleQuickDecision('pending') : undefined}
+              onQuickApprove={canChangeProposalStatus() ? () => handleQuickDecision('awarded') : undefined}
+              onQuickReject={canChangeProposalStatus() ? () => handleQuickDecision('rejected') : undefined}
               quickDecisionLoading={quickDecisionLoading}
             />
             {isAdmin() && (

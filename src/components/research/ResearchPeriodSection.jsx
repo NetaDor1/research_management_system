@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLanguage } from '../../context/LanguageContext';
-import { normalizeAcademicYear } from '../../utils/academicYear';
+import { isResearchAwarded, resolveResearchPeriodDates } from '../../utils/researchPeriod';
 
 const ResearchPeriodSection = ({ researchData }) => {
   const { t, language, isRTL } = useLanguage();
@@ -8,34 +8,23 @@ const ResearchPeriodSection = ({ researchData }) => {
   const locale = language === 'en' ? 'en-US' : 'he-IL';
   const notSpecified = t('notSpecified', 'לא צוין');
 
-  const formatDate = (timestamp) => {
-    if (!timestamp) return notSpecified;
+  if (!researchData || !isResearchAwarded(researchData)) return null;
+
+  const { durationYears, startDate, endDate } = resolveResearchPeriodDates(researchData);
+
+  const formatDate = (date) => {
+    if (!date) return notSpecified;
     try {
-      if (timestamp && typeof timestamp.toDate === 'function') {
-        return timestamp.toDate().toLocaleDateString(locale);
-      }
-      if (timestamp && timestamp.seconds) {
-        return new Date(timestamp.seconds * 1000).toLocaleDateString(locale);
-      }
-      if (typeof timestamp === 'string') {
-        return new Date(timestamp).toLocaleDateString(locale);
-      }
-      return String(timestamp);
-    } catch (e) {
-      return String(timestamp);
+      return date.toLocaleDateString(locale);
+    } catch {
+      return notSpecified;
     }
   };
 
-  if (!researchData) return null;
-  const displayAcademicYear = normalizeAcademicYear(
-    researchData.academicYear,
-    researchData.researchStartDate
-  );
-
   return (
-    <div style={{ 
-      background: '#f9f9f9', 
-      padding: '30px', 
+    <div style={{
+      background: '#f9f9f9',
+      padding: '30px',
       borderRadius: '8px',
       marginBottom: '20px',
       textAlign,
@@ -43,58 +32,48 @@ const ResearchPeriodSection = ({ researchData }) => {
       <h2 style={{ marginBottom: '20px', color: '#667eea' }}>
         {t('researchPeriod', 'תקופת המחקר')}
       </h2>
-      
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-        gap: '20px'
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: '20px',
       }}>
         <div>
-          <label style={{ 
-            display: 'block', 
-            fontWeight: 'bold', 
+          <label style={{
+            display: 'block',
+            fontWeight: 'bold',
             marginBottom: '5px',
-            color: '#666'
+            color: '#666',
           }}>
-            {t('startDateShort', 'תאריך התחלה')}:
+            {t('totalResearchYears', 'סה"כ תקופת המחקר בשנים')}:
           </label>
-          <span style={{ fontSize: '16px' }}>{formatDate(researchData.researchStartDate)}</span>
+          <span style={{ fontSize: '16px' }}>
+            {durationYears ?? researchData.researchDurationYears ?? notSpecified}
+          </span>
         </div>
 
         <div>
-          <label style={{ 
-            display: 'block', 
-            fontWeight: 'bold', 
+          <label style={{
+            display: 'block',
+            fontWeight: 'bold',
             marginBottom: '5px',
-            color: '#666'
+            color: '#666',
           }}>
-            {t('endDateShort', 'תאריך סיום')}:
+            {t('researchPeriodStartDate', 'תאריך תחילת המחקר')}:
           </label>
-          <span style={{ fontSize: '16px' }}>{formatDate(researchData.researchEndDate)}</span>
+          <span style={{ fontSize: '16px' }}>{formatDate(startDate)}</span>
         </div>
 
         <div>
-          <label style={{ 
-            display: 'block', 
-            fontWeight: 'bold', 
+          <label style={{
+            display: 'block',
+            fontWeight: 'bold',
             marginBottom: '5px',
-            color: '#666'
+            color: '#666',
           }}>
-            {t('researchDurationYears', 'משך המחקר (שנים)')}:
+            {t('researchPeriodEndDate', 'תאריך סיום המחקר')}:
           </label>
-          <span style={{ fontSize: '16px' }}>{researchData.researchDurationYears || notSpecified}</span>
-        </div>
-
-        <div>
-          <label style={{ 
-            display: 'block', 
-            fontWeight: 'bold', 
-            marginBottom: '5px',
-            color: '#666'
-          }}>
-            {t('academicYearShort', 'שנה אקדמית')}:
-          </label>
-          <span style={{ fontSize: '16px' }}>{displayAcademicYear || notSpecified}</span>
+          <span style={{ fontSize: '16px' }}>{formatDate(endDate)}</span>
         </div>
       </div>
     </div>

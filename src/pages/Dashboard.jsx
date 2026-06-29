@@ -177,8 +177,9 @@ const Dashboard = () => {
                   <h4>{research.title}</h4>
                   {userRole === 'ADMIN' && <p className="recent-researcher">{research.researcher}</p>}
                   <span className={`recent-status status-${research.status}`}>
-                    {research.status === 'awarded' ? t('awarded', 'זכייה') : 
-                     research.status === 'pending' ? t('pending', 'המתנה') : t('rejected', 'לא אושר')}
+                    {research.status === 'submitted' ? t('submittedStatus', 'הוגש') :
+                     research.status === 'awarded' ? t('awarded', 'זכייה') : 
+                     research.status === 'pending' ? t('pending', 'בהמתנה') : t('rejected', 'לא אושר')}
                   </span>
                 </div>
               </div>

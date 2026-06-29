@@ -369,8 +369,8 @@ const NewArticle = () => {
         researcherId: researcherId,
         researcherName: researcherName,
         
-        // סטטוס (ברירת מחדל - פורסם)
-        status: 'published',
+        // סטטוס מאמר: הוגש -> בהמתנה -> אושר/נדחה
+        status: editId ? (previousArticleRef.current?.status || 'submitted') : 'submitted',
         publicationType: 'journal', // ברירת מחדל - כתב עת
         
         // תאריך פרסום
@@ -520,7 +520,7 @@ const NewArticle = () => {
 
     const existing = previousArticleRef.current;
     if (!canDeleteArticle(existing)) {
-      alert(t('deleteArticleNotAllowed', 'ניתן למחוק רק מאמר בטיוטה או בסטטוס בביקורת'));
+      alert(t('deleteArticleNotAllowed', 'ניתן למחוק רק מאמר בטיוטה או בסטטוס הוגש/בהמתנה'));
       return;
     }
 

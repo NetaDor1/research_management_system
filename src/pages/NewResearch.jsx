@@ -18,8 +18,8 @@ import ResearchProposalReviewAssistant from '../components/research/ResearchProp
 import FormEditToolbar from '../components/FormEditToolbar';
 import WorkPlanSection from '../components/research/WorkPlanSection';
 import ProposalDocxUpload from '../components/research/ProposalDocxUpload';
-import { getHebrewAcademicYearFromDate, normalizeAcademicYear } from '../utils/academicYear';
 import { canDeleteResearch, getSubmissionStatus } from '../utils/submissionStatus';
+import { canShowResearchPeriodInForm } from '../utils/researchPeriod';
 import { navigateBackOrFallback } from '../utils/navigation';
 import {
   REQUIRED_DOCUMENT_KEYS,
@@ -149,10 +149,7 @@ const NewResearch = () => {
     researcherRole: '',
     proposalStage: '',
     submissionType: '',
-    researchStartDate: '',
-    researchEndDate: '',
     researchDurationYears: '',
-    academicYear: '',
     totalBudget: '',
     currency: 'ILS',
     convertedBudget: '',
@@ -212,8 +209,6 @@ const NewResearch = () => {
     }));
   
   // Refs for date pickers
-  const startDatePickerRef = useRef(null);
-  const endDatePickerRef = useRef(null);
   const expectedDatePickerRef = useRef(null);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -265,37 +260,6 @@ const NewResearch = () => {
       };
     });
   };
-
-  // Calculate research duration automatically
-  useEffect(() => {
-    if (formData.researchStartDate && formData.researchEndDate) {
-      const startDateISO = convertDateToISO(formData.researchStartDate);
-      const endDateISO = convertDateToISO(formData.researchEndDate);
-      
-      if (startDateISO && endDateISO) {
-        const start = new Date(startDateISO);
-        const end = new Date(endDateISO);
-        
-        if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && end > start) {
-          const diffTime = Math.abs(end - start);
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          const diffYears = (diffDays / 365).toFixed(2);
-          
-          updateFormData(prev => ({
-            ...prev,
-            researchDurationYears: diffYears
-          }));
-
-          // Calculate academic year
-          const academicYear = getHebrewAcademicYearFromDate(start);
-          updateFormData(prev => ({
-            ...prev,
-            academicYear: academicYear
-          }));
-        }
-      }
-    }
-  }, [formData.researchStartDate, formData.researchEndDate]);
 
   // Calculate total budget from components
   useEffect(() => {
@@ -420,10 +384,7 @@ const NewResearch = () => {
           researcherRole: data.researcherRole || '',
           proposalStage: data.proposalStage || '',
           submissionType: data.submissionType || '',
-          researchStartDate: timestampToDisplayDate(data.researchStartDate),
-          researchEndDate: timestampToDisplayDate(data.researchEndDate),
           researchDurationYears: data.researchDurationYears || '',
-          academicYear: normalizeAcademicYear(data.academicYear, data.researchStartDate),
           totalBudget: data.totalBudget || '',
           currency: data.currency || 'ILS',
           convertedBudget: data.convertedBudget || '',
@@ -639,7 +600,7 @@ const NewResearch = () => {
         ...prev,
         [name]: files[0] || null
       }));
-    } else if (name === 'researchStartDate' || name === 'researchEndDate' || name === 'expectedResponseDate') {
+    } else if (name === 'expectedResponseDate') {
       // Handle date fields with custom formatting
       handleDateChange(name, value);
     } else {
@@ -902,38 +863,18 @@ const NewResearch = () => {
     if (!snapshot.proposalStage) {
       newErrors.proposalStage = 'שלב ההצעה חובה';
     }
-    // Validate date format dd/mm/yyyy
-    const datePattern = /^(\d{2})\/(\d{2})\/(\d{4})$/;
-    
-    if (!snapshot.researchStartDate) {
-      newErrors.researchStartDate = 'תאריך תחילת המחקר חובה';
-    } else if (!datePattern.test(snapshot.researchStartDate)) {
-      newErrors.researchStartDate = 'תאריך לא תקין. נא להזין בפורמט dd/mm/yyyy';
-    } else {
-      const startDateISO = convertDateToISO(snapshot.researchStartDate);
-      const startDate = new Date(startDateISO);
-      if (isNaN(startDate.getTime())) {
-        newErrors.researchStartDate = 'תאריך לא תקין';
-      }
-    }
-    
-    if (!snapshot.researchEndDate) {
-      newErrors.researchEndDate = 'תאריך סיום המחקר חובה';
-    } else if (!datePattern.test(snapshot.researchEndDate)) {
-      newErrors.researchEndDate = 'תאריך לא תקין. נא להזין בפורמט dd/mm/yyyy';
-    } else {
-      const endDateISO = convertDateToISO(snapshot.researchEndDate);
-      const endDate = new Date(endDateISO);
-      if (isNaN(endDate.getTime())) {
-        newErrors.researchEndDate = 'תאריך לא תקין';
-      } else if (snapshot.researchStartDate) {
-        const startDateISO = convertDateToISO(snapshot.researchStartDate);
-        const startDate = new Date(startDateISO);
-        if (!isNaN(startDate.getTime()) && endDate <= startDate) {
-          newErrors.researchEndDate = 'תאריך סיום חייב להיות אחרי תאריך התחלה';
+    const showPeriod = canShowResearchPeriodInForm(Boolean(editId), previousResearchRef.current);
+    if (showPeriod) {
+      if (!String(snapshot.researchDurationYears ?? '').trim()) {
+        newErrors.researchDurationYears = 'יש להזין את סה"כ תקופת המחקר בשנים';
+      } else {
+        const years = Number(String(snapshot.researchDurationYears).replace(',', '.'));
+        if (Number.isNaN(years) || years <= 0) {
+          newErrors.researchDurationYears = 'יש להזין מספר שנים תקין (גדול מ-0)';
         }
       }
     }
+
     // Check if at least one budget component has a value
     const hasBudgetComponents = Object.values(snapshot.budgetComponents || {}).some(amount => {
       const numAmount = parseFloat(amount) || 0;
@@ -986,17 +927,7 @@ const NewResearch = () => {
       console.log('Researcher Name:', researcherName);
 
       // Convert dates to Timestamp for Firestore
-      const researchStartDateISO = convertDateToISO(fd.researchStartDate);
-      const researchEndDateISO = convertDateToISO(fd.researchEndDate);
       const expectedResponseDateISO = convertDateToISO(fd.expectedResponseDate);
-      
-      const researchStartDate = researchStartDateISO 
-        ? Timestamp.fromDate(new Date(researchStartDateISO))
-        : null;
-      
-      const researchEndDate = researchEndDateISO 
-        ? Timestamp.fromDate(new Date(researchEndDateISO))
-        : null;
       
       const expectedResponseDate = expectedResponseDateISO 
         ? Timestamp.fromDate(new Date(expectedResponseDateISO))
@@ -1092,10 +1023,9 @@ const NewResearch = () => {
         researcherName: finalResearcherName,
         
         // תקופת המחקר
-        researchStartDate: researchStartDate,
-        researchEndDate: researchEndDate,
-        researchDurationYears: fd.researchDurationYears || '',
-        academicYear: fd.academicYear || '',
+        researchDurationYears: canShowResearchPeriodInForm(isEdit, previousResearchRef.current)
+          ? String(fd.researchDurationYears ?? '').trim()
+          : String(previousResearchRef.current?.researchDurationYears ?? '').trim(),
         
         // תקציב
         totalBudget: fd.totalBudget || '',
@@ -1137,7 +1067,7 @@ const NewResearch = () => {
         workPlanTasks: finalWorkPlanTasks,
         
         // סטטוס
-        status: isEdit ? (existingStatus || 'pending') : 'pending',
+        status: isEdit ? (existingStatus || 'submitted') : 'submitted',
         submissionStatus: userRole === 'ADMIN' && isEdit
           ? (existingSubmissionStatus || 'submitted')
           : (asDraft ? 'draft' : 'submitted'),
@@ -1150,8 +1080,8 @@ const NewResearch = () => {
         
         // תאריכים
         submissionDate: isEdit
-          ? (existingSubmissionDate || researchStartDate || serverTimestamp())
-          : (researchStartDate || serverTimestamp()),
+          ? (existingSubmissionDate || serverTimestamp())
+          : serverTimestamp(),
         createdAt: isEdit ? (existingCreatedAt || serverTimestamp()) : serverTimestamp(),
         updatedAt: serverTimestamp(),
         isNew: asDraft ? false : ((!isEdit || wasDraft) ? true : Boolean(existingIsNew))
@@ -1434,12 +1364,9 @@ const NewResearch = () => {
         [t('submissionTypeLabel', 'סוג הגשה'), formData.submissionType],
       ].map(([label, value]) => [label, value || t('notSpecified', 'לא צוין')]))}
 
-      ${buildMetaSection(t('researchPeriod', 'תקופת המחקר'), [
-        [t('startDateLabel', 'תאריך תחילת המחקר'), formatDate(formData.researchStartDate) || t('notSpecified', 'לא צוין')],
-        [t('endDateLabel', 'תאריך סיום המחקר'), formatDate(formData.researchEndDate) || t('notSpecified', 'לא צוין')],
+      ${showResearchPeriodInForm ? buildMetaSection(t('researchPeriod', 'תקופת המחקר'), [
         [t('totalResearchYears', 'סה"כ תקופת המחקר בשנים'), formData.researchDurationYears || t('notSpecified', 'לא צוין')],
-        [t('academicYearLabel', 'שנה אקדמית'), formData.academicYear || t('notSpecified', 'לא צוין')],
-      ])}
+      ]) : ''}
 
       <div class="section">
         ${buildSectionHeading(t('budgetTitle', 'תקציב'))}
@@ -1592,6 +1519,9 @@ const NewResearch = () => {
     }
   }, []);
 
+  const isEditMode = Boolean(editId);
+  const showResearchPeriodInForm = canShowResearchPeriodInForm(isEditMode, previousResearchRef.current);
+
   return (
     <div className="page-container">
       <div className="page-content research-submit-page">
@@ -1624,16 +1554,13 @@ const NewResearch = () => {
             proposalStageOptions={proposalStageOptions}
           />
 
-          <ResearchPeriodSection
-            formData={formData}
-            errors={errors}
-            handleChange={handleChange}
-            handleDatePickerChange={handleDatePickerChange}
-            formatDateForDisplay={formatDateForDisplay}
-            convertDateToISO={convertDateToISO}
-            startDatePickerRef={startDatePickerRef}
-            endDatePickerRef={endDatePickerRef}
-          />
+          {showResearchPeriodInForm && (
+            <ResearchPeriodSection
+              formData={formData}
+              errors={errors}
+              handleChange={handleChange}
+            />
+          )}
 
           <BudgetSection
             formData={formData}

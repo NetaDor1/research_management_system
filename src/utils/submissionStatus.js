@@ -1,3 +1,5 @@
+import { normalizePatentStatus, PATENT_STATUS_PROVISIONAL } from './patentStatuses';
+
 export const SUBMISSION_DRAFT = 'draft';
 export const SUBMISSION_SUBMITTED = 'submitted';
 
@@ -11,34 +13,44 @@ export const isSubmitted = (data) => !isDraft(data);
 export const filterSubmittedOnly = (docs) =>
   docs.filter((doc) => isSubmitted(typeof doc.data === 'function' ? doc.data() : doc));
 
+export const normalizeResearchStatus = (status) => {
+  if (status === 'submitted' || status === 'pending' || status === 'awarded' || status === 'rejected') {
+    return status;
+  }
+  return status || 'pending';
+};
+
 export const canResearcherEditResearch = (data) => {
   if (!data) return false;
   if (isDraft(data)) return true;
-  return (data.status || 'pending') === 'pending';
+  const status = normalizeResearchStatus(data.status);
+  return status === 'submitted' || status === 'pending';
 };
 
 export const canDeleteResearch = (data) => {
   if (!data) return false;
   if (isDraft(data)) return true;
-  return (data.status || 'pending') === 'pending';
+  const status = normalizeResearchStatus(data.status);
+  return status === 'submitted' || status === 'pending';
 };
 
 export const canResearcherEditPatent = (data) => {
   if (!data) return false;
   if (isDraft(data)) return true;
-  return (data.status || 'in-process') === 'in-process';
+  return normalizePatentStatus(data.status) !== 'patent-granted';
 };
 
 export const canResearcherEditArticle = (data) => {
   if (!data) return false;
   if (isDraft(data)) return true;
-  return (data.status || 'published') !== 'rejected';
+  const status = data.status || 'submitted';
+  return status === 'submitted' || status === 'pending';
 };
 
 export const canDeletePatent = (data) => {
   if (!data) return false;
   if (isDraft(data)) return true;
-  return (data.status || 'in-process') === 'in-process';
+  return normalizePatentStatus(data.status) === PATENT_STATUS_PROVISIONAL;
 };
 
 export const canDeleteArticle = (data) => {

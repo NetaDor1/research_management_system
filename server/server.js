@@ -329,6 +329,10 @@ ${proposalJson}`;
 
 const MAX_CHAT_FIELD = 8000;
 const MAX_CHAT_MSGS = 36;
+/** Limits tokens sent to Gemini per chat request (reduces quota pressure). */
+const MAX_CHAT_API_FIELD = 3000;
+const MAX_CHAT_API_PRIOR_MSGS = 6;
+const CHAT_MAX_OUTPUT_TOKENS = 2048;
 
 function truncateField(value, maxLen) {
   if (typeof value !== 'string') return '';
@@ -351,12 +355,26 @@ function normalizeChatMessages(raw) {
   return out;
 }
 
-function proposalContextFromBody(proposal) {
+function priorMessagesForApi(messages) {
+  const prior = messages.slice(0, -1);
+  const sliced = prior.length > MAX_CHAT_API_PRIOR_MSGS
+    ? prior.slice(-MAX_CHAT_API_PRIOR_MSGS)
+    : prior;
+  return {
+    lastUser: truncateField(messages[messages.length - 1].content, MAX_CHAT_API_FIELD),
+    history: sliced.map((m) => ({
+      role: m.role,
+      parts: [{ text: truncateField(m.content, MAX_CHAT_API_FIELD) }],
+    })),
+  };
+}
+
+function proposalContextFromBody(proposal, maxLen = MAX_CHAT_FIELD) {
   const p = proposal && typeof proposal === 'object' ? proposal : {};
   return {
     title: truncateField(String(p.title ?? ''), 2000),
-    abstract: truncateField(String(p.abstract ?? ''), MAX_CHAT_FIELD),
-    methodology: truncateField(String(p.methodology ?? ''), MAX_CHAT_FIELD),
+    abstract: truncateField(String(p.abstract ?? ''), maxLen),
+    methodology: truncateField(String(p.methodology ?? ''), maxLen),
     budget: truncateField(String(p.budget ?? ''), 4000),
   };
 }
@@ -376,60 +394,148 @@ app.post('/api/research-assistant-chat', async (req, res, next) => {
       throw err;
     }
 
-    const ctx = proposalContextFromBody(req.body?.proposal);
+    const ctx = proposalContextFromBody(req.body?.proposal, MAX_CHAT_API_FIELD);
     const proposalBlock = [
       ctx.title && `Title / כותרת:\n${ctx.title}`,
       ctx.abstract && `Abstract / תקציר:\n${ctx.abstract}`,
       ctx.methodology && `Research description & methods / תיאור ומתודולוגיה:\n${ctx.methodology}`,
       ctx.budget && `Budget / תקציב:\n${ctx.budget}`,
-    ].filter(Boolean).join('\n\n---\n\n');
+    ].filter(Boolean).join('\n\n');
 
-    const systemInstruction = `You are an expert academic research-grant advisor and reviewer.
-The user is drafting a proposal submission. Answer their questions clearly and practically.
-Prefer Hebrew unless the user writes only in English.
+    const systemInstruction = `Expert grant-proposal advisor. Prefer Hebrew unless the user writes English only.
 
-The proposal has the following sections (use these exact names when referring to them):
-1. Abstract / תקציר
-2. Scientific background and state of the art / רקע מדעי ומצב טכנולוגי עדכני
-3. Research objectives and specific aims / מטרות מחקר ומטרות ספציפיות
-4. Detailed description of the proposed research / תיאור מפורט של המחקר המוצע
-5. Significance, innovation and potential benefits / משמעות, חדשנות ותועלת פוטנציאלית
-6. Applicability / ישימות
+Full-draft sections (numbered headers, exact titles):
+1. **תקציר**  2. **רקע מדעי ומצב טכנולוגי עדכני**  3. **מטרות מחקר ומטרות ספציפיות**
+4. **תיאור מפורט של המחקר המוצע**  5. **משמעות, חדשנות ותועלת פוטנציאלית**  6. **ישימות**
 
-FORMATTING RULES (strictly follow):
-- Use **bold** (double asterisks) for section titles and key terms only.
-- Use - for bullet points.
-- Do NOT use # or ## headers. Do NOT use --- separators. Do NOT use * for bullets (use -).
-- Do NOT write the word "טיוטה" or "draft" anywhere.
-- Keep answers clean and readable - avoid excessive symbols.
+Format: "N. **title**" on one line, body below. **bold** titles, - bullets. No # headers, no ---, no "טיוטה".
 
-CONTENT RULES:
-- When the user asks for a full draft or proposal, write ALL sections (Abstract, Scientific Background, Research Objectives, Detailed Description, Significance/Innovation, Applicability, Budget) with their full content  no-t just headings.
-- When the user asks for advice or feedback only, give guidance and bullet points - without writing paragraph drafts unless asked.
-- If a section is missing from the form, tell the user what to add - do not invent content.
-- Do not invent grant deadlines, committee names, or citations.
+When the user wants a draft or describes their research: write submission-ready formal prose in every section (background, objectives, methods, outcomes) based on their topic. Write as the applicant — never meta-instructions like "יש להציג/לפרט/לסקור" or "should include". For advice-only questions, brief guidance without full drafts.
 
-Current draft context (may be partial):
-${proposalBlock || '(No draft text in the form yet - use the user message as the topic if they describe one.)'}`;
+Context:
+${proposalBlock || '(empty — use user message as topic)'}`;
 
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     const model = genAI.getGenerativeModel(
       {
         model: GEMINI_MODEL,
         systemInstruction,
-        generationConfig: { temperature: 0.35, maxOutputTokens: 4096, ...THINKING_OFF },
+        generationConfig: { temperature: 0.35, maxOutputTokens: CHAT_MAX_OUTPUT_TOKENS, ...THINKING_OFF },
       },
       GEMINI_REQUEST_OPTIONS
     );
 
-    const prior = messages.slice(0, -1);
-    const lastUser = messages[messages.length - 1].content;
-    const history = prior.map((m) => ({ role: m.role, parts: [{ text: m.content }] }));
+    const { history, lastUser } = priorMessagesForApi(messages);
 
     let replyText;
     try {
       const chat = model.startChat({ history });
-      const result = await withRetry(() => chat.sendMessage(lastUser));
+      const result = await chat.sendMessage(lastUser);
+      replyText = result.response.text();
+    } catch (geminiErr) {
+      throw mapGeminiError(geminiErr);
+    }
+
+    if (typeof replyText !== 'string' || !replyText.trim()) {
+      const err = new Error('Model returned an empty reply');
+      err.statusCode = 502;
+      throw err;
+    }
+
+    res.status(200).json({ reply: replyText.trim() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+function patentContextFromBody(patent, maxLen = MAX_CHAT_FIELD) {
+  const p = patent && typeof patent === 'object' ? patent : {};
+  return {
+    title: truncateField(String(p.title ?? ''), 2000),
+    disclosure: truncateField(String(p.disclosure ?? ''), maxLen),
+    detailed: truncateField(String(p.detailed ?? ''), maxLen),
+  };
+}
+
+app.post('/api/patent-assistant-chat', async (req, res, next) => {
+  try {
+    if (!GEMINI_API_KEY) {
+      const err = new Error('Server is not configured: GEMINI_API_KEY is missing');
+      err.statusCode = 503;
+      throw err;
+    }
+
+    const messages = normalizeChatMessages(req.body?.messages);
+    if (!messages) {
+      const err = new Error('Invalid messages: non-empty array ending with a user message, max ' + MAX_CHAT_MSGS + ' turns');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const ctx = patentContextFromBody(req.body?.patent, MAX_CHAT_API_FIELD);
+    const patentBlock = [
+      ctx.title && `Invention title / שם המצאה:\n${ctx.title}`,
+      ctx.disclosure && `Invention disclosure form (DOI) / טופס גילוי המצאה:\n${ctx.disclosure}`,
+      ctx.detailed && `Detailed invention description (optional) / תיאור מפורט של המצאה:\n${ctx.detailed}`,
+    ].filter(Boolean).join('\n\n');
+
+    const systemInstruction = `You are an expert patent attorney and technology transfer advisor at an academic institution.
+The user is drafting a patent disclosure / invention disclosure form (DOI). Answer clearly and practically.
+Prefer Hebrew unless the user writes only in English. For technical field content, prefer professional English when drafting patent-style text.
+
+The form has these sections (use these exact names when referring to them):
+
+**טופס גילוי המצאה / Invention disclosure form**
+1. **תיאור קצר של המצאה** / Short description of the invention
+2. **האם המצאה היא מוצר/תהליך/שיטה? פרט** / Is the invention a product, process or method? Elaborate
+3. **מי הלקוחות/צרכנים/משתמשים הפוטנציאליים?** / Who are the potential customers, consumers or users?
+4. **האם היו קשרים עם גורם מסחרי בנוגע להמצאה? פרט** / Were there contacts with a commercial entity regarding the invention? Elaborate
+
+**תיאור מפורט של המצאה (אופציונלי) / Detailed invention description (optional)**
+5. **תיאור מפורט של המצאה** / Detailed description of the invention
+6. **יתרונות המצאה על פני הידע והשימושים הקיימים** / Advantages of the invention over existing knowledge and uses
+7. **שימושים פוטנציאליים ויישום** / Potential uses and implementation
+
+FORMATTING RULES (strictly follow):
+- When writing a full disclosure draft, start EACH of the 7 sections on its own line using this exact pattern:
+  1. **תיאור קצר של המצאה**
+  (paragraph content here)
+  2. **האם המצאה היא מוצר/תהליך/שיטה? פרט**
+  (paragraph content here)
+  ... through section 7.
+- The number and bold title must be on the SAME line. Put the section body on the following lines.
+- Use **bold** (double asterisks) for section titles and key terms only.
+- Use - for bullet points.
+- Do NOT use # or ## headers. Do NOT use --- separators. Do NOT use * for bullets (use -).
+- Do NOT write the word "טיוטה" or "draft" anywhere.
+- Keep answers clean and readable.
+
+CONTENT RULES:
+- When the user asks for a full disclosure draft, write ALL seven sections above with full paragraph content (not just headings).
+- Focus on patent-relevant language: novelty, inventive step, industrial applicability, commercial potential, prior art awareness.
+- When the user asks for advice or feedback only, give guidance and bullet points without writing full drafts unless asked.
+- If a section is missing from the form, tell the user what to add; do not invent experimental data or prior art citations.
+- Do not invent patent numbers, filing dates, or legal opinions.
+
+Current draft context (may be partial):
+${patentBlock || '(No draft text in the form yet - use the user message as the topic if they describe one.)'}`;
+
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel(
+      {
+        model: GEMINI_MODEL,
+        systemInstruction,
+        generationConfig: { temperature: 0.35, maxOutputTokens: CHAT_MAX_OUTPUT_TOKENS, ...THINKING_OFF },
+      },
+      GEMINI_REQUEST_OPTIONS
+    );
+
+    const { history, lastUser } = priorMessagesForApi(messages);
+
+    let replyText;
+    try {
+      const chat = model.startChat({ history });
+      const result = await chat.sendMessage(lastUser);
       replyText = result.response.text();
     } catch (geminiErr) {
       throw mapGeminiError(geminiErr);

@@ -1,14 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db } from '../services/firebase';
+import { createNotification } from '../services/notifications';
 import './Page.css';
 import './Research.css';
 import { exportPrintableHtmlToPdf, escapeHtml } from '../utils/exportPdf';
 import { navigateBackOrFallback } from '../utils/navigation';
 import { canResearcherEditArticle, isDraft } from '../utils/submissionStatus';
+
+const normalizeArticleStatus = (status) => {
+  if (status === 'published') return 'approved';
+  if (status === 'in-review') return 'pending';
+  if (status === 'submitted' || status === 'pending' || status === 'approved' || status === 'rejected') {
+    return status;
+  }
+  return 'submitted';
+};
 
 const ArticleDetail = () => {
   const { id } = useParams();
@@ -23,6 +33,7 @@ const ArticleDetail = () => {
   const [error, setError] = useState('');
   const [linkedResearch, setLinkedResearch] = useState(null);
   const [linkedResearchLoading, setLinkedResearchLoading] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
 
   useEffect(() => {
     const fetchArticle = async () => {
@@ -55,7 +66,7 @@ const ArticleDetail = () => {
             return;
           }
 
-          setArticleData(data);
+          setArticleData({ ...data, status: normalizeArticleStatus(data.status) });
         } else {
           setError(t('articleNotFound', 'המאמר לא נמצא'));
         }
@@ -135,10 +146,12 @@ const ArticleDetail = () => {
 
   const getStatusLabel = (status) => {
     switch (status) {
-      case 'published':
-        return t('published', 'פורסם');
-      case 'in-review':
-        return t('inReview', 'בביקורת');
+      case 'submitted':
+        return t('submittedStatus', 'הוגש');
+      case 'pending':
+        return t('pending', 'בהמתנה');
+      case 'approved':
+        return t('approved', 'אושר');
       case 'rejected':
         return t('rejected', 'נדחה');
       default:
@@ -148,9 +161,10 @@ const ArticleDetail = () => {
 
   const getStatusClass = (status) => {
     switch (status) {
-      case 'published':
+      case 'approved':
         return 'status-awarded';
-      case 'in-review':
+      case 'submitted':
+      case 'pending':
         return 'status-pending';
       case 'rejected':
         return 'status-rejected';
@@ -171,6 +185,64 @@ const ArticleDetail = () => {
   };
 
   const getBackPath = () => (userRole === 'RESEARCHER' ? '/' : '/articles');
+
+  const canChangeArticleStatus = () =>
+    Boolean(
+      articleData &&
+      (isAdmin() || (userRole === 'RESEARCHER' && articleData.researcherId === user?.id))
+    );
+
+  const handleArticleDecision = async (newStatus) => {
+    if (!canChangeArticleStatus() || !id || statusSaving) return;
+    setStatusSaving(true);
+    try {
+      await updateDoc(doc(db, 'articles', id), {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+      });
+
+      const title = articleData.title || '';
+      if (isAdmin() && articleData.researcherId) {
+        const notifTitle = newStatus === 'approved' ? 'המאמר אושר' : newStatus === 'rejected' ? 'המאמר נדחה' : 'המאמר בהמתנה';
+        const notifMsg = newStatus === 'approved'
+          ? `המאמר "${title}" אושר.`
+          : newStatus === 'rejected'
+            ? `המאמר "${title}" נדחה.`
+            : `המאמר "${title}" הועבר לסטטוס בהמתנה.`;
+
+        await createNotification({
+          userId: articleData.researcherId,
+          title: notifTitle,
+          message: notifMsg,
+          type: 'article_status_update',
+          entityType: 'article',
+          entityId: id,
+          link: `/articles/${id}`,
+          eventKey: `article_status_${newStatus}:${id}:${Date.now()}`,
+        });
+      } else if (!isAdmin()) {
+        const statusLabel = newStatus === 'approved' ? 'אושר' : newStatus === 'rejected' ? 'נדחה' : 'בהמתנה';
+        await createNotification({
+          userId: 'ADMIN',
+          targetRole: 'ADMIN',
+          title: 'עדכון סטטוס מאמר',
+          message: `${user?.name || 'חוקר'} עדכן/ה את סטטוס המאמר "${title}" ל-${statusLabel}.`,
+          type: 'article_status_update',
+          entityType: 'article',
+          entityId: id,
+          link: `/articles/${id}`,
+          eventKey: `article_status_${newStatus}:${id}:${Date.now()}`,
+        });
+      }
+
+      setArticleData((prev) => ({ ...prev, status: newStatus }));
+    } catch (err) {
+      console.error('Error updating article status:', err);
+      alert(t('saveArticleError', 'שגיאה בשמירת המאמר'));
+    } finally {
+      setStatusSaving(false);
+    }
+  };
 
   const formatDateForLocale = (value) => {
     if (!value) return t('notSpecified', 'לא צוין');
@@ -198,14 +270,7 @@ const ArticleDetail = () => {
     const dir = language === 'en' ? 'ltr' : 'rtl';
     const lang = language === 'en' ? 'en' : 'he';
 
-    const statusLabel =
-      articleData.status === 'published'
-        ? t('published', 'פורסם')
-        : articleData.status === 'in-review'
-          ? t('inReview', 'בביקורת')
-          : articleData.status === 'rejected'
-            ? t('rejected', 'נדחה')
-            : articleData.status || t('notSpecified', 'לא צוין');
+    const statusLabel = getStatusLabel(articleData.status);
 
     const publicationTypeLabel =
       articleData.publicationType === 'journal'
@@ -476,6 +541,62 @@ const ArticleDetail = () => {
                   >
                     {getStatusLabel(articleData.status)}
                   </span>
+                  {canChangeArticleStatus() && articleData.status === 'submitted' && (
+                    <div style={{ marginTop: '10px' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleArticleDecision('pending')}
+                        disabled={statusSaving}
+                        style={{
+                          padding: '4px 14px',
+                          background: 'transparent',
+                          color: statusSaving ? '#aaa' : '#8a6d3b',
+                          border: `1px solid ${statusSaving ? '#aaa' : '#8a6d3b'}`,
+                          borderRadius: '6px',
+                          cursor: statusSaving ? 'not-allowed' : 'pointer',
+                          fontSize: '13px',
+                        }}
+                      >
+                        {statusSaving ? t('saving', 'שומר...') : t('moveToPending', 'בהמתנה')}
+                      </button>
+                    </div>
+                  )}
+                  {canChangeArticleStatus() && articleData.status === 'pending' && (
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      <button
+                        type="button"
+                        disabled={statusSaving}
+                        onClick={() => handleArticleDecision('approved')}
+                        style={{
+                          padding: '4px 14px',
+                          background: 'transparent',
+                          color: statusSaving ? '#aaa' : '#3d8c5c',
+                          border: `1px solid ${statusSaving ? '#aaa' : '#3d8c5c'}`,
+                          borderRadius: '6px',
+                          cursor: statusSaving ? 'not-allowed' : 'pointer',
+                          fontSize: '13px',
+                        }}
+                      >
+                        ✔ {t('approveArticle', 'אשר מאמר')}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={statusSaving}
+                        onClick={() => handleArticleDecision('rejected')}
+                        style={{
+                          padding: '4px 14px',
+                          background: 'transparent',
+                          color: statusSaving ? '#aaa' : '#b84f5a',
+                          border: `1px solid ${statusSaving ? '#aaa' : '#b84f5a'}`,
+                          borderRadius: '6px',
+                          cursor: statusSaving ? 'not-allowed' : 'pointer',
+                          fontSize: '13px',
+                        }}
+                      >
+                        ✖ {t('rejectArticle', 'דחה מאמר')}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
