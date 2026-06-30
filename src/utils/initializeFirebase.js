@@ -135,9 +135,14 @@ export const createUserDocument = async (uid, userData) => {
     await setDoc(userRef, {
       name: userData.name,
       email: userData.email,
-      role: userData.role || 'RESEARCHER', // 'ADMIN' or 'RESEARCHER'
+      role: userData.role || 'RESEARCHER',
+      accountStatus: userData.accountStatus || 'approved',
+      authProvider: userData.authProvider || 'email',
+      rejectionReason: null,
+      approvedAt: userData.accountStatus === 'pending' ? null : serverTimestamp(),
+      approvedBy: null,
       createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
     });
     console.log('User document created:', uid);
     return { success: true };

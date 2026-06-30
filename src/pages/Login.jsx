@@ -1,32 +1,48 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import {
+  signInWithEmail,
+  signInWithCollegeSSO,
+  getAuthErrorMessage,
+  ACCOUNT_STATUS,
+  signOut,
+} from '../services/authService';
 import './Login.css';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { setUser, setUserRole } = useAuth();
-  const { t } = useLanguage();
-  
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    role: 'RESEARCHER' // Default role
-  });
-  
+  const { establishSession } = useAuth();
+  const { t, language } = useLanguage();
+
+  const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    // Clear error when user starts typing
+    setFormData((prev) => ({ ...prev, [name]: value }));
     if (error) setError('');
+  };
+
+  const routeAfterLogin = async (profile) => {
+    if (profile.accountStatus === ACCOUNT_STATUS.PENDING) {
+      navigate('/pending-approval');
+      return;
+    }
+    if (profile.accountStatus === ACCOUNT_STATUS.REJECTED) {
+      await signOut();
+      setError(
+        profile.rejectionReason
+          ? `${t('loginRejected', 'בקשת ההרשמה נדחתה')}: ${profile.rejectionReason}`
+          : t('loginRejected', 'בקשת ההרשמה נדחתה. פנו לרשות המחקר.')
+      );
+      return;
+    }
+    await establishSession(profile);
+    navigate('/');
   };
 
   const handleSubmit = async (e) => {
@@ -35,44 +51,46 @@ const Login = () => {
     setLoading(true);
 
     try {
-      // Basic validation
       if (!formData.email || !formData.password) {
         setError(t('fillAllFields', 'אנא מלא את כל השדות'));
-        
-        setLoading(false);
         return;
       }
 
-      // Email validation
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.email)) {
         setError(t('invalidEmail', 'כתובת אימייל לא תקינה'));
-        setLoading(false);
         return;
       }
 
-      // Simulate authentication (in a real app, this would call an API)
-      // For now, we'll accept any email/password combination
-      // In production, you should validate against Firebase Auth or your backend
-      
-      // Create user object based on role
-      const userData = {
-        id: formData.role === 'ADMIN' ? '1' : '2',
-        name: formData.role === 'ADMIN' ? 'רשות המחקר' : 'חוקר',
-        email: formData.email
-      };
-
-      // Set user and role in context (this will also save to localStorage)
-      setUser(userData);
-      setUserRole(formData.role);
-
-      // Navigate to home page
-      navigate('/');
+      const profile = await signInWithEmail(formData.email.trim(), formData.password);
+      await routeAfterLogin(profile);
     } catch (err) {
-      console.error('Login error:', err);
-      setError(t('loginError', 'שגיאה בהתחברות. אנא נסה שוב.'));
+      if (err.message === 'PROFILE_NOT_FOUND') {
+        const uidHint = err.uid ? ` (UID: ${err.uid})` : '';
+        setError(
+          `${t('profileNotFound', 'לא נמצא פרופיל משתמש ב-Firestore. ודאי שמזהה המסמך ב-users תואם ל-UID ב-Authentication.')}${uidHint}`
+        );
+      } else if (err?.code === 'permission-denied') {
+        setError(
+          t(
+            'firestorePermissionDenied',
+            'אין הרשאה לקרוא את פרופיל המשתמש. עדכני את כללי Firestore (ראי firestore.rules בפרויקט) ולחצי Publish ב-Firebase Console.'
+          )
+        );
+      } else {
+        setError(getAuthErrorMessage(err, language));
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCollegeSSO = async () => {
+    setError('');
+    try {
+      await signInWithCollegeSSO();
+    } catch {
+      setError(t('collegeSsoNotAvailable', 'כניסה דרך אתר המכללה תהיה זמינה בעתיד.'));
     }
   };
 
@@ -131,52 +149,29 @@ const Login = () => {
             </div>
           </div>
 
-          <div className="form-group">
-            <span className="form-label">{t('role', 'תפקיד')}</span>
-            <div className="role-options" role="radiogroup" aria-label={t('role', 'תפקיד')}>
-              <label className="role-option">
-                <input
-                  type="radio"
-                  name="role"
-                  value="RESEARCHER"
-                  checked={formData.role === 'RESEARCHER'}
-                  onChange={handleChange}
-                  required
-                />
-                {t('researcher', 'חוקר')}
-              </label>
-              <label className="role-option">
-                <input
-                  type="radio"
-                  name="role"
-                  value="ADMIN"
-                  checked={formData.role === 'ADMIN'}
-                  onChange={handleChange}
-                  required
-                />
-                {t('researchAuthority', 'רשות המחקר')}
-              </label>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="login-button"
-            disabled={loading}
-          >
+          <button type="submit" className="login-button" disabled={loading}>
             {loading ? t('loggingIn', 'מתחבר...') : t('login', 'התחבר')}
           </button>
         </form>
 
+        <button
+          type="button"
+          className="college-sso-button"
+          onClick={handleCollegeSSO}
+          title={t('collegeSsoHint', 'יתחבר בעתיד לאתר המכללה')}
+        >
+          {t('collegeSsoLogin', 'כניסה דרך אתר המכללה')}
+          <span className="coming-soon-badge">{t('comingSoon', 'בקרוב')}</span>
+        </button>
+
         <div className="login-footer">
           <p>
             {t('forgotPassword', 'שכחת את הסיסמה?')}{' '}
-            <a href="#" onClick={(e) => {
-              e.preventDefault();
-              alert('Password reset functionality will be added later');
-            }}>
-              {t('clickHere', 'לחץ כאן')}
-            </a>
+            <Link to="/forgot-password">{t('clickHere', 'לחץ כאן')}</Link>
+          </p>
+          <p>
+            {t('noAccount', 'אין לך חשבון?')}{' '}
+            <Link to="/register">{t('registerHere', 'הירשם כאן')}</Link>
           </p>
         </div>
       </div>

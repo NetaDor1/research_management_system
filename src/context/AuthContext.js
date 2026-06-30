@@ -1,6 +1,14 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../services/firebase';
+import {
+  fetchUserProfile,
+  signOut as authSignOut,
+  ACCOUNT_STATUS,
+  USER_ROLES,
+} from '../services/authService';
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -10,81 +18,102 @@ export const useAuth = () => {
   return context;
 };
 
-// Load user data from localStorage
-const loadUserFromStorage = () => {
-  try {
-    const storedUser = localStorage.getItem('auth_user');
-    const storedRole = localStorage.getItem('auth_role');
-    
-    if (storedUser && storedRole) {
-      return {
-        user: JSON.parse(storedUser),
-        role: storedRole
-      };
-    }
-  } catch (error) {
-    console.error('Error loading user from storage:', error);
-  }
-  
-  // Default values
-  return {
-    user: {
-      id: '1',
-      name: 'רשות המחקר',
-      email: 'admin@college.ac.il'
-    },
-    role: 'ADMIN'
-  };
-};
-
 export const AuthProvider = ({ children }) => {
-  // Load initial state from localStorage
-  const { user: initialUser, role: initialRole } = loadUserFromStorage();
-  
-  const [userRole, setUserRole] = useState(initialRole);
-  const [user, setUser] = useState(initialUser);
+  const [loading, setLoading] = useState(true);
+  const [firebaseUser, setFirebaseUser] = useState(null);
+  const [profile, setProfile] = useState(null);
 
-  // Save to localStorage whenever user or role changes
-  useEffect(() => {
-    try {
-      localStorage.setItem('auth_user', JSON.stringify(user));
-      localStorage.setItem('auth_role', userRole);
-    } catch (error) {
-      console.error('Error saving user to storage:', error);
+  const loadProfile = useCallback(async (uid) => {
+    const userProfile = await fetchUserProfile(uid);
+    setProfile(userProfile);
+    return userProfile;
+  }, []);
+
+  /** Call after signInWithEmailAndPassword so context is ready before navigate. */
+  const establishSession = useCallback(async (userProfile) => {
+    const fbUser = auth.currentUser;
+    if (!fbUser) return null;
+    setFirebaseUser(fbUser);
+    if (userProfile) {
+      setProfile(userProfile);
+    } else {
+      await loadProfile(fbUser.uid);
     }
-  }, [user, userRole]);
+    setLoading(false);
+    return userProfile ?? (await fetchUserProfile(fbUser.uid));
+  }, [loadProfile]);
 
-  // Update user role function that also saves to localStorage
-  const updateUserRole = (newRole) => {
-    setUserRole(newRole);
-    localStorage.setItem('auth_role', newRole);
-  };
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      setFirebaseUser(fbUser);
+      if (fbUser) {
+        try {
+          await loadProfile(fbUser.uid);
+        } catch (err) {
+          console.error('Failed to load user profile:', err);
+          setProfile(null);
+          if (err?.code === 'permission-denied') {
+            console.error(
+              'Firestore: publish firestore.rules from the project root in Firebase Console → Firestore → Rules'
+            );
+          }
+        }
+      } else {
+        setProfile(null);
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, [loadProfile]);
 
-  // Update user function that also saves to localStorage
-  const updateUser = (newUser) => {
-    setUser(newUser);
-    localStorage.setItem('auth_user', JSON.stringify(newUser));
-  };
+  const refreshProfile = useCallback(async () => {
+    const uid = auth.currentUser?.uid ?? firebaseUser?.uid;
+    if (!uid) return null;
+    return loadProfile(uid);
+  }, [firebaseUser, loadProfile]);
 
-  const isAdmin = () => userRole === 'ADMIN';
-  const isResearcher = () => userRole === 'RESEARCHER';
+  const signOut = useCallback(async () => {
+    await authSignOut();
+    setProfile(null);
+    setFirebaseUser(null);
+  }, []);
 
-  // For backward compatibility (deprecated - use isAdmin/isResearcher instead)
-  const isManager = () => userRole === 'ADMIN';
-  const isLecturer = () => userRole === 'RESEARCHER';
+  const user = profile
+    ? { id: profile.id, name: profile.name, email: profile.email }
+    : null;
+
+  const userRole = profile?.role || null;
+  const accountStatus = profile?.accountStatus || null;
+
+  const isAuthenticated = Boolean(firebaseUser && profile);
+  const isApproved = accountStatus === ACCOUNT_STATUS.APPROVED;
+  const isPending = accountStatus === ACCOUNT_STATUS.PENDING;
+  const isRejected = accountStatus === ACCOUNT_STATUS.REJECTED;
+  const isAdmin = () => userRole === USER_ROLES.ADMIN && isApproved;
+  const isResearcher = () => userRole === USER_ROLES.RESEARCHER && isApproved;
 
   const value = {
+    loading,
+    firebaseUser,
+    profile,
     user,
     userRole,
-    setUser: updateUser,
-    setUserRole: updateUserRole,
+    accountStatus,
+    isAuthenticated,
+    isApproved,
+    isPending,
+    isRejected,
     isAdmin,
     isResearcher,
-    // Deprecated - keeping for backward compatibility
-    isManager,
-    isLecturer,
+    refreshProfile,
+    establishSession,
+    signOut,
+    // Legacy setters kept for compatibility during migration — no-ops in production
+    setUser: () => {},
+    setUserRole: () => {},
+    isManager: () => isAdmin(),
+    isLecturer: () => isResearcher(),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
-

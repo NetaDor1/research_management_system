@@ -32,7 +32,7 @@ const mockPatentsData = [
 ];
 
 const Dashboard = () => {
-  const { userRole, user, setUserRole, setUser } = useAuth();
+  const { userRole, user } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
 
@@ -102,27 +102,6 @@ const Dashboard = () => {
             ? t('dashboardWelcomeAdmin', 'ברוכים הבאים למערכת ניהול מחקר. כאן תוכלו לנהל ולעקוב אחר כל המחקרים, המאמרים והפטנטים במכללה.')
             : t('dashboardWelcomeResearcher', 'ברוכים הבאים למערכת ניהול מחקר. כאן תוכלו לראות ולנהל את המחקרים, המאמרים והפטנטים שלכם.')}
         </p>
-
-        {/* Role Switcher for Testing */}
-        <div className="role-switcher">
-          <span>{t('roleCurrent', 'תפקיד נוכחי')}: <strong>{userRole === 'ADMIN' ? 'Research Authority (ADMIN)' : 'Researcher (RESEARCHER)'}</strong></span>
-          <button 
-            className="role-switch-btn"
-            onClick={() => {
-              const newRole = userRole === 'ADMIN' ? 'RESEARCHER' : 'ADMIN';
-              
-              if (newRole === 'RESEARCHER') {
-                setUser({ id: '2', name: 'יוסי כהן', email: 'researcher@college.ac.il' });
-              } else {
-                setUser({ id: '1', name: 'רשות המחקר', email: 'admin@college.ac.il' });
-              }
-              
-              setUserRole(newRole);
-            }}
-          >
-            {t('switchTo', 'החלף ל')}-{userRole === 'ADMIN' ? t('researcher', 'חוקר') : t('researchAuthority', 'רשות המחקר')}
-          </button>
-        </div>
 
         {/* Statistics Cards */}
         <div className="dashboard-stats">

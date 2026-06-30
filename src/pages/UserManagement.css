@@ -1,0 +1,89 @@
+.user-management-page {
+  max-width: 960px;
+}
+
+.user-management-subtitle {
+  color: #6c757d;
+  margin-bottom: 24px;
+}
+
+.user-management-table-wrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: white;
+}
+
+.user-management-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.user-management-table th,
+.user-management-table td {
+  padding: 12px 16px;
+  text-align: right;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.user-management-table th {
+  background: #f8fafc;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.user-management-table select {
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.user-actions-cell {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.approve-btn,
+.reject-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.approve-btn {
+  background: #48bb78;
+  color: white;
+}
+
+.approve-btn:hover:not(:disabled) {
+  background: #38a169;
+}
+
+.reject-btn {
+  background: #fed7d7;
+  color: #c53030;
+}
+
+.reject-btn:hover:not(:disabled) {
+  background: #feb2b2;
+}
+
+.approve-btn:disabled,
+.reject-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.info-message.inline-info {
+  padding: 20px;
+  border-radius: 8px;
+  background: #ebf8ff;
+  color: #2b6cb0;
+  text-align: center;
+}

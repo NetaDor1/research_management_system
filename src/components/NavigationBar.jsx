@@ -10,7 +10,7 @@ const NavigationBar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAdmin, user, userRole } = useAuth();
+  const { isAdmin, user, signOut } = useAuth();
   const { t, isRTL } = useLanguage();
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -27,7 +27,14 @@ const NavigationBar = () => {
     event.preventDefault();
     event.stopPropagation();
     closeNav();
-    window.location.assign(path);
+    navigate(path);
+  };
+
+  const handleLogout = async (event) => {
+    event.preventDefault();
+    closeNav();
+    await signOut();
+    navigate('/login');
   };
 
   // Navigation items - filtered by role
@@ -41,19 +48,20 @@ const NavigationBar = () => {
     { path: '/articles', label: t('articles', 'מאמרים') },
     { path: '/statistics', label: t('statistics', 'סטטיסטיקות') },
     { path: '/report-format', label: t('reportsFormat', 'פורמט דו"חות') },
+    { path: '/user-management', label: t('userManagement', 'ניהול משתמשים'), adminOnly: true },
     { path: '/settings', label: t('settings', 'הגדרות') },
   ];
 
-  // Filter nav items based on role
-  const navItems = isAdmin() 
-    ? allNavItems 
-    : allNavItems.filter(item => 
-        item.path === '/' || 
-        item.path === '/dashboard' || 
-        item.path === '/statistics' || 
-        item.path === '/report-format' ||
-        item.path === '/settings'
-      );
+  const navItems = (isAdmin() ? allNavItems : allNavItems.filter((item) => !item.adminOnly))
+    .filter((item) =>
+      isAdmin()
+        ? true
+        : item.path === '/'
+          || item.path === '/dashboard'
+          || item.path === '/statistics'
+          || item.path === '/report-format'
+          || item.path === '/settings'
+    );
 
   useEffect(() => {
     if (!db || !user?.id) return undefined;
@@ -206,7 +214,7 @@ const NavigationBar = () => {
         <div className="nav-footer">
           <button
             className="logout-button"
-            onClick={handleNavigate('/login')}
+            onClick={handleLogout}
             type="button"
           >
             <span className="nav-label">{t('logout', 'התנתק')}</span>
