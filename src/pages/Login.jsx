@@ -66,10 +66,7 @@ const Login = () => {
       await routeAfterLogin(profile);
     } catch (err) {
       if (err.message === 'PROFILE_NOT_FOUND') {
-        const uidHint = err.uid ? ` (UID: ${err.uid})` : '';
-        setError(
-          `${t('profileNotFound', 'לא נמצא פרופיל משתמש ב-Firestore. ודאי שמזהה המסמך ב-users תואם ל-UID ב-Authentication.')}${uidHint}`
-        );
+        setError(t('accountNotFoundLogin', 'בקשת ההרשמה שלך נדחתה. יש ליצור את החשבון מחדש.'));
       } else if (err?.code === 'permission-denied') {
         setError(
           t(

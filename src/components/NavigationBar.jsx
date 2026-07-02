@@ -14,6 +14,8 @@ const NavigationBar = () => {
   const { t, isRTL } = useLanguage();
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [pendingUsersCount, setPendingUsersCount] = useState(0);
+  const userIsAdmin = isAdmin();
 
   const toggleNav = () => {
     setIsOpen(!isOpen);
@@ -66,11 +68,17 @@ const NavigationBar = () => {
   useEffect(() => {
     if (!db || !user?.id) return undefined;
 
-    const q = query(
-      collection(db, 'notifications'),
-      where('userId', '==', user.id),
-      where('read', '==', false)
-    );
+    const q = userIsAdmin
+      ? query(
+          collection(db, 'notifications'),
+          where('targetRole', '==', 'ADMIN'),
+          where('read', '==', false)
+        )
+      : query(
+          collection(db, 'notifications'),
+          where('userId', '==', user.id),
+          where('read', '==', false)
+        );
 
     const unsubscribe = onSnapshot(
       q,
@@ -83,9 +91,32 @@ const NavigationBar = () => {
     );
 
     return () => unsubscribe();
-  }, [user?.id]);
+  }, [user?.id, userIsAdmin]);
 
-  // Admin: unread messages from researchers + unread replies on admin-sent messages
+  useEffect(() => {
+    if (!db || !userIsAdmin) {
+      setPendingUsersCount(0);
+      return undefined;
+    }
+
+    const q = query(
+      collection(db, 'users'),
+      where('accountStatus', '==', 'pending')
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        setPendingUsersCount(snapshot.size);
+      },
+      () => {
+        setPendingUsersCount(0);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [userIsAdmin]);
+
   useEffect(() => {
     if (!db || !isAdmin()) return undefined;
 
@@ -198,17 +229,26 @@ const NavigationBar = () => {
         </div>
         
         <ul className="nav-list">
-          {navItems.map((item) => (
+          {navItems.map((item) => {
+            const showPendingBadge =
+              item.path === '/user-management' && pendingUsersCount > 0;
+            const pendingBadgeLabel = pendingUsersCount > 99 ? '99+' : pendingUsersCount;
+            const navLabel = showPendingBadge
+              ? `${item.label} (${pendingBadgeLabel})`
+              : item.label;
+
+            return (
             <li key={item.path} className="nav-item">
               <button
                 className={`nav-link ${location.pathname === item.path ? 'active' : ''}`}
                 onClick={handleNavigate(item.path)}
                 type="button"
               >
-                <span className="nav-label">{item.label}</span>
+                <span className="nav-label">{navLabel}</span>
               </button>
             </li>
-          ))}
+            );
+          })}
         </ul>
         
         <div className="nav-footer">

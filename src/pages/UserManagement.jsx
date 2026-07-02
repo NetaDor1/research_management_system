@@ -56,15 +56,38 @@ const UserManagement = () => {
   };
 
   const handleReject = async (userId) => {
-    const reason = window.prompt(t('rejectionReasonPrompt', 'סיבת דחייה (אופציונלי):'));
-    if (reason === null) return;
+    const confirmed = window.confirm(
+      t(
+        'rejectUserConfirm',
+        'לדחות את הבקשה ולמחוק את פרטי המשתמש? לאחר מכן יוכל/תוכל להירשם מחדש עם אותו אימייל.'
+      )
+    );
+    if (!confirmed) return;
+
     setActionId(userId);
     try {
-      await rejectUser(userId, reason.trim(), user?.id);
+      await rejectUser(userId, null, user?.id);
       await loadUsers();
     } catch (err) {
       console.error(err);
-      setError(t('userManagementActionError', 'שגיאה בביצוע הפעולה'));
+      if (err?.code === 'auth-delete-not-configured') {
+        setError(
+          t(
+            'authDeleteNotConfigured',
+            'פרטי המשתמש נמחקו מ-Firestore, אך חשבון ההתחברות לא נמחק — הגדירי FIREBASE_SERVICE_ACCOUNT ב-server/.env והפעילי מחדש את השרת.'
+          )
+        );
+      } else if (err?.code === 'auth-delete-server-unavailable') {
+        setError(
+          t(
+            'authDeleteServerUnavailable',
+            'פרטי המשתמש נמחקו מ-Firestore, אך השרת לא זמין למחיקת חשבון ההתחברות. הפעילי את השרת (npm run start:server).'
+          )
+        );
+      } else {
+        setError(t('userManagementActionError', 'שגיאה בביצוע הפעולה'));
+      }
+      await loadUsers();
     } finally {
       setActionId(null);
     }

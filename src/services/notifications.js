@@ -32,3 +32,23 @@ export const createNotification = async ({
   const docRef = await addDoc(collection(db, 'notifications'), payload);
   return docRef.id;
 };
+
+/** Notify research authority that a researcher is waiting for account approval */
+export async function notifyAdminPendingRegistration({ userId, name, email, isReapply = false }) {
+  const displayName = (name || '').trim() || 'חוקר';
+  const displayEmail = (email || '').trim();
+
+  return createNotification({
+    userId: 'ADMIN',
+    targetRole: 'ADMIN',
+    title: isReapply ? 'בקשת הרשמה חוזרת' : 'בקשת הרשמה חדשה',
+    message: isReapply
+      ? `${displayName} (${displayEmail}) הגיש/ה בקשת הרשמה חוזרת וממתין/ה לאישור חשבון.`
+      : `${displayName} (${displayEmail}) נרשם/ה למערכת וממתין/ה לאישור חשבון.`,
+    type: 'user_registration_pending',
+    entityType: 'user',
+    entityId: userId,
+    link: '/user-management',
+    eventKey: `user_registration_pending:${userId}:${Date.now()}`,
+  });
+}

@@ -11,6 +11,7 @@ const {
   GoogleGenerativeAI,
   GoogleGenerativeAIFetchError,
 } = require('@google/generative-ai');
+const authUserRoutes = require('./authUserRoutes');
 
 const PORT = Number(process.env.PORT) || 3001;
 const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash-lite';
@@ -241,6 +242,8 @@ function mapGeminiError(err) {
 app.get('/api/health', (req, res) => {
   res.status(200).json({ ok: true, geminiConfigured: Boolean(GEMINI_API_KEY), model: GEMINI_MODEL });
 });
+
+app.use('/api/auth', authUserRoutes);
 
 app.post('/api/parse-research-proposal-docx', docxUpload.single('file'), async (req, res, next) => {
   try {

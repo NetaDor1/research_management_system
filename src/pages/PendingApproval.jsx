@@ -5,7 +5,7 @@ import { useLanguage } from '../context/LanguageContext';
 import './Login.css';
 
 const PendingApproval = () => {
-  const { isPending, isApproved, isAuthenticated, refreshProfile, signOut, profile } = useAuth();
+  const { loading, isPending, isApproved, isAuthenticated, refreshProfile, signOut, profile } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
@@ -37,31 +37,60 @@ const PendingApproval = () => {
     navigate('/login');
   };
 
+  if (loading) {
+    return (
+      <div className="login-container">
+        <div className="auth-loading-screen">
+          <div className="auth-loading-spinner" />
+        </div>
+      </div>
+    );
+  }
+
   if (!isPending) return null;
 
   return (
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <h1>{t('pendingApprovalTitle', 'ממתין לאישור')}</h1>
+          <h1>
+            {justRegistered
+              ? t('pendingApprovalRegisteredTitle', 'ההרשמה הושלמה בהצלחה!')
+              : t('pendingApprovalTitle', 'ממתין לאישור')}
+          </h1>
         </div>
 
-        <div className="info-message">
-          {justRegistered ? (
-            <p>{t('pendingApprovalRegistered', 'ההרשמה הושלמה בהצלחה! נשלח אימייל לאימות כתובת הדואר.')}</p>
-          ) : null}
-          <p>
-            {t(
-              'pendingApprovalBody',
-              'חשבונך ממתין לאישור רשות המחקר. לאחר האישור תוכל/י להיכנס למערכת ולהשתמש בכל הפונקציות.'
-            )}
-          </p>
-          {profile?.email && (
-            <p className="pending-email">
-              {t('registeredAs', 'נרשמת כ')}: <strong dir="ltr">{profile.email}</strong>
+        {justRegistered ? (
+          <div className="success-message" role="status">
+            <p>
+              {t(
+                'pendingApprovalAccountOpens',
+                'החשבון שלך ייפתח לאחר אישור החשבון על ידי רשות המחקר.'
+              )}
             </p>
-          )}
-        </div>
+            <p>
+              {t(
+                'pendingApprovalAfterApproval',
+                'לאחר האישור תוכל/י להיכנס למערכת עם האימייל והסיסמה שבחרת.'
+              )}
+            </p>
+          </div>
+        ) : (
+          <div className="info-message">
+            <p>
+              {t(
+                'pendingApprovalBody',
+                'חשבונך ממתין לאישור רשות המחקר. החשבון ייפתח לאחר אישור החשבון על ידי רשות המחקר.'
+              )}
+            </p>
+          </div>
+        )}
+
+        {profile?.email && (
+          <p className="pending-email">
+            {t('registeredAs', 'נרשמת כ')}: <strong dir="ltr">{profile.email}</strong>
+          </p>
+        )}
 
         <button type="button" className="login-button secondary-button" onClick={() => refreshProfile()}>
           {t('checkApprovalStatus', 'בדוק שוב את סטטוס האישור')}

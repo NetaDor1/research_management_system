@@ -22,11 +22,22 @@ service cloud.firestore {
         && ownProfile().data.accountStatus == 'approved';
     }
 
+    function rejectedStatus(data) {
+      return data.accountStatus == 'rejected' || data.accountStat == 'rejected';
+    }
+
+    function isRejectedSelfReapply() {
+      return isSignedIn()
+        && request.auth.uid == userId
+        && rejectedStatus(resource.data)
+        && request.resource.data.accountStatus == 'pending';
+    }
+
     match /users/{userId} {
       allow read: if isSignedIn() && request.auth.uid == userId;
       allow read: if isApprovedAdmin();
       allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isApprovedAdmin();
+      allow update: if isApprovedAdmin() || isRejectedSelfReapply();
       allow delete: if isApprovedAdmin();
     }
 

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { registerResearcher, getAuthErrorMessage } from '../services/authService';
 import './Login.css';
 
 const Register = () => {
   const navigate = useNavigate();
+  const { establishSession } = useAuth();
   const { t, language } = useLanguage();
 
   const [formData, setFormData] = useState({
@@ -53,15 +55,21 @@ const Register = () => {
         return;
       }
 
-      await registerResearcher({
+      const profile = await registerResearcher({
         name: name.trim(),
         email: email.trim(),
         password,
       });
 
+      await establishSession(profile);
       navigate('/pending-approval', { state: { justRegistered: true } });
     } catch (err) {
-      setError(getAuthErrorMessage(err, language));
+      if (err.message === 'PROFILE_NOT_FOUND') {
+        const uidHint = err.uid ? ` (UID: ${err.uid})` : '';
+        setError(`${t('profileNotFound', 'לא נמצא פרופיל משתמש ב-Firestore. ודאי שמזהה המסמך ב-users תואם ל-UID ב-Authentication.')}${uidHint}`);
+      } else {
+        setError(getAuthErrorMessage(err, language));
+      }
     } finally {
       setLoading(false);
     }
